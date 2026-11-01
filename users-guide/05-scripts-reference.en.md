@@ -178,6 +178,10 @@ python scripts/integrate.py pool [--prune]                     # List the pool. 
 - On a conflict (exit 2) or a failure of verify or System Test (exit 1), the integration is rolled back (`git reset --hard`) and the item returns to todo. The integration branch is always kept green.
 - Integration is limited to one at a time by a lock (`work/.ebak/integrate.lock`).
 
+## Handling of idle time (hook heartbeat)
+
+Time that opens up because of sleep or the host app being suspended is detected by the hooks through a heartbeat (`work/runs/<run-id>/.heartbeat`) and accumulated in `idle_sec` of `meta.json`. Gaps of `limits.idle_gap_minutes` (default 45; 0 disables) or more are counted, and they are subtracted from the elapsed time against `max_hours`.
+
 ## kpi.py (KPI aggregation)
 
 ```bash
@@ -190,14 +194,6 @@ python scripts/kpi.py history                      # Aggregate the whole of docs
 The North Star is "verified requirements per human intervention". A **verified requirement** is an implemented requirement that is approved, has a catalog row, has no BLOCKED AC, and all of whose system ACs are `pass` in the ledger. For requirements that did not become verified, the reason (such as "no catalog row") is shown. The metrics and targets are in [8.2 of 08-roadmap.en.md](08-roadmap.en.md#82-kpis).
 
 As flow (speed) metrics, it also outputs the time per stage, the effective parallelism of the implementation loop (total working time of the items ÷ elapsed time of the loop), the working time per item, the serial time of integration and its share, and the models actually used (`work/runs/<run-id>/models.jsonl`, recorded by hooks). For a slow run, use this table first to separate whether parallelism is low (workers waiting) or the serial integration time is long (verify and System Test are heavy).
-
-## import-speckit.py (import from GitHub Spec Kit)
-
-```bash
-python scripts/import-speckit.py [--source DIR] [--feature 001] [--implement] [--no-constitution] [--out F | --stdout | --json]
-```
-
-It reads `specs/*/spec.md` and `.specify/memory/constitution.md` and writes a mapping table and the `/build` request text to `work/import/speckit-<datetime>.md`. It does not edit the requirements definition and assigns no IDs. Usage is in [1.7](01-writing-requests.en.md#17-importing-github-spec-kit-specifications).
 
 ## adopt.py (adopting an existing app)
 

@@ -12,7 +12,6 @@ A multi-agent development toolkit for GitHub Copilot (the VS Code Agents window 
   - Verification always runs before finishing
   - Dangerous operations are denied
 - Many of these rules work only when you start a run with `/build`. For the risks of requesting changes with a prompt other than `/build`, see [Important: Risks of sending a prompt other than `/build`](#important-risks-of-sending-a-prompt-other-than-build).
-- You can also import a specification written with [GitHub Spec Kit](https://github.com/github/spec-kit) and leave implementation and verification to conductor ([Integration with GitHub Spec Kit](#integration-with-github-spec-kit)).
 - It also works for apps that already have source code and design documents (brownfield). First take an inventory with `python scripts/adopt.py scan`, then build up the data layer from reverse-generated requirement hypotheses (pending approval) and a freeze of current behavior ([Adopting an existing app](users-guide/10-adopting-existing-apps.en.md)).
 
 ## Getting started (reading guide by reader)
@@ -34,7 +33,6 @@ If you are adopting the toolkit for an existing app (one that already has source
 - [Installation](#installation)
 - [Quickstart](#quickstart)
 - [EABK Studio (data-layer viewer)](#eabk-studio-data-layer-viewer)
-- [Integration with GitHub Spec Kit](#integration-with-github-spec-kit)
 - [Detailed documentation](#detailed-documentation)
 - [Glossary](#glossary)
 - [Repository structure](#repository-structure)
@@ -91,7 +89,6 @@ scripts/         Deterministic scripts (Python 3.9 or later; standard library on
   rdfix.py         Automatically fixes inconsistencies between data-layer files to match the requirements definition
   integrate.py     Handles the worktree pool and integration (merge → verify → System Test → commit) in one command
   kpi.py           KPI aggregation (North Star: verified requirements per human intervention. Also outputs flow metrics)
-  import-speckit.py  Converts GitHub Spec Kit artifacts into a /build request
   adopt.py         Adopting an existing app (inventory, freezing evidence, freezing current behavior, creating the request)
   hooks/gate.py   The hook implementation
   ebak.config.json Settings (verification commands, models, gates, retention period)
@@ -277,7 +274,6 @@ At the end of installation or an update, the common data-layer entry point `pyth
    python scripts/next-id.py --sync --adopt
    ```
    Then run `python scripts/verify.py --docs-only --show-warnings` to check for missing structured fields (CHK-20) and so on. You can leave the fixes to rd-author in the first run (write "bring the existing requirements definition into the toolkit's format" in the request).
-   If you have a [GitHub Spec Kit](https://github.com/github/spec-kit) specification (`specs/*/spec.md`, `.specify/memory/constitution.md`), create a `/build` request with `python scripts/import-speckit.py` ([Importing from Spec Kit](users-guide/01-writing-requests.en.md#17-importing-github-spec-kit-specifications)).
 5. (Optional) If you want to use tools for internal information or for your target technology, configure MCP servers and plugins in the environment where you run the run (VS Code, Copilot CLI, or the GitHub Copilot app) and sign in. Examples: Work IQ for primary sources of requirements, Microsoft Learn and the Azure MCP Server for development on Azure, and Microsoft-provided plugins for development with Copilot Studio. No agent-side configuration is needed ([Settings and customization 4.4](users-guide/04-customization.en.md#44-using-mcp-servers-plugins-and-extensions)).
 
 ### Updating and checking
@@ -559,101 +555,6 @@ You can also start it with `.\EABK-Studio\start.ps1 -Role pm` on Windows, or `./
 
 ---
 
-## Integration with GitHub Spec Kit
-
-You can import a specification written with [GitHub Spec Kit](https://github.com/github/spec-kit) (hereafter Spec Kit) into this toolkit and implement and verify it. The division of labor is: **you write the specification interactively with Spec Kit, and conductor builds it to completion according to the specification and proves it**. The bridge is `scripts/import-speckit.py`, and the import is one-way (Spec Kit → Enterprise App Build Kit).
-
-### Why integrate
-
-Both share the idea of "making the specification the source of truth," but they are good at different stages.
-
-| Aspect | Spec Kit | Enterprise App Build Kit |
-|---|---|---|
-| Problem it solves | **How to write** a specification (the practices and templates of Spec-Driven Development) | **Building to completion** according to the specification, **and proving it** |
-| How people are involved | Call `/speckit-*` stage by stage; a person checks the result and proceeds | Send `/build` just once. Points needing a decision are gathered in the question list, and it proceeds without stopping |
-| Handling of undecided items | Resolved on the spot through dialogue with `/speckit-clarify` | Recorded in the question list (Q) and BLOCKED, and answered in `<answers>` of the next `/build` |
-| Completion decision | `/speckit-converge` compares the specification, tasks, and code by reading them with an LLM | Decided deterministically by the chain requirement → acceptance criteria → System Test → verify (exit 0) |
-| Form of the source of truth | `specs/<NNN-feature>/spec.md` per feature | A single requirements definition (with IDs), the catalog, and the System Test ledger |
-
-From this, we think the following division of labor is reasonable.
-
-1. **The stage of growing the specification suits dialogue.** The intent and priority of requirements become more accurate the more short exchanges you have with a person. Spec Kit's specify, clarify, and constitution were made for this stage. conductor returns its questions in a batch after the run, so it is not suited to refining a specification together.
-2. **The stage of building and verifying suits unattended operation and deterministic decisions.** Implementation, testing, and integration involve many steps, and having a person call each stage increases interventions. Also, if "does it match the specification" is decided by an LLM comparing and reading, the decision itself fluctuates. With role-separated workers and hooks and verify, conductor carries this stage forward with a single human action and produces the pass/fail result mechanically.
-3. **To connect the two, each element of the specification must be mapped to Enterprise App Build Kit's managed data.** User stories, acceptance scenarios, undecided items, and so on correspond to requirements, acceptance criteria, and the question list, respectively. If you do this mapping by hand each time, omissions and duplicate IDs occur. `import-speckit.py` assigns candidates mechanically, and rd-author does the numbering and makes the final decisions.
-
-**Supporting measurements**: We ran the same 3 tasks twice with each tool ([bench/RESULTS.md](bench/RESULTS.md)). Because the tasks were small and the pass rate hit the ceiling, we have not yet been able to detect a difference in quality. What we do know is the following 4 points.
-
-- The hidden acceptance tests passed 100% for both.
-- Human interventions averaged 7.7 for Spec Kit and 1 for conductor.
-- conductor's reviewer and final audit found defects that the hidden tests could not measure (test brittleness, a contradiction between acceptance criteria and non-functional requirements).
-- On the other hand, conductor took longer (about 40 minutes for a run executed with separated roles, versus about 17 minutes for Spec Kit).
-
-### What integrates, and how
-
-![Integration of GitHub Spec Kit and Enterprise App Build Kit (component structure)](images/speckit-abk-integration.svg)
-
-| Stage | Owner | What it does | Main deliverables |
-|---|---|---|---|
-| ① Write the specification | The user + Spec Kit | `/speckit-constitution` → `/speckit-specify` → `/speckit-clarify` (and `/speckit-plan` and `/speckit-tasks` if needed) | `.specify/memory/constitution.md`, `specs/<NNN-feature>/spec.md`, and others |
-| ② Import | `import-speckit.py` (a deterministic script) | Reads the Spec Kit documents and assigns an import destination candidate to each element. It does not edit the requirements definition and does not assign IDs | `work/import/speckit-<datetime>.md` (the mapping table and the `/build` request text) |
-| ③ Build to completion | conductor and the workers | Paste the request text into `/build` and send it. rd-author numbers and writes the requirements definition, rd-auditor audits, and it proceeds in the order test-designer → implementer → reviewer | The requirements definition, catalog, System Tests and ledger, and the implementation |
-| ④ Prove | hooks, verify, kpi.py | Does not mark it complete until it passes the gates. Produces the KPIs and the report | exit 0 of `verify.py`, `kpi.md`, `run-report.md` |
-| ⑤ Answer and update | The user | Answer the question list with `<answers>`. If you change the specification on the Spec Kit side, import again from ② | The decision log and the updated requirements |
-
-```bash
-# Run at the repository root after ①
-python scripts/import-speckit.py                         # Import all of specs/*/spec.md
-python scripts/import-speckit.py --feature 001           # Select features (prefix match; multiple allowed)
-python scripts/import-speckit.py --source ../photo-app   # A Spec Kit project in another repository
-python scripts/import-speckit.py --implement             # Make the request text do both import and implementation in one run
-```
-
-Paste the "request text" from the output `work/import/speckit-<datetime>.md` after conductor's `/build` and send it. The default request text uses `scope: なし` (none) and `approval_policy: 厳格` (strict), and performs **requirements definition only**. After you review and answer the question list in the report, you implement with the next `/build`. If it is fine to proceed without a review in between, create the request text with `--implement`.
-
-**Coexistence in the same repository**: The two tools have separate locations.
-
-| Tool | Location |
-|---|---|
-| Spec Kit | `specs/`, `.specify/`, `.github/skills/speckit-*` |
-| Enterprise App Build Kit | `docs/`, `tests/system/`, `scripts/`, `.github/agents/`, the 5 under `.github/skills/`, `.github/hooks/` |
-
-Spec Kit uses its own numbering (such as `FR-001` and `SC-001`). So that these do not collide with the toolkit's IDs, `specs/**/*.md` and `.specify/**` are excluded from the ID check (CHK-19) and from test selection by impact scope (`select-tests.py`). When integrating, do not use `/speckit-implement` or `/speckit-converge`, so that implementation is not done twice by the two tools. Also, while a run is in progress (the run is `active`), do not use Spec Kit skills; update the specification after the run ends ([Risks of sending a prompt other than `/build`](#important-risks-of-sending-a-prompt-other-than-build)).
-
-### How data is integrated
-
-![Data flow from Spec Kit artifacts to Enterprise App Build Kit's managed data](images/speckit-abk-dataflow.svg)
-
-The import rules are as follows (for the full mapping table, see [users-guide 1.7](users-guide/01-writing-requests.en.md#17-importing-github-spec-kit-specifications)).
-
-- **IDs are renumbered, and the source is kept.** Spec Kit's `FR-003` becomes the import-source ID `speckit:001-albums/FR-003`. rd-author assigns the toolkit's ID (for example, `FR-012`) with `next-id.py` and writes the import-source ID in the requirement's source field. The imported source file is registered as a SRC in the source registry.
-- **Acceptance scenarios become acceptance criteria and lead to System Tests.** Given / When / Then becomes an AC (the candidate verification level is system). Before implementation, test-designer creates System Tests and ledger cases from those ACs.
-- **Undecided items do not disappear.** `[NEEDS CLARIFICATION: …]` and Edge Cases phrased as questions become questions in the question list (Q). The related ACs are marked BLOCKED and are not implemented until an answer is given. Answers decided in clarify become decision-log entries.
-- **The technical plan does not become requirements.** `plan.md`, `tasks.md`, and `contracts/` are only listed in `<references>`, so that what must be satisfied (requirements) and how to build it (design) are not mixed.
-- **Per-feature specifications are consolidated into a single source of truth.** If an existing requirement has the same meaning, it is mapped to rather than created anew. If there is a difference, it is raised as a conflict in the question list.
-- **The import is one-way.** After import, the source of truth is the requirements definition. conductor does not rewrite `specs/`. To change the specification, fix it on the Spec Kit side and import again (rd-author handles the diff).
-
-### Benefits of the integration
-
-| Benefit | Mechanism | Evidence and how to verify |
-|---|---|---|
-| You can raise specification quality through dialogue | You settle intent, priorities, and undecided items with Spec Kit's clarify and constitution before handing over | On import, Clarifications become decision-log entries and undecided items become the question list |
-| Implementation proceeds to the end with a single human action | A single `/build` runs steps 0 to 6 unattended | In measurement, human interventions were 1 for conductor versus 7 to 9 for Spec Kit ([bench/RESULTS.md](bench/RESULTS.md)) |
-| You can prove mechanically that it matches the specification | The chain AC → System Test → ledger → `verify.py`. Pass/fail is determined by test results, not an LLM's judgment | "Verified requirements" and "traceability coverage" in `python scripts/kpi.py run` |
-| You can trace the source of the specification afterward | `speckit:<feature>/<original ID>` remains in the requirement's source field | The requirements definition and the source registry (SRC) |
-| Undecided items do not slip into the implementation | NEEDS CLARIFICATION → question list + BLOCKED. BLOCKED ACs are not implemented | The unanswered questions in `run-report.md` |
-| Someone other than the author verifies | rd-auditor (audit) and reviewer (diff review) are separate workers from the writer | In measurement, 2 reviewer send-backs and 1 contradiction detected by the final audit |
-| The specification does not scatter per feature | rd-author cross-checks against existing requirements and consolidates them into a single requirements definition | Conflicts are raised in the question list |
-
-### Good fits and caveats
-
-- **Good fits**: When you want people to refine the specification but delegate implementation and verification. When you want unattended runs, such as overnight, or for teams with few reviewers. Development that needs evidence for audits or traceability.
-- **Time and compute**: conductor calls workers many times, so it uses more time and tokens than Spec Kit alone. For quickly building small changes or prototypes, Spec Kit alone (`/speckit-implement`) can be faster.
-- **One-way only**: Answers and design decisions made during a run remain in the requirements definition and the decision log. They do not flow back into `specs/`. If you want to keep the Spec Kit documents up to date, look at the decision log and reflect them on the Spec Kit side too.
-- **Template assumptions**: `import-speckit.py` reads the headings of Spec Kit's standard templates (User Scenarios, Requirements, Success Criteria, and so on). If a preset changes the headings significantly, the mapping table becomes coarser. However, the full text of the original document goes into the request text, so rd-author can judge. If any parts are still template text (such as `[FEATURE NAME]`), it emits a `WARN`.
-- **Scope of measurement**: The measurement above ran 3 small tasks twice each. We have not yet measured quality differences on harder tasks or cost differences (credits) ([bench/README.md](bench/README.en.md)).
-
----
-
 ## Detailed documentation
 
 The details are in [users-guide/](users-guide/README.en.md).
@@ -672,8 +573,6 @@ The details are in [users-guide/](users-guide/README.en.md).
 | 10 | [Adopting an existing app](users-guide/10-adopting-existing-apps.en.md) | Build up the data layer from existing code and design documents: inventory → reverse-generated requirements (pending approval) → freezing current behavior |
 | 11 | [External integration catalog](users-guide/11-integration-catalog.en.md) | Record integrations with external apps and data in `docs/integrations.md` (optional). Procedures for adding, changing, retiring, and checking |
 | Reference | [EABK Studio guides](users-guide/studio/README.en.md) | You want to view the data layer in diagrams and tables. You want to know the procedures for each of Product Manager, Architect, and Software Engineer, and the data each screen reads |
-
-The procedures and results of the comparison measurement with GitHub Spec Kit (the same tasks, hidden acceptance tests, and the North Star comparison) are in [bench/](bench/README.en.md). The latest results are in [bench/RESULTS.md](bench/RESULTS.md).
 
 ## Glossary
 
@@ -702,4 +601,3 @@ The procedures and results of the comparison measurement with GitHub Spec Kit (t
 | Managed data templates | [docs/](docs/), [tests/system/ledger.json](tests/system/ledger.json) |
 | Installation scripts | [tools/](tools/) |
 | Toolkit tests | [tests/toolkit/](tests/toolkit/) (`python -m pytest tests/toolkit -q`) |
-| Comparison measurement with GitHub Spec Kit (not distributed) | [bench/](bench/README.en.md); results are in [bench/RESULTS.md](bench/RESULTS.md) |

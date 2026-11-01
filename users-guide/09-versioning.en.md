@@ -7,7 +7,7 @@ This chapter covers how Enterprise App Build Kit versions are assigned, the proc
 ## 9.1 Versioning rules
 
 - Versions follow [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`). The current version is **0.2.0**.
-- The source of truth for the version is `TOOLKIT_VERSION` in `scripts/ebaklib.py`. The installer (`tools/install.py`), `bench/bench.py`, and the records of `scripts/run-state.py` all read it from there. Do not copy the version anywhere else.
+- The source of truth for the version is `TOOLKIT_VERSION` in `scripts/ebaklib.py`. The installer (`tools/install.py`) and the records of `scripts/run-state.py` all read it from there. Do not copy the version anywhere else.
 - Write the change history in [CHANGELOG.md](../CHANGELOG.md) at the repository root.
 - Until 1.0.0, a MINOR update may include incompatible changes.
 
@@ -80,4 +80,4 @@ To roll back an update, `git revert` the update's commit. To return to a specifi
 
 ## 9.5 Notes on version notation
 
-Records from before the versions were reorganized to 0.1.0 (such as `toolkit_version: 1.2.0` and `1.3.0` in `bench/results/`, and past rows in `docs/run-history.md`) are left in the notation of the time. Even if `.github/ebak-toolkit.json` in an installed environment says `1.3.0`, updating with the procedure in 9.3 replaces it with version 0.1.0 or later.
+Records from before the versions were reorganized to 0.1.0 (such as `toolkit_version: 1.2.0` and `1.3.0` in past rows of `docs/run-history.md`) are left in the notation of the time. Even if `.github/ebak-toolkit.json` in an installed environment says `1.3.0`, updating with the procedure in 9.3 replaces it with version 0.1.0 or later.

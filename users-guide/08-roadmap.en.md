@@ -70,8 +70,6 @@ These are the indicators for measuring the effect. You can aggregate them with `
 | Token | Share of Tokens used by subagents | Record it; if it keeps growing, review the scope of delegation | Same as above |
 | Human | Number of Prompts the user writes per request | 1 (2 if there are answers) | Records of `run-state.py human` ("human interventions" in run-history) |
 
-The procedure for comparing against other approaches, such as GitHub Spec Kit, on the same task is in [bench/README.en.md](../bench/README.en.md).
-
 ## 8.3 Risks and countermeasures
 
 These are the main risks and countermeasures.

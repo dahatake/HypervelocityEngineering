@@ -148,7 +148,7 @@ def _toolkit_scripts() -> set:
     if _TK is None:
         _TK = {n for n in ("ebaklib.py", "rdcheck.py", "rdfix.py", "verify.py", "verify.ps1", "verify.sh", "next-id.py",
                            "ledger.py", "select-tests.py", "summarize.py", "clean-work.py", "run-state.py", "integrate.py",
-                           "kpi.py", "import-speckit.py", "adopt.py", "ebak.config.json")}
+                           "kpi.py", "adopt.py", "ebak.config.json")}
     return _TK
 
 

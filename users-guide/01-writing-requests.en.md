@@ -97,36 +97,4 @@ Blanket-approved items are listed in the report under "Blanket-approved items" i
 | Apply answers only | Leave `<request>` empty and write only `<answers>` |
 | Right after installing into an existing repository | "Align the existing requirements definition document (docs/requirements-definition.md) with the toolkit's format (structured fields, verification levels, PARAM). Do not change the meaning" |
 | Diagnosing past contradictions (Phase 0) | Call rd-auditor directly with `scope: 全量`, `runs: 1`, `history_mode: する` ([08-roadmap.md](08-roadmap.en.md)) |
-| Starting from a GitHub Spec Kit specification | Paste the request text produced by `python scripts/import-speckit.py` after `/build` ([1.7](#17-importing-github-spec-kit-specifications)) |
-
-## 1.7 Importing GitHub Spec Kit specifications
-
-You can import specifications written with [GitHub Spec Kit](https://github.com/github/spec-kit) (the artifacts of `/speckit-specify` and `/speckit-clarify`) into this toolkit's requirements definition document, and then implement and verify them with the conductor. The division of labor is: Spec Kit for writing the specification, and the conductor for building it through to the end and verifying it.
-
-```bash
-python scripts/import-speckit.py                          # All specs/*/spec.md in this repository
-python scripts/import-speckit.py --source ../photo-app    # A Spec Kit project in another repository
-python scripts/import-speckit.py --feature 001            # Select feature directories by prefix match (multiple allowed)
-python scripts/import-speckit.py --implement              # Make the request text do both import and implementation in one run
-```
-
-The output is `work/import/speckit-<datetime>.md`. Paste the "request text" inside it after the conductor's `/build` and send.
-
-| Spec Kit | Candidate destination (final decision is rd-author's) |
-|---|---|
-| User Story (Priority P1 / P2 / P3) | Usage scenarios and requirements (FR). Priority is MUST / SHOULD / MAY |
-| Acceptance Scenarios (Given / When / Then) | Acceptance criteria (AC). The candidate verification level is system |
-| Functional Requirements (such as `FR-001`) | Requirements (FR). MUST / SHOULD / MAY in the text are used as priority candidates |
-| `[NEEDS CLARIFICATION: …]`, Edge Cases phrased as questions | Questionnaire (Q), and BLOCKED for the related AC |
-| Clarifications (`Q: … → A: …`) | Decision log (origin: user decision) |
-| Success Criteria (such as `SC-001`) | Success indicators of goals (G), or non-functional requirements (NFR) |
-| Key Entities | Glossary and target entities |
-| Assumptions | Premises and constraints, or ASSUMPTION |
-| Constitution principles | Default constraints, or non-functional requirements. Development-process principles go to the decision log |
-| plan.md, tasks.md, contracts/ | Listed only in `<references>` (technology choices are not made into requirements) |
-
-- The script does not edit the requirements definition document and does not assign IDs (G-1, G-3). Spec Kit IDs are kept as source IDs in the form `speckit:001-photo-albums/FR-003`, and rd-author reassigns IDs with `next-id.py` and writes them in the source field.
-- The default request text uses `scope: なし` and `approval_policy: 厳格`, and performs requirements definition only. Answer the questionnaire in the report, then implement in the next `/build`.
-- If any parts remain as template text (such as `[FEATURE NAME]`), a `WARN` is emitted. Either fill them in on the Spec Kit side first, or have rd-author raise them in the questionnaire.
-- You may leave Spec Kit installed in the same repository. Spec Kit documents (`specs/**/*.md`, `.specify/**`) use their own numbers such as `FR-001`, so they are excluded from the ID check (CHK-19) and from `select-tests.py`. When integrating, do not use `/speckit-implement` or `/speckit-converge`; leave implementation to the conductor. Do not use Spec Kit skills while a run is in progress (update the specification after the run ends).
-- The integration concept, architecture diagram, and data mapping diagram are in [README, "Integration with GitHub Spec Kit"](../README.en.md#integration-with-github-spec-kit).
+

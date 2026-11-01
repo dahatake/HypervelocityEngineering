@@ -82,8 +82,6 @@ MANAGED = [
     "scripts/integrate.py",
     "scripts/watch.py",
     "scripts/kpi.py",
-    "scripts/perf-report.py",
-    "scripts/import-speckit.py",
     "scripts/adopt.py",
     "scripts/hooks/gate.py",
     "tools/install.py",
@@ -183,6 +181,8 @@ def dest_of(rel: str) -> str:
 # Files no longer shipped. Removed on update when unmodified.
 # EABK Studio guide moved from EABK-Studio/users-guide/ into the single users-guide/ (installed as EABK-docs/studio/).
 OBSOLETE: list[str] = [
+    "scripts/perf-report.py",
+    "scripts/import-speckit.py",
     "tests/system/e2e/test_run_owned_cleanup.py",
     "tests/system/test_run_cleanup_system.py",
     "EABK-Studio/users-guide/README.md",

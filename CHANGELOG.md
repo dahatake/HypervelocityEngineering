@@ -5,6 +5,12 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+- System Test の台帳から、blocked の 150 件を削除する（利用者の指示）。重複を統合して停止していたケース 135 件、System Test の対象外（検証レベルが integration）のケース 12 件、廃止したベンチマーク要求のケース 3 件（`test_benchmark_submission.py` も削除）。同じ受入基準を保証する有効なケースは残る。ID は ID 台帳で「削除済み」とし再利用しない。台帳のケースは通常削除しない決まり（CHK-12）のため、`rdcheck.py check --base <削除前の commit>` はこの削除を報告する（意図した削除）。
+
+- Spec Kit の取り込み（`import-speckit.py`）、ベンチマーク一式（`bench/`）、`scripts/perf-report.py` を削除する。EABK Studio は残す。
+  - 理由: GitHub Copilot の直近 3 か月の機能強化（Agents window・Agent Host・応答ごとのモデル別 Token 表示・dynamic workflows など）で代替でき、EABK の目的（役割の分離・強制ゲート・決定的スクリプト・データの永続管理）に寄与しない周辺機能だった。Spec Kit の `specs/**`・`.specify/**` を ID の走査から外す既定は残す。
+  - インストーラ: 配布一覧から外し、`OBSOLETE` に加えた（更新時に、変更していない旧ファイルを削除する）。hook の心拍（`idle_gap_minutes`）の動作は変えない。
+
 - hook G-5 の誤拒否を減らす。
   - 取り込み待ち（`run-state.py land` が主の作業ツリーの未コミット変更で止まる等）で、状態が変わらないのに agent-stop が同じ差し戻しを最大 40 回繰り返さない。blocker の指紋（base と統合ブランチの commit・主の作業ツリーの status のハッシュ）が前回と同じなら、2 回目以降は差し戻さず終了を許し、「取り込み待ち」と次の手順を 1 回だけ示す。指紋が変われば再び差し戻す。無関係な変更の commit・stash はしない（FR-1010 AC-448・449）。
   - 並列の作業役（同じ名前の implementer など）が止まったとき、agent id で自分の記録だけを消す。以前は「同じ名前の最初の 1 件」を消し、動いている別の作業役の編集が不明な session として G-5 で拒否されていた。

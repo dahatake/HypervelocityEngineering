@@ -70,8 +70,6 @@ external_exposure: 公開しない
 | Token | subagent が使った Token の割合 | 記録し、増え続けるなら委譲の範囲を見直す | 同上 |
 | 人 | 1 回の依頼で利用者が書く Prompt の回数 | 1 回（回答があれば 2 回） | `run-state.py human` の記録（run-history の「人の介入」） |
 
-GitHub Spec Kit など、ほかの進め方と同じ課題で比べる手順は [bench/README.md](../bench/README.md) にあります。
-
 ## 8.3 リスクと対策
 
 主なリスクと対策です。

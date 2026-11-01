@@ -180,14 +180,7 @@ python scripts/integrate.py pool [--prune]                     # プールの一
 - 競合（exit 2）、verify・System Test の失敗（exit 1）のときは、統合を取り消して（`git reset --hard`）項目を todo に戻します。統合ブランチは常に緑に保たれます。
 - 統合はロック（`work/.ebak/integrate.lock`）で 1 本ずつに制限されます。
 
-## perf-report.py（実行時間の分析）
-
-```powershell
-python scripts/perf-report.py --glob 'C:/GitHub/*'   # 複数リポジトリの work/runs を横断して表示
-python scripts/perf-report.py --format json --out work/perf.json
-```
-
-run ごとに、実時間・作業時間・System Test の重複と失敗の時間・verify の所要時間・サブエージェント別の時間・無活動の区間（idle_gaps）を出します。
+## 無活動時間の扱い（hook の心拍）
 
 スリープやホストアプリの停止で空いた時間は、hook が心拍（`work/runs/<run-id>/.heartbeat`）で検出し、`meta.json` の `idle_sec` に積みます。`limits.idle_gap_minutes`（既定 45、0 で無効）以上の空きが対象で、`max_hours` の経過時間から差し引きます。
 
@@ -203,14 +196,6 @@ python scripts/kpi.py history                      # docs/run-history.md 全体�
 North Star は「人の介入 1 回あたりの検証済み要求」です。**検証済み要求**は、実装した要求のうち、承認済みで、カタログの行があり、BLOCKED の AC がなく、system の AC がすべて台帳で `pass` のものです。検証済みにならなかった要求は、理由（「カタログの行がない」など）を表示します。指標と目標は [08-roadmap.md の 8.2](08-roadmap.md#82-kpi) にあります。
 
 流れ（速さ）の指標として、工程ごとの時間、実装ループの実効の並列度（項目の作業時間の合計 ÷ ループの経過時間）、項目 1 件あたりの作業時間、統合の直列時間とその割合、実際に使ったモデル（hook が記録する `work/runs/<run-id>/models.jsonl`）も出力します。遅い run では、まずこの表で、並列度が低いのか（作業役の待ち）、統合の直列時間が長いのか（verify・System Test の重さ）を切り分けます。
-
-## import-speckit.py（GitHub Spec Kit からの取り込み）
-
-```bash
-python scripts/import-speckit.py [--source DIR] [--feature 001] [--implement] [--no-constitution] [--out F | --stdout | --json]
-```
-
-`specs/*/spec.md` と `.specify/memory/constitution.md` を読み、対応表と `/build` の依頼文を `work/import/speckit-<日時>.md` に書きます。要求定義書は編集せず、ID も振りません。使い方は [1.7](01-writing-requests.md#17-github-spec-kit-の仕様を取り込む) にあります。
 
 ## adopt.py（既存アプリの導入）
 
