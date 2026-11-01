@@ -203,8 +203,10 @@ def test_ac346_map3d_same_tier_structure_as_2d_and_toggles(page):
 # FR-1063 AC-347: RPG 専用表示がなく、残る 2D・3D の階層・項目が FR-1062 の導出結果を保つ
 def test_ac347_rpg_removed_and_map2d_map3d_keep_fr1062_hierarchy_data_and_references(page):
     from urllib.parse import parse_qs, urlsplit
-    from test_studio_system import ROOT
+    from playwright.sync_api import expect
+    from test_studio_system import ROOT, _management_fingerprints
 
+    management_before = _management_fingerprints(ROOT)
     root_text = _read_root(ROOT)
     expected_labels = _requirement_labels(root_text)
     expected_ids = set(expected_labels)
@@ -246,9 +248,18 @@ def test_ac347_rpg_removed_and_map2d_map3d_keep_fr1062_hierarchy_data_and_refere
             )
             ref = item.locator("a[href]").first
             assert ref.count() == 1, f"{route}: {item_id} の詳細参照がない"
-            assert parse_qs(urlsplit(ref.get_attribute("href")).query).get("select") == [item_id], (
+            # SPA の query は通常の URL query ではなく #/route?select=ID 内にある。
+            assert parse_qs(urlsplit(urlsplit(ref.get_attribute("href")).fragment).query).get("select") == [item_id], (
                 f"{route}: {item_id} の詳細参照先が一致しない"
             )
+
+        # 各モードで代表の詳細参照を実際に開き、選択先の ID・名称を確認する。
+        selected_id = sorted(expected_ids)[0]
+        items[selected_id].locator("a[href]").first.click()
+        expect(page.locator("#drawer")).to_contain_text(selected_id)
+        expect(page.locator("#drawer")).to_contain_text(expected_labels[selected_id])
+
+    assert _management_fingerprints(ROOT) == management_before, "マップの表示・詳細参照で管理データが変更された"
 
 
 # ============================================================================ AC-348
