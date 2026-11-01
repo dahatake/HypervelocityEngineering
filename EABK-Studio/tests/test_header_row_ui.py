@@ -65,13 +65,19 @@ def _assert_no_overlap(page, sels=PERMANENT):
 def test_ac393_shortened_labels_keep_full_name_and_no_function_is_dropped(studio, lang):
     wide = _open(studio, "map2d", width=1280, lang=lang)
     ref = {k: wide.evaluate(JS_NAMES, sel) for k, sel in CTRL.items()}
+    # FR-1066: RPG was retired; AC-393 still guarantees every remaining mode.
+    assert {c["dim"] for c in ref["dim"]} == {"2d", "3d", "graph"}
+    assert wide.locator('header.top [data-dim="rpg"]').count() == 0
     wide.context.close()
-    assert len(ref["nav"]) == 9 and len(ref["persona"]) == 3 and len(ref["dim"]) == 4 and len(ref["lang"]) == 2 and ref["theme"]
+    assert len(ref["nav"]) == 9 and len(ref["persona"]) == 3 and len(ref["dim"]) == 3 and len(ref["lang"]) == 2 and ref["theme"]
     for width in (1024, 800, 600, 320):
         page = _open(studio, "map2d", width=width, lang=lang)
+        assert page.locator('header.top [data-dim="rpg"]').count() == 0
         for k, sel in CTRL.items():
             cur = page.evaluate(JS_NAMES, sel)
             assert len(cur) == len(ref[k]), f"{k} lost an element at {width}px"
+            if k == "dim":
+                assert {c["dim"] for c in cur} == {"2d", "3d", "graph"}
             for c, r in zip(cur, ref[k]):
                 assert c["shown"], f"{k} {r['text']!r} hidden at {width}px"
                 full = r["text"]

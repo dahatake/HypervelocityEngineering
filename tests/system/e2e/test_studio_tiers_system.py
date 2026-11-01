@@ -10,11 +10,10 @@ PROVISIONAL CONTRACT (仮置き。実装者が確認し、食い違えば CONFLI
       data-count = その層の項目件数（整数）。見出しの文字に名称と件数が見える。
   - 開閉: group 内の [data-testid="tier-toggle"]（<button>。aria-expanded=true|false。アクセシブルな名前に名称と件数を含む）。
   - 項目: [data-testid="tier-item"]（data-id=ID）。開いた group の下にだけ現れ、閉じると隠れる。
-  - 画面: #/map2d #/map3d（RPG 風は dim-toggle の [data-dim="rpg"]）#/tables #/entities #/integrations #/implstatus #/dashboard。
+  - 画面: #/map2d #/map3d #/tables #/entities #/integrations #/implstatus #/dashboard。
     画面一覧の正本は #nav a[href^="#/"]。管理データの項目を並べない画面は a に data-no-items を付ける（対象外）。
   - 実装状態の層ごとの内訳: tier-group 内の [data-testid="tier-status-breakdown"]（本文に状態名と件数）。
-  - RPG 風: [data-testid="rpg-view"] 内の会話ウィンドウ [data-testid="rpg-dialog"] に tier-group が現れる。
-    既存の城・街・住人の件数は window.eabkView.getState().rpg.places.length（AC-287）。
+  - マップに RPG 専用の城・街・住人・会話ウィンドウは表示されない（AC-347）。
   - 言語: localStorage 'eabk-studio.lang' = 'ja' | 'en'。
   - 未分類: 名称「未分類」（英語表示では「Unclassified」）。
 """
@@ -68,6 +67,11 @@ def _requirement_area_counts(root_text):
         area = m.group(1).strip() if m else "未分類"
         out[(division, area)] = out.get((division, area), 0) + 1
     return out
+
+
+def _requirement_labels(root_text):
+    """管理データから独立に期待する要求 ID と名称（FR-1062 の導出元）。"""
+    return dict(re.findall(r"^#### ((?:FR|NFR-[A-Z0-9]+)-\d+) (.+?)\s*$", root_text, flags=re.M))
 
 
 _DIVISION_NAMES = {"機能": "機能", "functional": "機能", "非機能": "非機能", "non-functional": "非機能",
@@ -196,33 +200,66 @@ def test_ac346_map3d_same_tier_structure_as_2d_and_toggles(page):
 
 
 # ============================================================================ AC-347
-# FR-1063 AC-347: RPG 風で項目に上位層（区分・領域）が名称・件数つきで示され、城・街・住人の件数は変わらない
-def test_ac347_rpg_tiers_shown_with_counts_and_places_count_unchanged(page):
-    _go(page, "map2d")
-    page.locator('[data-testid="dim-toggle"] [data-dim="rpg"]').click()
-    page.wait_for_selector('[data-testid="rpg-view"]')
-    places = page.evaluate("() => window.eabkView.getState().rpg.places.length")
-    page.keyboard.press("Enter")  # A ボタン: 会話ウィンドウ（入口にいなければ何も開かない）
-    page.evaluate("() => window.eabkView.openTierDialog && window.eabkView.openTierDialog()")
-    dlg = page.locator('[data-testid="rpg-dialog"]')
-    dlg.wait_for(timeout=5000)
-    gs = dlg.locator(GROUP)
-    assert gs.count() > 0, "会話ウィンドウに上位層がない"
-    texts = gs.all_inner_texts()
-    assert any(re.search(r"\d", t) for t in texts), "件数が示されない"
-    assert page.evaluate("() => window.eabkView.getState().rpg.places.length") == places, "項目が城・街・住人の件数に加算された"
+# FR-1063 AC-347: RPG 専用表示がなく、残る 2D・3D の階層・項目が FR-1062 の導出結果を保つ
+def test_ac347_rpg_removed_and_map2d_map3d_keep_fr1062_hierarchy_data_and_references(page):
+    from urllib.parse import parse_qs, urlsplit
+    from playwright.sync_api import expect
+    from test_studio_system import ROOT, _management_fingerprints
 
+    management_before = _management_fingerprints(ROOT)
+    root_text = _read_root(ROOT)
+    expected_labels = _requirement_labels(root_text)
+    expected_ids = set(expected_labels)
+    expected_areas = _requirement_area_counts(root_text)
+    reference_signature = None
 
-# FR-1063 AC-347（異常系）: 項目の件数は城・街・住人の件数に加えない
-def test_ac347_item_count_not_added_to_castle_town_resident_counts(page):
-    _go(page, "map2d")
-    page.locator('[data-testid="dim-toggle"] [data-dim="rpg"]').click()
-    page.wait_for_selector('[data-testid="rpg-view"]')
-    state = page.evaluate("() => window.eabkView.getState().rpg")
-    items = {i for i in page.evaluate("() => [...document.querySelectorAll('[data-testid=\"tier-item\"]')].map(e => e.dataset.id)")}
-    assert not ({p["id"] for p in state["places"]} & items), "項目が城・街・住人（places）に混ざった"
-    kinds = {p["kind"] for p in state["places"]}
-    assert kinds <= {"castle", "town"}, f"城・街以外が places に混ざった: {kinds}"
+    for route in ("map2d", "map3d"):
+        _go(page, route)
+        assert page.locator('[data-dim="rpg"]').count() == 0
+        assert page.locator(
+            '[data-testid="rpg-view"], [data-testid="rpg-dialog"], [data-testid="rpg-menu"]'
+        ).count() == 0
+        _expand_all(page)
+
+        signature = _signature(page)
+        assert signature, f"{route} に上位層がない"
+        if reference_signature is None:
+            reference_signature = signature
+        else:
+            assert signature == reference_signature, "2D・3D の上位層名・件数が一致しない"
+
+        got_areas = {}
+        for group in _groups(page, "area"):
+            if group["path"][0] in ("要求", "requirements"):
+                key = (_DIVISION_NAMES.get(group["path"][1].strip().lower(), group["path"][1]),
+                       group["path"][-1])
+                got_areas[key] = got_areas.get(key, 0) + group["count"]
+        assert got_areas == expected_areas, f"{route}: FR-1062 由来の区分・領域件数と一致しない"
+
+        items = {
+            item.get_attribute("data-id"): item
+            for item in page.locator('[data-testid="tier-item"]').all()
+        }
+        assert expected_ids <= set(items), f"{route}: 管理データ項目が欠けている: {expected_ids - set(items)}"
+        for item_id, title in expected_labels.items():
+            item = items[item_id]
+            assert title in (item.get_attribute("data-title") or item.inner_text()), (
+                f"{route}: {item_id} の名称が管理データと一致しない"
+            )
+            ref = item.locator("a[href]").first
+            assert ref.count() == 1, f"{route}: {item_id} の詳細参照がない"
+            # SPA の query は通常の URL query ではなく #/route?select=ID 内にある。
+            assert parse_qs(urlsplit(urlsplit(ref.get_attribute("href")).fragment).query).get("select") == [item_id], (
+                f"{route}: {item_id} の詳細参照先が一致しない"
+            )
+
+        # 各モードで代表の詳細参照を実際に開き、選択先の ID・名称を確認する。
+        selected_id = sorted(expected_ids)[0]
+        items[selected_id].locator("a[href]").first.click()
+        expect(page.locator("#drawer")).to_contain_text(selected_id)
+        expect(page.locator("#drawer")).to_contain_text(expected_labels[selected_id])
+
+    assert _management_fingerprints(ROOT) == management_before, "マップの表示・詳細参照で管理データが変更された"
 
 
 # ============================================================================ AC-348

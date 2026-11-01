@@ -5,7 +5,7 @@ PARAM-018=8).  The implementation is NOT the oracle.  Integration-level ACs (AC-
 are out of scope for System Test.
 
 PROVISIONAL CONTRACT (仮置き。実装者が確認し、食い違えば CONFLICT として返す。この oracle は実装に合わせて直さない):
-  - ヘッダーの切替: [data-testid="header-dim-toggle"]（data-current=2d|3d|rpg|graph, data-selected）。ボタンは [data-dim].
+  - ヘッダーの切替: [data-testid="header-dim-toggle"]（data-current=2d|3d|graph, data-selected）。ボタンは [data-dim].
     非対応のボタンは disabled。理由は、ボタンの title / aria-description / data-reason、または
     [data-testid="header-dim-reason"] の本文のどれかに空でない文字で出る。
   - 画面: #/dashboard #/map2d #/map3d #/entities #/tables #/integrations #/implstatus（#nav a[href^="#/"] が正本）。
@@ -24,7 +24,10 @@ from test_semantic_zoom_system import _serve, T_MID, T_DETAIL
 from test_studio_system import studio_url  # noqa: F401  (fixture: 実リポジトリ。種別が複数ある)
 
 HDR = '[data-testid="header-dim-toggle"]'
-SCREENS = ["dashboard", "map2d", "map3d", "entities", "tables", "integrations", "implstatus"]
+SCREENS = [
+    "dashboard", "map2d", "map3d", "mapgraph", "diagrams", "entities",
+    "source", "tables", "integrations", "implstatus", "maintenance", "consistency",
+]
 
 
 @pytest.fixture()
@@ -79,15 +82,16 @@ def _skip_if_3d_unavailable(page):
 
 
 # ============================================================================ AC-367
-# FR-1066 AC-367: すべての画面にヘッダーの表示モード切替があり、画面を切り替えても消えない
-def test_ac367_header_dim_toggle_exists_on_every_screen_with_2d_3d_rpg_buttons(pg):
+# FR-1066 AC-367: 全画面で 2D・3D・Graph 切替が常設され、RPG の入口・状態はない
+def test_ac367_header_dim_toggle_exists_on_every_screen_with_2d_3d_graph_buttons(pg):
     for route in SCREENS:
         _go(pg, route)
         expect(pg.locator(HDR)).to_be_visible()
-        assert _cur(pg) in ("2d", "3d", "rpg", "graph"), (route, _cur(pg))
-        assert pg.locator(HDR).get_attribute("data-selected") in ("2d", "3d", "rpg", "graph")
+        assert _cur(pg) in ("2d", "3d", "graph"), (route, _cur(pg))
+        assert pg.locator(HDR).get_attribute("data-selected") in ("2d", "3d", "graph")
         dims = pg.locator(f"{HDR} [data-dim]").evaluate_all("els => els.map(e => e.dataset.dim).sort()")
-        assert dims == ["2d", "3d", "graph", "rpg"], (route, dims)
+        assert dims == ["2d", "3d", "graph"], (route, dims)
+        assert pg.locator(f'{HDR} [data-dim="rpg"]').count() == 0, route
 
 
 # FR-1066 AC-367 (異常系): 画面を何度切り替えても切替が消えず、1 つだけである
@@ -116,30 +120,6 @@ def test_ac367_in_screen_toggle_and_header_toggle_share_one_state(pg):
 
 
 # ============================================================================ AC-368
-# FR-1066 AC-368: RPG 風はマップ以外で disabled、理由が表示される（異常系）
-@pytest.mark.parametrize("route", ["dashboard", "entities", "tables", "integrations", "implstatus"])
-def test_ac368_rpg_is_disabled_with_reason_outside_map(pg, route):
-    _go(pg, route)
-    rpg = pg.locator(f'{HDR} [data-dim="rpg"]')
-    assert rpg.is_disabled(), f"{route} で RPG 風が有効"
-    assert _reason(pg, rpg), f"{route} で RPG 風が使えない理由が表示されない"
-    rpg.click(force=True)  # 押しても何も起きない
-    assert _cur(pg) != "rpg"
-
-
-# FR-1066 AC-368: RPG 風はマップで有効。操作すると表示とdata-currentが更新される
-def test_ac368_rpg_enabled_on_map_and_switching_updates_view_and_current(pg):
-    _go(pg, "map2d")
-    rpg = pg.locator(f'{HDR} [data-dim="rpg"]')
-    assert rpg.is_enabled()
-    rpg.click()
-    expect(pg.locator(HDR)).to_have_attribute("data-current", "rpg")
-    expect(pg.locator('[data-testid="rpg-view"]')).to_be_visible()
-    pg.locator(f'{HDR} [data-dim="2d"]').click()
-    expect(pg.locator(HDR)).to_have_attribute("data-current", "2d")
-    assert pg.locator('[data-testid="rpg-view"]:visible').count() == 0
-
-
 # FR-1066 AC-368: 対応する画面（エンティティ）でボタンを操作すると画面の表示が切り替わる
 def test_ac368_entities_screen_follows_header_mode(pg):
     _go(pg, "entities")
