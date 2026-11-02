@@ -716,15 +716,38 @@ def clear_template(ctx: Ctx) -> None:
         pass
 
 
+PROMPT_PREFIX_HEADER = "【自動付与の指示（毎回の Prompt に適用。利用者の依頼はこの指示の対象です）】\n"
+
+
+def load_prompt_prefix(ctx: Ctx) -> str:
+    """FR-1081: the text of config prompt_prefix.file (inside the repo root only); "" when off / missing / empty."""
+    try:
+        pp = ctx.cfg.get("prompt_prefix") or {}
+        if not isinstance(pp, dict) or not pp.get("enabled", True):
+            return ""
+        rel = str(pp.get("file") or ".github/ebak-prompt-prefix.md")
+        root = Path(ctx.root).resolve()
+        p = (root / rel).resolve()
+        if root != p and root not in p.parents:
+            return ""
+        if not p.is_file():
+            return ""
+        return p.read_text(encoding="utf-8").strip()
+    except (OSError, ValueError, UnicodeError):
+        return ""
+
+
 def on_user_prompt(ctx: Ctx) -> None:
     prompt = str(g(ctx.data, "prompt", default=""))
     if TEMPLATE_PROMPT_RX.match(prompt):
         ctx.state_dir.mkdir(parents=True, exist_ok=True)
         h.write_json(template_path(ctx), {"session": session_id(ctx), "t": time.time()})
         ctx.log("TEMPLATE requested")
-    else:
-        clear_template(ctx)
-    emit({})
+        emit({})
+        return
+    clear_template(ctx)
+    text = load_prompt_prefix(ctx)
+    emit({"additionalContext": PROMPT_PREFIX_HEADER + text} if text else {})
 
 
 START_CMD_RX = re.compile(r"run-state\.py['\"]?\s+start\b(?!.*--help)")
