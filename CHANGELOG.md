@@ -5,6 +5,14 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+- System Test の数と実行時間の最小化（実測: `tests/system` 全体 33 分・遅い上位は画素の総当たり走査とテストごとの install）。
+  - `ledger.py consolidate [--apply]`: 同じテストファイル・層・要求の有効なケース（canary・serial を除く）を 1 つに統合する。AC は和集合、command は `-k` で元の選択の和集合（統合の前後で選択されるテストが同じことを確認済み）、元のケースは blocked（`merged_into`・理由を history）、統合したケースは not_run。この台帳は有効なケースが 139 → 88。
+  - `ledger.py cost [--top N] [--check]`: 有効なケース数・テストファイル数・統合できる数・既知の実行時間の上位・予算（`system_test.budget` の `max_active_cases`・`max_cases_per_requirement`・`max_case_seconds`・`max_total_seconds`）。`--check` は超過で exit 1。
+  - `ledger.py add`: 同じ要求・同じ層の有効なケースがあれば追加を拒否し、既存のケースの拡張を案内する（例外は `--new-case-reason`）。CHK-34（warn）: 統合できるケースがある。
+  - test-designer・system-test-increment: 画面 E2E は、アプリ・ブラウザーの起動、ログイン、データの用意を 1 回にし、固定の待ちと全面の総当たりを避ける指針を追加。
+  - 実行: `scripts/ebak.config.json` の `system_test.jobs` の既定を `auto`（同時に 2〜6 プロセス）にした。ポートやデータを共有するケースは `ledger.py add --serial`（既存は `update --serial true`）で単独実行にする。`system_test.budget` に、ケース数・1 ケースの秒数・合計秒数の上限を置いた。
+  - この toolkit の System Test: `tests/toolkit` の `repo`・`sample` も、install 済みの repo を 1 プロセスで 1 回作ってコピーする（`tests/toolkit` と `tests/integration` の全体で 17 分 40 秒 → 14 分 42 秒）。`test_full_run_rehearsal` は verify.commands を軽い命令に置き換えて 51 秒 → 20 秒（失敗する命令に替えるとテストが落ちることを確認）、`test_concurrent_claim_and_start` は後の確認を同時に行い 44 秒 → 36 秒（反復回数・同時数は PARAM-051・052 のまま）。`rdcheck.py similar <ID>` が、カタログの同じ ID の行を比較元にして要求との類似を見落とす不具合を修正（要求・受入基準を優先）。`test_ac187` は、言語切替が JA / EN の 2 つのボタンになった（AC-430）のに合わせて各ボタンを押す。別ファイルにまたがる同じ要求・層のケースは、`ledger.py run` が 1 つの pytest プロセスにまとめて実行するため統合しない（`ledger.py cost` に件数を表示）。 1 プロセスで install した repo をコピーして使い（`tests/system/snapshots.py`。1 テストあたり約 7.6 秒の install を 1 回に）、Studio のサーバーはプロセスで 1 つを共有し、2D マップの当たり判定の走査は粗密の 2 段（同じ格子の部分集合）と半径の二分探索にした。EABK-Studio の `studio` fixture は pytest-playwright の browser を使い、ほかのファイルと同じプロセスで動かしても asyncio の衝突で落ちない（以前は 43 件が error）。
+
 - System Test の台帳から、blocked の 150 件を削除する（利用者の指示）。重複を統合して停止していたケース 135 件、System Test の対象外（検証レベルが integration）のケース 12 件、廃止したベンチマーク要求のケース 3 件（`test_benchmark_submission.py` も削除）。同じ受入基準を保証する有効なケースは残る。ID は ID 台帳で「削除済み」とし再利用しない。台帳のケースは通常削除しない決まり（CHK-12）のため、`rdcheck.py check --base <削除前の commit>` はこの削除を報告する（意図した削除）。
 
 - Spec Kit の取り込み（`import-speckit.py`）、ベンチマーク一式（`bench/`）、`scripts/perf-report.py` を削除する。EABK Studio は残す。

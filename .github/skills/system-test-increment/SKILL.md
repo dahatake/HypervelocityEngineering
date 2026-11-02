@@ -43,6 +43,8 @@ description: 承認済みで BLOCKED でない「検証レベル: system」の�
 | AC の本文の変化の確認・反映 | `python scripts/ledger.py digests`、見直した後に `python scripts/ledger.py digests --update` |
 | 実行（status は exit code でだけ付く） | `python scripts/ledger.py run --cases E2E-001`（作業役は `--no-record`） |
 | 件数 | `python scripts/ledger.py summary -v` |
+| 数・時間の計測（ケース数・テストファイル数・統合できる数・遅いコマンド・予算 `system_test.budget`） | `python scripts/ledger.py cost [--top N] [--check]` |
+| 同じテストファイル・層・要求のケースの統合（既定は計画だけ） | `python scripts/ledger.py --by test-designer consolidate [--apply]` |
 
 - 台帳の `ac_digests` は、AC の本文（PARAM を展開したもの）のダイジェストです。AC が変わると verify の CHK-11 が知らせるので、ケースを見直してから `digests --update` します。
 - テストコードは `tests/system/` の下に置きます（例: `tests/system/e2e/`、`tests/system/contract/`）。Playwright などの設定ファイルもこの下に置き、`command` から参照します。
@@ -96,7 +98,8 @@ Markdown を見出し単位で検索するツールや、要求 ID からコー�
 
 台帳の規則:
 - 承認済みで BLOCKED でない受入基準のうち、システム全体を通して確かめるもの（画面操作、複数の API やサービスをまたぐ流れ、外部連携、データの永続化と再起動後の挙動、権限の拒否、性能などの非機能、生成 AI の出力）を、少なくとも 1 ケースに対応させます。台帳にない受入基準があれば、<test_design> に従ってテストを書き、ケースを追加します。
-- ケースの数は最適に保ちます。追加の前に、同じ受入基準・同じ要求のケースが台帳にないか（`python scripts/ledger.py summary -v`）を確かめ、あれば新規に作らず、既存のケースの command・AC を広げます（`ledger.py update`。`ledger.py add` は同じ AC の有効なケースがあると拒否します）。同じ受入基準を保証する有効なケースが複数あれば（rdcheck の CHK-33）、1 件に寄せて残りを理由つきで blocked にします。
+- ケースの数は最適に保ちます。追加の前に、同じ受入基準・同じ要求のケースが台帳にないか（`python scripts/ledger.py summary -v`）を確かめ、あれば新規に作らず、既存のケースの command・AC を広げます（`ledger.py update`。`ledger.py add` は、同じ AC、または同じ要求・同じ層の有効なケースがあると拒否します）。同じ受入基準を保証する有効なケースが複数あれば（rdcheck の CHK-33）、1 件に寄せて残りを理由つきで blocked にします。同じテストファイル・層・要求のケースが複数あれば（CHK-34）、`python scripts/ledger.py consolidate --apply` で機械的に統合します。数・遅いコマンド・予算は `python scripts/ledger.py cost [--check]` で確かめます。
+- 画面 E2E は、アプリ・ブラウザーの起動、ログイン、データの用意を、テストごとにせず 1 回にします（Playwright: `webServer` と `reuseExistingServer`、`storageState`、worker スコープの fixture。pytest: session スコープの fixture）。固定の待ちは条件の待ちに置き換え、全面の総当たり走査は結果が変わらない粗密の 2 段にします。ケースは既定で並列に実行されます（`system_test.jobs`）。ポートは空きポートを使い、固定ポート・共有データが避けられないケースだけ `ledger.py add --serial`（既存は `update --serial true`）で単独実行にします。
 - 台帳の要求 ID と AC ID が要求定義書に存在し、承認済みのままかを確かめます。要求や受入基準が削除・変更されていた場合だけ、そのケースを理由つきで blocked にするか、要求に合わせて更新し、理由を history に残します。それ以外で、ケースを削除したり、期待値を弱めたりはしません。
 - status の pass と fail は、テストを実行した結果でだけ付けます。blocked は、依存する受入基準が BLOCKED、要求が削除済み、または判定に必要な値が要求定義書にない（TBD）ときに付け、理由を history に書きます。
 </ledger>

@@ -106,6 +106,8 @@ python scripts/ledger.py set E2E-001 blocked --reason "…"
 python scripts/ledger.py digests [--update]
 python scripts/ledger.py repair [--apply]          # 要求定義書に合わせて台帳を直す（rdfix.py から使う）
 python scripts/ledger.py preflight [--cases ID,..] [--all]   # pytest を collect-only で確認（構文・import・-k/node id の誤りで 0 件）。test-designer の終了前と工程 4 の完了前に exit 0 にする
+python scripts/ledger.py cost [--top N] [--check]            # ケース数・テストファイル数・統合できる数・遅いコマンド・予算（system_test.budget。--check は超過で exit 1）
+python scripts/ledger.py consolidate [--apply] [--reason ..]  # 同じテストファイル・層・要求のケースを 1 つに統合（既定は計画だけ。AC は和集合、元のケースは blocked）
 python scripts/ledger.py --by conductor run --select changed|failed|all [--canary-first] [--stop-on-canary-fail] [--max-minutes N]
 python scripts/ledger.py run --cases E2E-001,IT-002 --no-record   # 作業役の worktree で、台帳を更新せずに実行だけする
 ```

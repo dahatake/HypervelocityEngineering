@@ -22,14 +22,37 @@ _PROBE = """
   const sel = () => (d && !d.hidden) ? d.innerText.trim().slice(0, 60) : '';
   const click = (x, y) => { fire('pointermove', x, y); fire('pointerdown', x, y); fire('pointerup', x, y); return sel(); };
   const reset = () => c.dispatchEvent(new MouseEvent('dblclick', {bubbles: true}));
-  const out = {};
-  for (let y = 4; y < r.height - 4; y += args.step) for (let x = 4; x < r.width - 4; x += args.step) {
-    reset(); const s = click(x, y); if (s) (out[s] = out[s] || []).push([x, y]);
+  const seen = new Map();
+  const probe = (x, y) => {
+    const k = x + ',' + y;
+    if (!seen.has(k)) { reset(); seen.set(k, click(x, y)); }
+    return seen.get(k);
+  };
+  // 粗い格子（args.coarse px）で当たりを探し、当たった点の周り（args.pad px）だけを細かい格子（args.step px）で測る。
+  // 測る点は従来の全面走査と同じ格子の部分集合なので、当たりの範囲の測定値は変わらない。
+  // 当たりの測定は 1 回ごとに drawer の描画を伴い重いので、測るノードは最大 args.maxNodes 個（全体から等間隔に選ぶ）にする。
+  // 格子の間隔が 16px なので、半径 12px の円（直径 24px）には必ず格子点が入る（中心から格子点までは最大 11.3px）。
+  const W = r.width - 4, H = r.height - 4;
+  const coarse = [];
+  for (let y = 4; y < H; y += args.coarse) for (let x = 4; x < W; x += args.coarse) {
+    const s = probe(x, y);
+    if (s) coarse.push([s, x, y]);
+  }
+  const labels = [...new Set(coarse.map(p => p[0]))];
+  const stride = Math.max(1, Math.ceil(labels.length / args.maxNodes));
+  const chosen = new Set(labels.filter((_, i) => i % stride === 0));
+  for (const [s, x, y] of coarse) {
+    if (!chosen.has(s)) continue;
+    for (let yy = Math.max(4, y - args.pad); yy < Math.min(H, y + args.pad + 1); yy += args.step)
+      for (let xx = Math.max(4, x - args.pad); xx < Math.min(W, x + args.pad + 1); xx += args.step) probe(xx, yy);
   }
   reset();
-  return {hits: out, w: r.width, h: r.height};
+  const out = {};
+  for (const [k, s] of seen) if (s && chosen.has(s)) { const [x, y] = k.split(',').map(Number); (out[s] = out[s] || []).push([x, y]); }
+  return {hits: out, coarse: coarse.map(p => [p[1], p[2]]), w: r.width, h: r.height};
 }
 """
+_SCAN = {"step": 4, "coarse": 16, "pad": 20, "maxNodes": 12}
 
 _ZOOM = """
 (dy) => { const c = document.querySelector('#view canvas'); const r = c.getBoundingClientRect();
@@ -62,7 +85,7 @@ def test_fr1011_ac077_hit_radius_is_screen_space(page, zoom, stretch):
     if stretch:
         page.evaluate(_STRETCH)
         page.wait_for_timeout(500)
-    res = page.evaluate(_PROBE, {"step": 4})
+    res = page.evaluate(_PROBE, _SCAN)
     assert res["hits"], "no node could be selected by clicking the 2D map"
     for label, pts in res["hits"].items():
         # one node's selectable area never exceeds a PARAM-009 radius circle (+ sampling step)
@@ -72,11 +95,12 @@ def test_fr1011_ac077_hit_radius_is_screen_space(page, zoom, stretch):
 def test_fr1011_ac077_outside_radius_keeps_selection(page):
     # FR-1011 AC-077 abnormal: click outside every radius does not change selection
     _open_map(page)
-    res = page.evaluate(_PROBE, {"step": 4})
-    hit = {tuple(p) for pts in res["hits"].values() for p in pts}
+    res = page.evaluate(_PROBE, {**_SCAN, "maxNodes": 1})
+    # 粗い格子の当たり点 p は、ノードの中心から RADIUS 以内にある。p から 2*RADIUS+8 より遠い点は、どのノードの半径からも 8px 以上外
+    hit = [tuple(p) for p in res["coarse"]]
     far = next(
         ((x, y) for y in range(10, int(res["h"]) - 10, 10) for x in range(10, int(res["w"]) - 10, 10)
-         if all((x - hx) ** 2 + (y - hy) ** 2 > (RADIUS + 8) ** 2 for hx, hy in hit)),
+         if all((x - hx) ** 2 + (y - hy) ** 2 > (2 * RADIUS + 8) ** 2 for hx, hy in hit)),
         None,
     )
     assert far, "no empty area to click"

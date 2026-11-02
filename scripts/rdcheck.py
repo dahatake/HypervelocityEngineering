@@ -146,7 +146,7 @@ class Checker:
         for fn in (self.chk01_02, self.chk03, self.chk04, self.chk05, self.chk06_22, self.chk07_08,
                    self.chk09, self.chk10_11, self.chk12, self.chk13_14_15, self.chk16, self.chk17,
                    self.chk18, self.chk19, self.chk20, self.chk21, self.chk23, self.chk25, self.chk26,
-                   self.chk27, self.chk24, self.chk28, self.chk29, self.chk30, self.chk31, self.chk32, self.chk33):
+                   self.chk27, self.chk24, self.chk28, self.chk29, self.chk30, self.chk31, self.chk32, self.chk33, self.chk34):
             fn()
         return self.findings
 
@@ -1064,6 +1064,18 @@ class Checker:
             self.warn("CHK-33", led, f"{a} を有効なケース {'、'.join(ids)} が重複して保証しています。1 件に統合し"
                       f"（ledger.py update で command・ac を寄せる）、残りは ledger.py block で停止します")
 
+    # CHK-34: System Test の数の予算（同じテストファイル・層・要求の有効なケースは 1 つにできる）
+    def chk34(self) -> None:
+        led = h.mf(self.cfg, "ledger")
+        try:
+            plan = h.load_script("ledger").merge_plan(self.ledger)
+        except Exception:
+            return
+        if plan:
+            ex = "、".join("+".join(c.get("id", "") for c in g) for g in plan[:3])
+            self.warn("CHK-34", led, f"同じテストファイル・層・要求の有効なケースが {len(plan)} 組（{sum(len(g) - 1 for g in plan)} 件が不要）あります"
+                      f"（例: {ex}）。`python scripts/ledger.py consolidate --apply` で 1 件に統合します")
+
 # ---------------------------------------------------------------------- commands
 
 def cmd_check(args, root, cfg) -> int:
@@ -1392,7 +1404,9 @@ def cmd_similar(args, root, cfg) -> int:
     items = similar_items(doc, kind, (root, cfg))
     self_id = None
     if re.fullmatch(r"[A-Z]+(?:-[A-Z]+)?-\d{3,}", query):
-        hit = next((it for it in items if it[0] == query), None)
+        # 要求・受入基準を優先する（カタログの行は同じ ID を持つが、題名だけの短い文で比べ方が変わる）
+        hit = next((it for it in items if it[0] == query and it[1] in ("REQ", "AC")), None) \
+            or next((it for it in items if it[0] == query), None)
         if not hit:
             raise SystemExit(f"ERROR similar: {query} が要求定義書にありません（廃止・却下は対象外）")
         self_id, q = query, hit[3]

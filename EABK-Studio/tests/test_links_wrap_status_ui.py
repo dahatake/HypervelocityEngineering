@@ -17,7 +17,7 @@ sync_api = pytest.importorskip("playwright.sync_api")
 
 
 @pytest.fixture(scope="module")
-def studio(tmp_path_factory):
+def studio(tmp_path_factory, request):
     repo = make_zoom(tmp_path_factory.mktemp("ui") / "r")
     doc = repo / DOC
     long_id = "Y" * 120
@@ -40,10 +40,19 @@ def studio(tmp_path_factory):
             break
         except OSError:
             time.sleep(0.1)
-    with sync_api.sync_playwright() as pw:
-        browser = pw.chromium.launch()
-        yield browser, f"http://127.0.0.1:{port}"
-        browser.close()
+    try:
+        # pytest-playwright の browser（プロセスで 1 つ）を使う。別に sync_playwright を開くと、
+        # ほかのファイルと同じプロセスで動かしたときに asyncio ループの衝突で落ちる
+        shared = request.getfixturevalue("browser")
+    except pytest.FixtureLookupError:
+        shared = None
+    if shared is not None:
+        yield shared, f"http://127.0.0.1:{port}"
+    else:
+        with sync_api.sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            yield browser, f"http://127.0.0.1:{port}"
+            browser.close()
     proc.terminate()
 
 

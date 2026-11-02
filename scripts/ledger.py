@@ -94,15 +94,28 @@ def cmd_add(args, root, cfg) -> int:
             f"ERROR ledger: 同じ受入基準を保証する有効なケースがあります（{hits}）。新しいケースを足さず、"
             f"`python scripts/ledger.py update {first} --command ... --ac ... --reason \"...\"` で既存のケースを拡張します。"
             "層（e2e と api など）が違い、別のケースが本当に必要なときだけ --new-case-reason \"理由\" を付けます")
+    # 同じ要求・同じ層のケースも増やさない（要求 1 件につき層ごとに 1 ケース。AC は ac_ids に足す）
+    same_fr = [c["id"] for c in data["cases"] if c.get("status") != "blocked" and c.get("layer") == args.layer
+               and set(reqs) & set(c.get("requirement_ids", []))]
+    if same_fr and not args.new_case_reason:
+        raise SystemExit(
+            f"ERROR ledger: 同じ要求・同じ層（{args.layer}）の有効なケースがあります（{'、'.join(same_fr)}）。System Test の数を増やさず、"
+            f"`python scripts/ledger.py update {same_fr[0]} --ac <既存の AC>,{','.join(acs)} --command ... --reason \"...\"` で、"
+            "既存のケースにこの AC と検証を足します（同じテストファイルに関数を足し、command の -k を広げる）。"
+            "既存のケースと独立に実行する必要があるときだけ --new-case-reason \"理由\" を付けます")
     cid = h.load_script("next-id").allocate(root, cfg, kind, 1, args.title[:40], False)[0]
     case = {
         "id": cid, "requirement_ids": reqs, "ac_ids": acs, "title": args.title, "layer": args.layer,
         "command": args.command, "canary": bool(args.canary), "status": "not_run",
         "last_commit": None, "last_run_at": None, "evidence": None, "history": [],
     }
+    if args.serial:
+        case["serial"] = True
     history(case, "追加", args.reason or "受入基準からケースを作成", args.by)
     if covering:
         history(case, "同じ AC の既存ケースと別に追加", args.new_case_reason, args.by)
+    elif same_fr:
+        history(case, "同じ要求・同じ層の既存ケースと別に追加", args.new_case_reason, args.by)
     data["cases"].append(case)
     for a in acs:
         data["ac_digests"][a] = h.ac_digest(doc.acs[a], doc.params)
@@ -136,6 +149,11 @@ def cmd_update(args, root, cfg) -> int:
         if val != c.get("canary"):
             changes.append(f"canary: {c.get('canary')} -> {val}")
             c["canary"] = val
+    if args.serial is not None:
+        val = args.serial.lower() in ("true", "1", "yes")
+        if val != bool(c.get("serial")):
+            changes.append(f"serial: {bool(c.get('serial'))} -> {val}")
+            c["serial"] = val
     if not changes:
         print("変更はありません")
         return 0
@@ -160,6 +178,133 @@ def cmd_block(args, root, cfg) -> int:
     h.save_ledger(root, cfg, data)
     print(f"{args.id}: blocked")
     return 0
+
+
+def case_file(c: dict) -> Optional[str]:
+    p = parse_pytest(c.get("command") or "")
+    return re.sub(r"^\./", "", p[0]) if p else None
+
+
+def merge_plan(data: dict) -> List[List[dict]]:
+    """Groups of active cases that can be one case: same test file, same layer, same requirements.
+    canary and serial cases stay as they are (a merged canary would slow the fail-fast stage)."""
+    groups: Dict[tuple, List[dict]] = {}
+    for c in data.get("cases", []):
+        if c.get("status") == "blocked" or c.get("canary") or c.get("serial"):
+            continue
+        f = case_file(c)
+        if f:
+            groups.setdefault((f, c.get("layer"), tuple(sorted(c.get("requirement_ids", [])))), []).append(c)
+    return [g for g in groups.values() if len(g) > 1]
+
+
+def merged_command(members: List[dict]) -> str:
+    """One pytest command that selects what every member command selected (a whole-file member selects the whole file)."""
+    parsed = [parse_pytest(m["command"]) for m in members]
+    f = re.sub(r"^\./", "", parsed[0][0])
+    if any(not node and not k for _, node, k in parsed):
+        return f"python -m pytest {f} -q"
+    exprs: List[str] = []
+    for _, node, k in parsed:
+        e = f"({k})" if k else node.split("::")[-1].split("[")[0]
+        if e not in exprs:
+            exprs.append(e)
+    return f'python -m pytest {f} -k "{" or ".join(exprs)}" -q'
+
+
+def cmd_consolidate(args, root, cfg) -> int:
+    """Merge same-file/same-layer/same-requirement cases into one (the first), block the rest with the reason in history.
+    ac_ids are unioned, so no acceptance criterion loses its case. Merged cases are reset to not_run (status comes only from a run)."""
+    data = h.load_ledger(root, cfg)
+    plan = merge_plan(data)
+    total = sum(len(g) - 1 for g in plan)
+    for g in plan:
+        keep = g[0]
+        print(f"{keep['id']} <- {', '.join(c['id'] for c in g[1:])}  [{case_file(keep)}, {keep.get('layer')}, {','.join(keep.get('requirement_ids', []))}]")
+    print(f"consolidate: {len(plan)} groups, {total} cases can be merged ({len([c for c in data['cases'] if c.get('status') != 'blocked'])} active now)"
+          + ("" if args.apply else " -- --apply で書き込む"))
+    if not args.apply or not plan:
+        return 0
+    why = args.reason or "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
+    for g in plan:
+        keep = g[0]
+        acs = list(dict.fromkeys(a for c in g for a in c.get("ac_ids", [])))
+        cmd = merged_command(g)
+        titles = keep.get("title", "")
+        keep["ac_ids"], keep["command"] = acs, cmd
+        keep["title"] = f"{titles}（ほか {len(g) - 1} 件を統合）" if "ほか" not in titles else titles
+        keep["status"] = "not_run"
+        history(keep, f"command, ac_ids: {', '.join(c['id'] for c in g[1:])} を統合", why, args.by)
+        for c in g[1:]:
+            c["status"] = "blocked"
+            c["merged_into"] = keep["id"]
+            history(c, "blocked", f"{keep['id']} に統合（{why}）", args.by)
+    doc = h.parse_requirements(root, cfg)
+    for c in data["cases"]:
+        for a in c.get("ac_ids", []):
+            if a in doc.acs:
+                data["ac_digests"][a] = h.ac_digest(doc.acs[a], doc.params)
+    h.save_ledger(root, cfg, data)
+    print(f"consolidate: {total} cases blocked, {len(plan)} cases extended (not_run until the next `ledger.py run`)")
+    return 0
+
+
+def cmd_cost(args, root, cfg) -> int:
+    """Where the System Test time and count go: active cases, distinct test files (= process starts when batched),
+    cases that could merge, known durations, and the system_test.budget limits (exit 1 with --check when exceeded)."""
+    data = h.load_ledger(root, cfg)
+    cases = data["cases"]
+    active = [c for c in cases if c.get("status") != "blocked"]
+    files = {case_file(c) or c.get("command") for c in active}
+    plan = merge_plan(data)
+    mergeable = sum(len(g) - 1 for g in plan)
+    try:
+        durs = json.loads((h.work_dir(h.conductor_root(root, cfg), cfg) / ".ebak" / "durations.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        durs = {}
+    by_cmd: Dict[str, List[str]] = {}
+    for c in active:
+        by_cmd.setdefault(c.get("command") or "", []).append(c["id"])
+    known = {k: float(v) for k, v in durs.items() if k in by_cmd and isinstance(v, (int, float))}
+    per_req: Dict[str, int] = {}
+    for c in active:
+        for r in c.get("requirement_ids", []):
+            per_req[r] = per_req.get(r, 0) + 1
+    layers: Dict[str, int] = {}
+    for c in active:
+        layers[c.get("layer", "?")] = layers.get(c.get("layer", "?"), 0) + 1
+    print(f"cases: active {len(active)} / total {len(cases)} (blocked {len(cases) - len(active)}) | layers: "
+          + ", ".join(f"{k}={v}" for k, v in sorted(layers.items())))
+    print(f"test files: {len(files)} (process starts when batched) | mergeable: {mergeable} cases in {len(plan)} groups"
+          + (" -> `ledger.py consolidate --apply`" if mergeable else ""))
+    # 別ファイルにまたがる同じ要求・層のケースは統合しない: ledger run が 1 つの pytest プロセス（ブラウザーも 1 回）にまとめて実行するため、統合しても起動の費用は減らない
+    cross: Dict[tuple, set] = {}
+    for c in active:
+        f = case_file(c)
+        if f and not c.get("canary") and not c.get("serial"):
+            cross.setdefault((c.get("layer"), tuple(sorted(c.get("requirement_ids", [])))), set()).add(f)
+    print(f"cross-file: {sum(1 for v in cross.values() if len(v) > 1)} groups share requirement+layer across files (run batches them into one process; no merge needed)")
+    print(f"known duration: {sum(known.values()):.0f}s over {len(known)}/{len(by_cmd)} commands")
+    for k, v in sorted(known.items(), key=lambda kv: -kv[1])[:args.top]:
+        print(f"  {v:7.1f}s  {','.join(by_cmd[k][:3])}  {k[:100]}")
+    b = (cfg.get("system_test") or {}).get("budget") or {}
+    over = []
+    if b.get("max_active_cases") is not None and len(active) > int(b["max_active_cases"]):
+        over.append(f"有効なケース {len(active)} > max_active_cases {b['max_active_cases']}")
+    if b.get("max_cases_per_requirement") is not None:
+        for r, n in sorted(per_req.items()):
+            if n > int(b["max_cases_per_requirement"]):
+                over.append(f"{r} のケース {n} > max_cases_per_requirement {b['max_cases_per_requirement']}")
+    if b.get("max_case_seconds") is not None:
+        for k, v in sorted(known.items(), key=lambda kv: -kv[1]):
+            if v > float(b["max_case_seconds"]):
+                over.append(f"{','.join(by_cmd[k][:3])} が {v:.0f}s > max_case_seconds {b['max_case_seconds']}")
+    if b.get("max_total_seconds") is not None and sum(known.values()) > float(b["max_total_seconds"]):
+        over.append(f"既知の実行時間の合計 {sum(known.values()):.0f}s > max_total_seconds {b['max_total_seconds']}")
+    for o in over:
+        print(f"BUDGET: {o}")
+    print("budget: " + ("超過 %d 件" % len(over) if over else ("OK" if b else "未設定（system_test.budget）")))
+    return 1 if (args.check and over) else 0
 
 
 def cmd_set(args, root, cfg) -> int:
@@ -941,6 +1086,7 @@ def main(argv=None) -> int:
     a.add_argument("--layer", required=True)
     a.add_argument("--command", required=True)
     a.add_argument("--canary", action="store_true")
+    a.add_argument("--serial", action="store_true", help="単独で実行する（固定ポート・共有データを使うケース。system_test.jobs の並列から外す）")
     a.add_argument("--reason", default="")
     a.add_argument("--new-case-reason", default="",
                    help="同じ AC の有効なケースがあっても別のケースにする理由（既定では拒否し、update での拡張を促す）")
@@ -951,6 +1097,7 @@ def main(argv=None) -> int:
     u.add_argument("--ac")
     u.add_argument("--req")
     u.add_argument("--canary")
+    u.add_argument("--serial", help="true|false: 単独で実行する（並列から外す）")
     u.add_argument("--reason", required=False)
     b = sub.add_parser("block")
     b.add_argument("id")
@@ -964,6 +1111,12 @@ def main(argv=None) -> int:
     d.add_argument("--update", action="store_true")
     rp = sub.add_parser("repair")
     rp.add_argument("--apply", action="store_true", help="修正を書き込む（既定は確認だけ）")
+    cs = sub.add_parser("consolidate", help="同じテストファイル・層・要求のケースを 1 つに統合する（既定は計画だけ）")
+    cs.add_argument("--apply", action="store_true")
+    cs.add_argument("--reason", default="")
+    ct = sub.add_parser("cost", help="ケース数・テストファイル数・統合できる数・遅いコマンド・予算（system_test.budget）")
+    ct.add_argument("--top", type=int, default=10)
+    ct.add_argument("--check", action="store_true", help="予算を超えていれば exit 1")
     pf = sub.add_parser("preflight")
     pf.add_argument("--cases")
     pf.add_argument("--all", action="store_true", help="pass 済みも含める（既定は not_run・fail のケース）")
@@ -987,8 +1140,8 @@ def main(argv=None) -> int:
     cfg = h.load_config(root)
     fn = {"summary": cmd_summary, "add": cmd_add, "update": cmd_update, "block": cmd_block,
           "set": cmd_set, "digests": cmd_digests, "run": cmd_run, "repair": cmd_repair,
-          "preflight": cmd_preflight}[args.cmd]
-    if args.cmd in ("add", "update", "block", "set", "digests"):
+          "preflight": cmd_preflight, "consolidate": cmd_consolidate, "cost": cmd_cost}[args.cmd]
+    if args.cmd in ("add", "update", "block", "set", "digests", "consolidate"):
         with ledger_lock(root, cfg):
             return fn(args, root, cfg)
     return fn(args, root, cfg)

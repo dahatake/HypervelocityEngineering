@@ -81,15 +81,34 @@ def _find_two_nodes(m):
 
 
 def _chord(m, anchor, node, axis):
-    """Extent (px) along one axis where a click selects `node` (anchor reset before each probe)."""
+    """Extent (px) along one axis where a click selects `node` (anchor reset before each probe).
+    The hit area is one convex disc around a point already known to hit, so each edge is found by
+    bisection instead of probing every pixel."""
     _, ax, ay = anchor
-    hits = []
-    for d in range(-34, 35):
+
+    def hit(d):
         pt = (node[1] + d, node[2]) if axis == "x" else (node[1], node[2] + d)
         m.click(ax, ay)
-        if m.click(*pt) == node[0]:
-            hits.append(d)
-    return (min(hits), max(hits)) if hits else None
+        return m.click(*pt) == node[0]
+
+    if not hit(0):
+        # the first-hit point may sit at an edge that a re-click misses; fall back to the full sweep
+        hits = [d for d in range(-34, 35) if hit(d)]
+        return (min(hits), max(hits)) if hits else None
+
+    def edge(sign):
+        lo, hi = 0, 34  # lo: known hit, hi: first known miss (or the probe limit)
+        if hit(sign * hi):
+            return sign * hi
+        while hi - lo > 1:
+            mid = (lo + hi) // 2
+            if hit(sign * mid):
+                lo = mid
+            else:
+                hi = mid
+        return sign * lo
+
+    return edge(-1), edge(1)
 
 
 VARIANTS = [

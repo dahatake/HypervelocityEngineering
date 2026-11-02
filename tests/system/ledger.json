@@ -347,16 +347,17 @@
         "FR-010"
       ],
       "ac_ids": [
-        "AC-010"
+        "AC-010",
+        "AC-034"
       ],
-      "title": "Invalid repository switch preserves current model",
+      "title": "Invalid repository switch preserves current model（ほか 1 件を統合）",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_invalid_repository_switch_keeps_model_and_explains_failure",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py -k \"test_invalid_repository_switch_keeps_model_and_explains_failure or test_repository_switch_success_updates_model_and_failure_restores_previous\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/E2E-007-202611020539.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/E2E-007-202611030030.log",
       "history": [
         {
           "at": "2026-10-09T22:11:16+09:00",
@@ -369,6 +370,12 @@
           "by": "test-designer",
           "change": "command: 'python -m pytest tests/system/e2e/test_studio_system.py' -> 'python -m pytest tests/system/e2e/test_studio_system.py::test_invalid_repository_switch_keeps_model_and_explains_failure'",
           "reason": "各ケースを独立実行し、他ACの結果に依存しないようにする"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: E2E-014 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -581,7 +588,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_repository_switch_success_updates_model_and_failure_restores_previous",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-014-202611020539.log",
@@ -597,8 +604,15 @@
           "by": "test-designer",
           "change": "command: 'python -m pytest tests/system/e2e/test_studio_system.py' -> 'python -m pytest tests/system/e2e/test_studio_system.py::test_repository_switch_success_updates_model_and_failure_restores_previous'",
           "reason": "各ケースを独立実行し、他ACの結果に依存しないようにする"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-007 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-007"
     },
     {
       "id": "E2E-015",
@@ -693,22 +707,29 @@
         "FR-1004"
       ],
       "ac_ids": [
-        "AC-046"
+        "AC-046",
+        "AC-047"
       ],
-      "title": "Explicit maintenance previews and safely applies the two permitted catalog columns",
+      "title": "Explicit maintenance previews and safely applies the two permitted catalog columns（ほか 1 件を統合）",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_explicit_maintenance_previews_and_applies_only_two_catalog_columns",
+      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py -k \"test_explicit_maintenance_previews_and_applies_only_two_catalog_columns or test_maintenance_failures_roll_back_every_byte_and_offer_retry_or_cancel\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/E2E-018-202611020539.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/E2E-018-202611030030.log",
       "history": [
         {
           "at": "2026-10-10T00:05:10+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: E2E-019 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -724,7 +745,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_maintenance_failures_roll_back_every_byte_and_offer_retry_or_cancel",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-019-202611020539.log",
@@ -734,8 +755,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-018 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-018"
     },
     {
       "id": "E2E-020",
@@ -768,22 +796,30 @@
         "FR-1006"
       ],
       "ac_ids": [
-        "AC-049"
+        "AC-049",
+        "AC-050",
+        "AC-051"
       ],
-      "title": "Layer consistency traces complete missing and dangling chains by ID",
+      "title": "Layer consistency traces complete missing and dangling chains by ID（ほか 2 件を統合）",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_layer_consistency_traces_normal_missing_layer_and_dangling_reference_by_id",
+      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py -k \"test_layer_consistency_traces_normal_missing_layer_and_dangling_reference_by_id or test_entity_er_uses_requirement_evidence_and_never_invents_missing_relations or test_history_progress_and_infographics_drill_to_evidence_without_counting_not_run_as_pass\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/E2E-021-202611020539.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/E2E-021-202611030030.log",
       "history": [
         {
           "at": "2026-10-10T00:05:26+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: E2E-022, E2E-023 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -799,7 +835,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_entity_er_uses_requirement_evidence_and_never_invents_missing_relations",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-022-202611020539.log",
@@ -809,8 +845,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-021 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-021"
     },
     {
       "id": "E2E-023",
@@ -824,7 +867,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_history_progress_and_infographics_drill_to_evidence_without_counting_not_run_as_pass",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-023-202611020539.log",
@@ -834,8 +877,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-021 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-021"
     },
     {
       "id": "E2E-024",
@@ -1005,22 +1055,30 @@
         "NFR-COMPAT-001"
       ],
       "ac_ids": [
-        "AC-066"
+        "AC-066",
+        "AC-067",
+        "AC-068"
       ],
-      "title": "Windowsパス同一性とロック保護",
+      "title": "Windowsパス同一性とロック保護（ほか 2 件を統合）",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_windows_aliases_are_one_candidate_but_collisions_and_locks_are_protected",
+      "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py -k \"test_windows_aliases_are_one_candidate_but_collisions_and_locks_are_protected or test_shipping_catalog_agent_and_guides_publish_one_cleanup_contract or test_cleanup_preserves_unrelated_diff_and_all_final_verifiers_exit_zero\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/E2E-033-202611020539.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/E2E-033-202611030030.log",
       "history": [
         {
           "at": "2026-10-10T10:42:22+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: E2E-034, E2E-035 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -1036,7 +1094,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_shipping_catalog_agent_and_guides_publish_one_cleanup_contract",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-034-202611020539.log",
@@ -1046,8 +1104,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-033 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-033"
     },
     {
       "id": "E2E-035",
@@ -1061,7 +1126,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_cleanup_preserves_unrelated_diff_and_all_final_verifiers_exit_zero",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-035-202611020539.log",
@@ -1071,8 +1136,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-033 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-033"
     },
     {
       "id": "E2E-062",
@@ -1105,22 +1177,29 @@
         "FR-1012"
       ],
       "ac_ids": [
-        "AC-080"
+        "AC-080",
+        "AC-081"
       ],
-      "title": "実装配置図が 3 層に分類しモデル上の資産と関連線だけを描く",
+      "title": "実装配置図が 3 層に分類しモデル上の資産と関連線だけを描く（ほか 1 件を統合）",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_map_placement_system.py -k test_placement_diagram_shows_three_layers -q",
+      "command": "python -m pytest tests/system/e2e/test_studio_map_placement_system.py -k \"(test_placement_diagram_shows_three_layers) or (test_placement_click_highlights)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/E2E-064-202611020539.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/E2E-064-202611030030.log",
       "history": [
         {
           "at": "2026-10-12T15:07:58+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: E2E-066 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -1136,7 +1215,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_map_placement_system.py -k test_placement_click_highlights -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-066-202611020539.log",
@@ -1146,8 +1225,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-064 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-064"
     },
     {
       "id": "E2E-071",
@@ -1461,22 +1547,30 @@
         "FR-1034"
       ],
       "ac_ids": [
-        "AC-199"
+        "AC-199",
+        "AC-200",
+        "AC-207"
       ],
-      "title": "アーキテクチャ図（2D/3D）で実行場所ごとのアプリ・データ・通信が区別でき、未記載の配置は描かない",
+      "title": "アーキテクチャ図（2D/3D）で実行場所ごとのアプリ・データ・通信が区別でき、未記載の配置は描かない（ほか 2 件を統合）",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_links_wrap_status_arch_system.py -k \"ac199\" -q",
+      "command": "python -m pytest tests/system/e2e/test_studio_links_wrap_status_arch_system.py -k \"(ac199) or (ac200) or (ac207)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/E2E-093-202611020541.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/E2E-093-202611030030.log",
       "history": [
         {
           "at": "2026-10-15T05:03:16+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: E2E-094, E2E-095 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -1492,7 +1586,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_links_wrap_status_arch_system.py -k \"ac200\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-094-202611020541.log",
@@ -1502,8 +1596,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-093 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-093"
     },
     {
       "id": "E2E-095",
@@ -1517,7 +1618,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_links_wrap_status_arch_system.py -k \"ac207\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-095-202611020541.log",
@@ -1527,8 +1628,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "AC-207 の System Test を追加"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-093 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-093"
     },
     {
       "id": "E2E-096",
@@ -1636,22 +1744,29 @@
         "NFR-UX-002"
       ],
       "ac_ids": [
-        "AC-015"
+        "AC-015",
+        "AC-041"
       ],
-      "title": "変更したレイアウトは同じブラウザーの再読込で復元され、別のブラウザーには引き継がれず、壊れた保存値は既定になる",
+      "title": "変更したレイアウトは同じブラウザーの再読込で復元され、別のブラウザーには引き継がれず、壊れた保存値は既定になる（ほか 1 件を統合）",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_layout_authz_system.py -k \"ac015\" -q",
+      "command": "python -m pytest tests/system/e2e/test_studio_layout_authz_system.py -k \"(ac015) or (ac041)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/E2E-109-202611020539.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/E2E-109-202611030030.log",
       "history": [
         {
           "at": "2026-10-16T05:00:06+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "AC-015 の台帳ケースを追加（監査 A-01）"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: E2E-110 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -1667,7 +1782,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_layout_authz_system.py -k \"ac041\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-110-202611020539.log",
@@ -1677,8 +1792,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "AC-041 の台帳ケースを追加（監査 A-01）"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-109 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-109"
     },
     {
       "id": "E2E-111",
@@ -1711,22 +1833,29 @@
         "FR-1050"
       ],
       "ac_ids": [
-        "AC-277"
+        "AC-277",
+        "AC-278"
       ],
-      "title": "表の全種別の表セルの実在 ID はすべてリンク／実在しない ID はリンクにしない",
+      "title": "表の全種別の表セルの実在 ID はすべてリンク／実在しない ID はリンクにしない（ほか 1 件を統合）",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac277\" -q",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"(ac277) or (ac278)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/E2E-112-202611020539.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/E2E-112-202611030030.log",
       "history": [
         {
           "at": "2026-10-17T14:20:29+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: E2E-113 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -1742,7 +1871,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac278\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-113-202611020539.log",
@@ -1752,8 +1881,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-112 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-112"
     },
     {
       "id": "E2E-114",
@@ -1761,22 +1897,29 @@
         "FR-1051"
       ],
       "ac_ids": [
-        "AC-280"
+        "AC-280",
+        "AC-281"
       ],
-      "title": "表の種別が 要求・設計・証跡・運用 の 4 グループ見出しの下に束ねられる",
+      "title": "表の種別が 要求・設計・証跡・運用 の 4 グループ見出しの下に束ねられる（ほか 1 件を統合）",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac280\" -q",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"(ac280) or (ac281)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/E2E-114-202611020539.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/E2E-114-202611030030.log",
       "history": [
         {
           "at": "2026-10-17T14:20:34+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: E2E-115 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -1792,7 +1935,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac281\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-115-202611020539.log",
@@ -1802,8 +1945,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-114 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-114"
     },
     {
       "id": "E2E-116",
@@ -1811,22 +1961,30 @@
         "FR-1052"
       ],
       "ac_ids": [
-        "AC-283"
+        "AC-283",
+        "AC-284",
+        "AC-285"
       ],
-      "title": "エンティティ詳細にパンくず（nav・aria-current・一覧へ戻る a）がある",
+      "title": "エンティティ詳細にパンくず（nav・aria-current・一覧へ戻る a）がある（ほか 2 件を統合）",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac283\" -q",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"(ac283) or (ac284) or (ac285)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/E2E-116-202611020539.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/E2E-116-202611030030.log",
       "history": [
         {
           "at": "2026-10-17T14:20:40+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: E2E-117, E2E-118 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -1842,7 +2000,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac284\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-117-202611020539.log",
@@ -1852,8 +2010,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-116 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-116"
     },
     {
       "id": "E2E-118",
@@ -1867,7 +2032,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac285\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-118-202611020539.log",
@@ -1877,8 +2042,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-116 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-116"
     },
     {
       "id": "E2E-119",
@@ -1886,16 +2058,20 @@
         "FR-1047"
       ],
       "ac_ids": [
-        "AC-258"
+        "AC-258",
+        "AC-259",
+        "AC-261",
+        "AC-262",
+        "AC-260"
       ],
-      "title": "tokens defined once and no raw colors outside them",
+      "title": "tokens defined once and no raw colors outside them（ほか 4 件を統合）",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac258_tokens_defined_once_and_no_raw_colors_outside_them\" -q",
+      "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"(test_ac258_tokens_defined_once_and_no_raw_colors_outside_them) or (test_ac259_three_choices_default_system_and_follow_os_without_reload) or (test_ac261_system_font_stack_no_remote_fonts_and_type_ramp) or (test_ac262_spacing_size_radius_tokens_are_multiples_of_grid) or (test_ac260_choice_is_restored_after_reload_and_next_launch)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/E2E-119-202611020539.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/E2E-119-202611030030.log",
       "history": [
         {
           "at": "2026-10-17T14:37:55+09:00",
@@ -1914,6 +2090,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: E2E-121, E2E-125, E2E-127, E2E-160 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -1929,7 +2111,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac259_three_choices_default_system_and_follow_os_without_reload\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-121-202611020539.log",
@@ -1951,8 +2133,15 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-119 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-119"
     },
     {
       "id": "E2E-125",
@@ -1966,7 +2155,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac261_system_font_stack_no_remote_fonts_and_type_ramp\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-125-202611020539.log",
@@ -1988,8 +2177,15 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-119 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-119"
     },
     {
       "id": "E2E-127",
@@ -2003,7 +2199,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac262_spacing_size_radius_tokens_are_multiples_of_grid\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-127-202611020539.log",
@@ -2025,8 +2221,15 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-119 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-119"
     },
     {
       "id": "E2E-129",
@@ -2034,16 +2237,21 @@
         "FR-1048"
       ],
       "ac_ids": [
-        "AC-263"
+        "AC-263",
+        "AC-264",
+        "AC-265",
+        "AC-266",
+        "AC-267",
+        "AC-268"
       ],
-      "title": "elevation levels and same kind same value on all screens",
+      "title": "elevation levels and same kind same value on all screens（ほか 5 件を統合）",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac263_elevation_levels_and_same_kind_same_value_on_all_screens\" -q",
+      "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"(test_ac263_elevation_levels_and_same_kind_same_value_on_all_screens) or (test_ac264_interactive_states_defined_and_selection_not_color_only) or (test_ac265_motion_uses_tokens_within_limit_and_no_endless_animation) or (test_ac266_layers_fall_back_to_opaque_with_readable_text) or (test_ac267_error_state_has_common_structure_and_keeps_input) or (test_ac268_single_bundled_icon_set_allowed_sizes_and_accessible_names)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/E2E-129-202611020539.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/E2E-129-202611030030.log",
       "history": [
         {
           "at": "2026-10-17T14:38:51+09:00",
@@ -2062,6 +2270,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: E2E-130, E2E-132, E2E-133, E2E-134, E2E-137 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -2077,7 +2291,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac264_interactive_states_defined_and_selection_not_color_only\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-130-202611020539.log",
@@ -2099,8 +2313,15 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-129 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-129"
     },
     {
       "id": "E2E-132",
@@ -2114,7 +2335,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac265_motion_uses_tokens_within_limit_and_no_endless_animation\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-132-202611020539.log",
@@ -2136,8 +2357,15 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-129 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-129"
     },
     {
       "id": "E2E-133",
@@ -2151,7 +2379,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac266_layers_fall_back_to_opaque_with_readable_text\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-133-202611020539.log",
@@ -2173,8 +2401,15 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-129 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-129"
     },
     {
       "id": "E2E-134",
@@ -2188,7 +2423,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac267_error_state_has_common_structure_and_keeps_input\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-134-202611020539.log",
@@ -2210,8 +2445,15 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-129 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-129"
     },
     {
       "id": "E2E-137",
@@ -2225,7 +2467,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac268_single_bundled_icon_set_allowed_sizes_and_accessible_names\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-137-202611020539.log",
@@ -2247,8 +2489,15 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-129 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-129"
     },
     {
       "id": "E2E-139",
@@ -2256,16 +2505,21 @@
         "NFR-A11Y-001"
       ],
       "ac_ids": [
-        "AC-269"
+        "AC-269",
+        "AC-270",
+        "AC-271",
+        "AC-272",
+        "AC-273",
+        "AC-274"
       ],
-      "title": "token contrast ratios meet wcag aa and are reported",
+      "title": "token contrast ratios meet wcag aa and are reported（ほか 5 件を統合）",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac269_token_contrast_ratios_meet_wcag_aa_and_are_reported\" -q",
+      "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"(test_ac269_token_contrast_ratios_meet_wcag_aa_and_are_reported) or (test_ac270_focus_visible_on_keyboard_not_on_mouse_and_no_bare_outline_none) or (test_ac271_forced_colors_defined_and_state_visible) or (test_ac272_reduced_motion_stops_animations_on_all_screens) or (test_ac273_pointer_target_size_at_least_24px) or (test_ac274_theme_toggle_keyboard_reachable_with_name_role_state_and_announced)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/E2E-139-202611020539.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/E2E-139-202611030030.log",
       "history": [
         {
           "at": "2026-10-17T14:39:55+09:00",
@@ -2284,6 +2538,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: E2E-140, E2E-142, E2E-143, E2E-145, E2E-147 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -2299,7 +2559,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac270_focus_visible_on_keyboard_not_on_mouse_and_no_bare_outline_none\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-140-202611020539.log",
@@ -2321,8 +2581,15 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-139 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-139"
     },
     {
       "id": "E2E-142",
@@ -2336,7 +2603,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac271_forced_colors_defined_and_state_visible\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-142-202611020539.log",
@@ -2358,8 +2625,15 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-139 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-139"
     },
     {
       "id": "E2E-143",
@@ -2373,7 +2647,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac272_reduced_motion_stops_animations_on_all_screens\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-143-202611020539.log",
@@ -2395,8 +2669,15 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-139 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-139"
     },
     {
       "id": "E2E-145",
@@ -2410,7 +2691,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac273_pointer_target_size_at_least_24px\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-145-202611020539.log",
@@ -2432,8 +2713,15 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-139 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-139"
     },
     {
       "id": "E2E-147",
@@ -2447,7 +2735,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac274_theme_toggle_keyboard_reachable_with_name_role_state_and_announced\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-147-202611020539.log",
@@ -2469,8 +2757,15 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-139 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-139"
     },
     {
       "id": "E2E-149",
@@ -2682,16 +2977,18 @@
         "FR-1018"
       ],
       "ac_ids": [
-        "AC-107"
+        "AC-107",
+        "AC-108",
+        "AC-109"
       ],
-      "title": "再検査合格時のみ修復を commit し不合格なら commit も push もしない(異常系)",
+      "title": "再検査合格時のみ修復を commit し不合格なら commit も push もしない(異常系)（ほか 2 件を統合）",
       "layer": "contract",
-      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac107 -q",
+      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k \"(ac107) or (ac108) or (ac109)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/IT-010-202611020541.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/IT-010-202611030030.log",
       "history": [
         {
           "at": "2026-10-14T20:56:18+09:00",
@@ -2710,6 +3007,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-105..114 が level system になったため blocked 解除"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: IT-011, IT-012 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -2725,7 +3028,7 @@
       "layer": "contract",
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac108 -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/IT-011-202611020541.log",
@@ -2747,8 +3050,15 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-105..114 が level system になったため blocked 解除"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "IT-010 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "IT-010"
     },
     {
       "id": "IT-012",
@@ -2762,7 +3072,7 @@
       "layer": "contract",
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac109 -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/IT-012-202611020541.log",
@@ -2784,8 +3094,15 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-105..114 が level system になったため blocked 解除"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "IT-010 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "IT-010"
     },
     {
       "id": "IT-013",
@@ -2793,16 +3110,17 @@
         "FR-1019"
       ],
       "ac_ids": [
-        "AC-110"
+        "AC-110",
+        "AC-111"
       ],
-      "title": "再検査不合格時にラベル・要約・実行リンク付き Issue を 1 件作成する",
+      "title": "再検査不合格時にラベル・要約・実行リンク付き Issue を 1 件作成する（ほか 1 件を統合）",
       "layer": "contract",
-      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac110 -q",
+      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k \"(ac110) or (ac111)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/IT-013-202611020541.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/IT-013-202611030030.log",
       "history": [
         {
           "at": "2026-10-14T20:56:21+09:00",
@@ -2821,6 +3139,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-105..114 が level system になったため blocked 解除"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: IT-014 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -2836,7 +3160,7 @@
       "layer": "contract",
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac111 -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/IT-014-202611020541.log",
@@ -2858,8 +3182,15 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-105..114 が level system になったため blocked 解除"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "IT-013 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "IT-013"
     },
     {
       "id": "IT-015",
@@ -2867,16 +3198,17 @@
         "NFR-SEC-004"
       ],
       "ac_ids": [
-        "AC-112"
+        "AC-112",
+        "AC-113"
       ],
-      "title": "権限は 3 つの write のみで fork PR は書き込みせず検査のみ(異常系)",
+      "title": "権限は 3 つの write のみで fork PR は書き込みせず検査のみ(異常系)（ほか 1 件を統合）",
       "layer": "contract",
-      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac112 -q",
+      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k \"(ac112) or (ac113)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/IT-015-202611020541.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/IT-015-202611030030.log",
       "history": [
         {
           "at": "2026-10-14T20:56:23+09:00",
@@ -2895,6 +3227,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-105..114 が level system になったため blocked 解除"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: IT-016 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -2910,7 +3248,7 @@
       "layer": "contract",
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac113 -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/IT-016-202611020541.log",
@@ -2932,8 +3270,15 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-105..114 が level system になったため blocked 解除"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "IT-015 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "IT-015"
     },
     {
       "id": "IT-017",
@@ -3034,16 +3379,17 @@
         "FR-1024"
       ],
       "ac_ids": [
-        "AC-163"
+        "AC-163",
+        "AC-234"
       ],
-      "title": "企業データカタログ「利用する」で参照元が取得不能: 全エンティティを企業カタログ未確認の ToDo に（0 件含む）",
+      "title": "企業データカタログ「利用する」で参照元が取得不能: 全エンティティを企業カタログ未確認の ToDo に（0 件含む）（ほか 1 件を統合）",
       "layer": "contract",
-      "command": "python -m pytest tests/system/test_entities_system.py -k ac163 -q",
+      "command": "python -m pytest tests/system/test_entities_system.py -k \"(ac163) or (ac234)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/IT-020-202611020539.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/IT-020-202611030030.log",
       "history": [
         {
           "at": "2026-10-14T22:49:43+09:00",
@@ -3056,6 +3402,12 @@
           "by": "test-designer",
           "change": "title: '参照元未設定: 全エンティティを企業カタログ未確認の ToDo に（0 件含む）' -> '企業データカタログ「利用する」で参照元が取得不能: 全エンティティを企業カタログ未確認の ToDo に（0 件含む）'",
           "reason": "commit 2ef25488 で AC-163 が『利用する』設定時のみに改訂"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: IT-022 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -3071,7 +3423,7 @@
       "layer": "contract",
       "command": "python -m pytest tests/system/test_entities_system.py -k ac234 -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/IT-022-202611020539.log",
@@ -3081,8 +3433,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "IT-020 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "IT-020"
     },
     {
       "id": "IT-023",
@@ -3140,22 +3499,29 @@
         "FR-1045"
       ],
       "ac_ids": [
-        "AC-237"
+        "AC-237",
+        "AC-238"
       ],
-      "title": "インストーラ（新規の導入）: 導入後に自動修復し、修復項目・手動対応（CHK・位置・役割）・合否を表示",
+      "title": "インストーラ（新規の導入）: 導入後に自動修復し、修復項目・手動対応（CHK・位置・役割）・合否を表示（ほか 1 件を統合）",
       "layer": "data",
-      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac237_new_install\" -q",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"(ac237_new_install) or (ac238_no_repair)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/IT-031-202611020539.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/IT-031-202611030030.log",
       "history": [
         {
           "at": "2026-10-16T09:09:40+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: IT-034 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -3171,7 +3537,7 @@
       "layer": "data",
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac238_no_repair\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/IT-034-202611020539.log",
@@ -3181,8 +3547,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "IT-031 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "IT-031"
     },
     {
       "id": "E2E-160",
@@ -3196,7 +3569,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac260_choice_is_restored_after_reload_and_next_launch\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-160-202611020539.log",
@@ -3206,8 +3579,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-119 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-119"
     },
     {
       "id": "E2E-169",
@@ -3240,22 +3620,31 @@
         "FR-010"
       ],
       "ac_ids": [
-        "AC-332"
+        "AC-332",
+        "AC-333",
+        "AC-334",
+        "AC-335"
       ],
-      "title": "ヘッダーのリポジトリボタンにフォルダーアイコン、操作でフォルダー選択を開き文字入力モーダルを出さない／キーボード操作可",
+      "title": "ヘッダーのリポジトリボタンにフォルダーアイコン、操作でフォルダー選択を開き文字入力モーダルを出さない／キーボード操作可（ほか 3 件を統合）",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_repo_pick_system.py -k ac332",
+      "command": "python -m pytest tests/system/e2e/test_studio_repo_pick_system.py -k \"(ac332) or (ac333) or (ac334) or (ac335)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/E2E-165-202611020539.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/E2E-165-202611030030.log",
       "history": [
         {
           "at": "2026-10-18T18:57:40+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "FR-010 フォルダー選択の System Test を作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: E2E-166, E2E-167, E2E-168 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -3271,7 +3660,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_repo_pick_system.py -k ac333",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-166-202611020539.log",
@@ -3281,8 +3670,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "FR-010 フォルダー選択の System Test を作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-165 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-165"
     },
     {
       "id": "E2E-167",
@@ -3296,7 +3692,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_repo_pick_system.py -k ac334",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-167-202611020539.log",
@@ -3306,8 +3702,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "FR-010 フォルダー選択の System Test を作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-165 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-165"
     },
     {
       "id": "E2E-168",
@@ -3321,7 +3724,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_repo_pick_system.py -k ac335",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-168-202611020539.log",
@@ -3331,8 +3734,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "FR-010 フォルダー選択の System Test を作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-165 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-165"
     },
     {
       "id": "E2E-189",
@@ -3365,22 +3775,32 @@
         "FR-1063"
       ],
       "ac_ids": [
-        "AC-345"
+        "AC-345",
+        "AC-346",
+        "AC-347",
+        "AC-348",
+        "AC-349"
       ],
-      "title": "マップ 2D で項目が上位層ごとにまとまり名称・件数・開閉がある",
+      "title": "マップ 2D で項目が上位層ごとにまとまり名称・件数・開閉がある（ほか 4 件を統合）",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac345_map2d_items_are_grouped_by_tier_with_name_and_count_and_toggle\" -q",
+      "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"(test_ac345_map2d_items_are_grouped_by_tier_with_name_and_count_and_toggle) or (test_ac346_map3d_same_tier_structure_as_2d_and_toggles) or (test_ac347_rpg_removed_and_map2d_map3d_keep_fr1062_hierarchy_data_and_references) or (test_ac348_list_and_table_screens_group_rows_under_headings_with_counts) or (test_ac349_status_and_dashboard_group_by_tier_with_counts)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/E2E-173-202611020539.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/E2E-173-202611030030.log",
       "history": [
         {
           "at": "2026-10-18T19:36:50+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: E2E-175, E2E-176, E2E-178, E2E-179 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -3396,7 +3816,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac346_map3d_same_tier_structure_as_2d_and_toggles\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-175-202611020539.log",
@@ -3406,8 +3826,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-173 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-173"
     },
     {
       "id": "E2E-176",
@@ -3421,7 +3848,7 @@
       "layer": "e2e",
       "command": "python -m pytest -q tests/system/e2e/test_studio_tiers_system.py -k test_ac347_rpg_removed_and_map2d_map3d_keep_fr1062_hierarchy_data_and_references",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-176-202611020539.log",
@@ -3443,8 +3870,15 @@
           "by": "test-designer",
           "change": "command: 'python -m pytest tests/system/e2e/test_studio_tiers_system.py -k test_ac347_rpg_removed_and_map2d_map3d_keep_fr1062_hierarchy_data_and_references -q' -> 'python -m pytest -q tests/system/e2e/test_studio_tiers_system.py -k test_ac347_rpg_removed_and_map2d_map3d_keep_fr1062_hierarchy_data_and_references'",
           "reason": "AC-347 の期待値は維持。SPAハッシュ内のqueryからselectを解析し、2D・3Dの全要求の参照ID、実際の詳細表示と管理データ保持を検証する"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-173 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-173"
     },
     {
       "id": "E2E-178",
@@ -3458,7 +3892,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac348_list_and_table_screens_group_rows_under_headings_with_counts\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-178-202611020539.log",
@@ -3468,8 +3902,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-173 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-173"
     },
     {
       "id": "E2E-179",
@@ -3483,7 +3924,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac349_status_and_dashboard_group_by_tier_with_counts\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-179-202611020539.log",
@@ -3493,8 +3934,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-173 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-173"
     },
     {
       "id": "E2E-194",
@@ -3502,22 +3950,29 @@
         "FR-1070"
       ],
       "ac_ids": [
-        "AC-381"
+        "AC-381",
+        "AC-382"
       ],
-      "title": "3D のカメラのプリセットは 9 種・既定 corporate で、選ぶとカメラが変わる",
+      "title": "3D のカメラのプリセットは 9 種・既定 corporate で、選ぶとカメラが変わる（ほか 1 件を統合）",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_camera_presets_system.py -k \"test_ac381\" -q",
+      "command": "python -m pytest tests/system/e2e/test_studio_camera_presets_system.py -k \"(test_ac381) or (test_ac382)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/E2E-194-202611020541.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/E2E-194-202611030030.log",
       "history": [
         {
           "at": "2026-10-19T21:05:38+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: E2E-195 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -3533,7 +3988,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_camera_presets_system.py -k \"test_ac382\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-195-202611020541.log",
@@ -3543,8 +3998,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-194 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-194"
     },
     {
       "id": "E2E-196",
@@ -3552,22 +4014,29 @@
         "FR-1071"
       ],
       "ac_ids": [
-        "AC-385"
+        "AC-385",
+        "AC-386"
       ],
-      "title": "動きの軽減では全プリセットで Static、情報は欠けず、戻すと自動動作が有効",
+      "title": "動きの軽減では全プリセットで Static、情報は欠けず、戻すと自動動作が有効（ほか 1 件を統合）",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_camera_presets_system.py -k \"test_ac385\" -q",
+      "command": "python -m pytest tests/system/e2e/test_studio_camera_presets_system.py -k \"(test_ac385) or (test_ac386)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/E2E-196-202611020541.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/E2E-196-202611030030.log",
       "history": [
         {
           "at": "2026-10-19T21:05:41+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: E2E-197 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -3583,7 +4052,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_camera_presets_system.py -k \"test_ac386\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-197-202611020541.log",
@@ -3593,8 +4062,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-196 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-196"
     },
     {
       "id": "E2E-198",
@@ -3732,22 +4208,29 @@
         "FR-1068"
       ],
       "ac_ids": [
-        "AC-374"
+        "AC-374",
+        "AC-375"
       ],
-      "title": "3D ノードが種別ごとに異なるかたちを持つ",
+      "title": "3D ノードが種別ごとに異なるかたちを持つ（ほか 1 件を統合）",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac374_3d_nodes_expose_kind_and_distinct_shapes\" -q",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"(test_ac374_3d_nodes_expose_kind_and_distinct_shapes) or (test_ac375_legend_kinds_match_node_kinds)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/E2E-207-202611020539.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/E2E-207-202611030030.log",
       "history": [
         {
           "at": "2026-10-19T21:06:54+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test ケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: E2E-209 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -3763,7 +4246,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac375_legend_kinds_match_node_kinds\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-209-202611020539.log",
@@ -3773,8 +4256,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test ケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-207 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-207"
     },
     {
       "id": "E2E-211",
@@ -3782,22 +4272,29 @@
         "FR-1069"
       ],
       "ac_ids": [
-        "AC-378"
+        "AC-378",
+        "AC-379"
       ],
-      "title": "演出スタイルの既定は engineering で根要素に反映される",
+      "title": "演出スタイルの既定は engineering で根要素に反映される（ほか 1 件を統合）",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac378_style_toggle_defaults\" -q",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"(test_ac378_style_toggle_defaults) or (test_ac379_engineering_has_no_fx)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/E2E-211-202611020539.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/E2E-211-202611030030.log",
       "history": [
         {
           "at": "2026-10-19T21:06:59+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test ケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: E2E-213 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -3813,7 +4310,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac379_engineering_has_no_fx\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-213-202611020539.log",
@@ -3823,8 +4320,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test ケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-211 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-211"
     },
     {
       "id": "E2E-216",
@@ -3832,16 +4336,17 @@
         "FR-1072"
       ],
       "ac_ids": [
-        "AC-391"
+        "AC-391",
+        "AC-392"
       ],
-      "title": "ヘッダーの折返し・320px含む全幅内表示と残存2D/3D/Graph 3モード（RPG非表示）",
+      "title": "ヘッダーの折返し・320px含む全幅内表示と残存2D/3D/Graph 3モード（RPG非表示）（ほか 1 件を統合）",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_header_row_system.py -k ac391",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_row_system.py -k \"(ac391) or (ac392)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/E2E-216-202611020539.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/E2E-216-202611030030.log",
       "history": [
         {
           "at": "2026-10-19T23:27:17+09:00",
@@ -3872,6 +4377,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-391の期待値とテストを更新したため再実行待ち"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: E2E-217 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -3887,7 +4398,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_header_row_system.py -k ac392",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-217-202611020539.log",
@@ -3909,8 +4420,15 @@
           "by": "test-designer",
           "change": "command: \"python -m pytest tests/system/e2e/test_studio_header_row_system.py -k 'ac392'\" -> 'python -m pytest tests/system/e2e/test_studio_header_row_system.py -k ac392'",
           "reason": "Windows で -k の単一引用符が失敗するため引用符を除去"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-216 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-216"
     },
     {
       "id": "E2E-218",
@@ -4081,22 +4599,33 @@
       ],
       "ac_ids": [
         "AC-438",
-        "AC-441"
+        "AC-441",
+        "AC-439",
+        "AC-440",
+        "AC-442",
+        "AC-443",
+        "AC-444"
       ],
-      "title": "動的可視化: data-viz 公開・キー結合の enter/update/exit・絞り込みと data-viz-count・戻す",
+      "title": "動的可視化: data-viz 公開・キー結合の enter/update/exit・絞り込みと data-viz-count・戻す（ほか 5 件を統合）",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_dynamic_viz_system.py -k ac438 -q",
+      "command": "python -m pytest tests/system/e2e/test_studio_dynamic_viz_system.py -k \"(ac438) or (ac439) or (ac440) or (ac442) or (ac443) or (ac444)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "32a19a34",
-      "last_run_at": "2026-11-02T05:46:24+09:00",
-      "evidence": "work/runs/202611020515/logs/system-test/E2E-226-202611020544.log",
+      "last_commit": "a172b9ce",
+      "last_run_at": "2026-11-03T00:34:03+09:00",
+      "evidence": "work/runs/adhoc-202611030030/logs/system-test/E2E-226-202611030030.log",
       "history": [
         {
           "at": "2026-10-30T04:28:52+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "command, ac_ids: E2E-227, E2E-228, E2E-229, E2E-230, E2E-231 を統合",
+          "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
         }
       ]
     },
@@ -4112,7 +4641,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_dynamic_viz_system.py -k ac439 -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-227-202611020544.log",
@@ -4122,8 +4651,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-226 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-226"
     },
     {
       "id": "E2E-228",
@@ -4137,7 +4673,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_dynamic_viz_system.py -k ac440 -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-228-202611020544.log",
@@ -4147,8 +4683,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-226 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-226"
     },
     {
       "id": "E2E-229",
@@ -4162,7 +4705,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_dynamic_viz_system.py -k ac442 -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-229-202611020544.log",
@@ -4172,8 +4715,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-226 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-226"
     },
     {
       "id": "E2E-230",
@@ -4187,7 +4737,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_dynamic_viz_system.py -k ac443 -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-230-202611020545.log",
@@ -4197,8 +4747,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-226 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-226"
     },
     {
       "id": "E2E-231",
@@ -4212,7 +4769,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_dynamic_viz_system.py -k ac444 -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "32a19a34",
       "last_run_at": "2026-11-02T05:46:24+09:00",
       "evidence": "work/runs/202611020515/logs/system-test/E2E-231-202611020545.log",
@@ -4222,8 +4779,15 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-02T23:14:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "E2E-226 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
         }
-      ]
+      ],
+      "merged_into": "E2E-226"
     }
   ]
 }

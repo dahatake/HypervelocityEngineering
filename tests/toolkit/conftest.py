@@ -142,6 +142,35 @@ def init_git(path: Path):
     git(path, "config", "commit.gpgsign", "false")
 
 
+_SNAP = {}
+
+
+def _snapshot(key, build):
+    """install.py と sample の用意は重い（1 テストあたり数秒）。プロセスに 1 回だけ作り、各テストにはコピーを渡す。"""
+    import atexit
+    import tempfile
+    if key not in _SNAP:
+        base = Path(tempfile.mkdtemp(prefix="eabk-tk-snap-"))
+        atexit.register(lambda: shutil.rmtree(base, ignore_errors=True))
+        _SNAP[key] = build(base / "app")
+    return _SNAP[key]
+
+
+def _copy(snap: Path, dest: Path) -> Path:
+    shutil.copytree(snap, dest, symlinks=True)
+    return dest
+
+
+def _build_installed(path: Path) -> Path:
+    init_git(path)
+    (path / "README.md").write_text("# app\n", encoding="utf-8")
+    git(path, "add", "-A")
+    git(path, "commit", "-q", "-m", "init")
+    run([sys.executable, str(SOURCE / "tools" / "install.py"), "--target", str(path), "--skip-verify"], path, check=True)
+    Repo(path).commit("install toolkit")
+    return path
+
+
 @pytest.fixture
 def empty_repo(tmp_path):
     path = tmp_path / "app"
@@ -153,15 +182,12 @@ def empty_repo(tmp_path):
 
 
 @pytest.fixture
-def repo(empty_repo):
-    run([sys.executable, str(SOURCE / "tools" / "install.py"), "--target", str(empty_repo), "--skip-verify"], empty_repo, check=True)
-    r = Repo(empty_repo)
-    r.commit("install toolkit")
-    return r
+def repo(tmp_path):
+    return Repo(_copy(_snapshot("installed", _build_installed), tmp_path / "app"))
 
 
-@pytest.fixture
-def sample(repo):
+def _build_sample(path: Path) -> Path:
+    repo = Repo(_build_installed(path))
     repo.write("docs/requirements-definition.md", SAMPLE_RD)
     repo.write("docs/catalog.md", SAMPLE_CATALOG)
     repo.write("docs/id-registry.md", SAMPLE_ID_REGISTRY)
@@ -193,4 +219,9 @@ def sample(repo):
     cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     repo.py("next-id.py", "--sync", "--adopt", check=True)
     repo.commit("sample requirements")
-    return repo
+    return repo.path
+
+
+@pytest.fixture
+def sample(tmp_path):
+    return Repo(_copy(_snapshot("sample", _build_sample), tmp_path / "app"))
