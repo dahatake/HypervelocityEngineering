@@ -140,7 +140,12 @@
     "AC-440": "sha256:1506c2c97f3143c7",
     "AC-442": "sha256:4900ea1b7b109d53",
     "AC-443": "sha256:56844dcc502cae93",
-    "AC-444": "sha256:7a0a7b59545d11ae"
+    "AC-444": "sha256:7a0a7b59545d11ae",
+    "AC-453": "sha256:84b5ef16d2c94f6c",
+    "AC-454": "sha256:0fed17cc69bdc351",
+    "AC-455": "sha256:27ceea86990e47c7",
+    "AC-456": "sha256:e18a97619f4879e0",
+    "AC-457": "sha256:bcd423b094734a96"
   },
   "cases": [
     {
@@ -4222,6 +4227,37 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-058",
+      "requirement_ids": [
+        "FR-1081"
+      ],
+      "ac_ids": [
+        "AC-457"
+      ],
+      "title": "定型文の自動付与（付与・無効化・/build template 除外・既定文の配布・書き換え反映）",
+      "layer": "api",
+      "command": "python -m pytest tests/system/test_prompt_prefix_system.py -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-11-03T06:02:51+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-03T06:03:01+09:00",
+          "by": "test-designer",
+          "change": "ac_ids: ['AC-453', 'AC-454', 'AC-455', 'AC-456', 'AC-457'] -> ['AC-457']",
+          "reason": "AC-453〜456 は integration レベルで System Test 対象外。system は AC-457 のみ（テストは通し検証として全体を実行）"
         }
       ]
     }
