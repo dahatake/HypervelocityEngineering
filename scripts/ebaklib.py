@@ -283,6 +283,17 @@ def primary_tree_of(root: Path) -> Path:
     """The primary checkout of the repository that `root` belongs to (root itself when it is not a linked worktree)."""
     g = root / ".git"
     if g.is_file():
+        # `.git` の gitdir: <common>/worktrees/<name> と、その中の commondir から、git を起動せずに求める（1 回 60〜100 ms）
+        try:
+            txt = g.read_text(encoding="utf-8").strip()
+            if txt.startswith("gitdir:"):
+                gd = Path(txt.split(":", 1)[1].strip())
+                gd = gd if gd.is_absolute() else root / gd
+                cd = (gd / "commondir").read_text(encoding="utf-8").strip()
+                common = Path(cd) if Path(cd).is_absolute() else gd / cd
+                return common.resolve().parent
+        except OSError:
+            pass
         rc, out = git(["rev-parse", "--git-common-dir"], root)
         if rc == 0 and out.strip():
             common = Path(out.strip())

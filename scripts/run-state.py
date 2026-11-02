@@ -214,23 +214,35 @@ def require_own_worktree(root: Path, cfg: dict, args) -> Optional[int]:
     return 0
 
 
-def primary_tree(root: Path) -> Path:
+def worktree_paths(root: Path) -> list:
+    """Paths of the repository's worktrees (primary first), read from the git directory without starting git
+    (`git worktree list` costs 60-100 ms per call on Windows). Falls back to git when the layout is unexpected."""
+    try:
+        primary = h.primary_tree_of(root)
+        common = primary / ".git"
+        if common.is_dir():
+            paths = [primary]
+            wt = common / "worktrees"
+            for d in sorted(wt.iterdir()) if wt.is_dir() else []:
+                gd = (d / "gitdir").read_text(encoding="utf-8").strip()  # <worktree>/.git
+                paths.append(Path(gd).parent)
+            return paths
+    except (OSError, ValueError):
+        pass
     rc, out = h.git(["worktree", "list", "--porcelain"], root)
-    for line in out.splitlines():
-        if line.startswith("worktree "):
-            return Path(line.split(" ", 1)[1].strip())
-    return root
+    return [Path(line.split(" ", 1)[1].strip()) for line in out.splitlines() if line.startswith("worktree ")]
+
+
+def primary_tree(root: Path) -> Path:
+    paths = worktree_paths(root)
+    return paths[0] if paths else root
 
 
 def other_active_runs(root: Path) -> int:
     """Active runs in other worktrees of this repository (they share the machine's CPU and memory)."""
     n = 0
     here = os.path.normcase(str(root.resolve()))
-    rc, out = h.git(["worktree", "list", "--porcelain"], root)
-    for line in out.splitlines():
-        if not line.startswith("worktree "):
-            continue
-        p = Path(line.split(" ", 1)[1].strip())
+    for p in worktree_paths(root):
         if os.path.normcase(str(p.resolve())) == here or not p.exists():
             continue
         try:
