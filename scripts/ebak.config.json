@@ -50,7 +50,7 @@
   },
   "gates": {
     "enabled": true,
-    "allow_hook_edit": true,
+    "allow_hook_edit": false,
     "subagent_verify": {
       "implementer": ["--quick"],
       "test-designer": ["--docs-only"],
