@@ -219,6 +219,7 @@ TEMPLATES = [
     "docs/run-history.md",
     "docs/integrations.md",
     "tests/system/ledger.json",
+    ".github/ebak-prompt-prefix.md",
 ]
 CONFIG = "scripts/ebak.config.json"
 MANIFEST = ".github/ebak-toolkit.json"

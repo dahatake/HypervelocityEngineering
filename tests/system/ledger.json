@@ -140,7 +140,8 @@
     "AC-440": "sha256:1506c2c97f3143c7",
     "AC-442": "sha256:4900ea1b7b109d53",
     "AC-443": "sha256:56844dcc502cae93",
-    "AC-444": "sha256:7a0a7b59545d11ae"
+    "AC-444": "sha256:7a0a7b59545d11ae",
+    "AC-457": "sha256:bcd423b094734a96"
   },
   "cases": [
     {
@@ -4788,6 +4789,31 @@
         }
       ],
       "merged_into": "E2E-226"
+    },
+    {
+      "id": "IT-059",
+      "requirement_ids": [
+        "FR-1081"
+      ],
+      "ac_ids": [
+        "AC-457"
+      ],
+      "title": "定型文の自動付与（付与・無効化・/build template 除外・既定文の配布・書き換え反映）",
+      "layer": "api",
+      "command": "python -m pytest tests/system/test_prompt_prefix_system.py -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "2e224834",
+      "last_run_at": "2026-11-03T06:28:15+09:00",
+      "evidence": "work/runs/adhoc-202611030628/logs/system-test/IT-059-202611030628.log",
+      "history": [
+        {
+          "at": "2026-11-03T06:27:58+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
     }
   ]
 }

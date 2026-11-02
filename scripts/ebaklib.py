@@ -26,6 +26,7 @@ TOOLKIT_VERSION = "0.5.2"
 SPECKIT_PATHS = [".specify/**", "specs/**/*.md"]
 
 DEFAULT_CONFIG: dict = {
+    "prompt_prefix": {"enabled": True, "file": ".github/ebak-prompt-prefix.md"},
     "management_files": {
         "requirements": "docs/requirements-definition.md",
         "requirements_dir": "docs/requirements",
