@@ -1,4 +1,8 @@
 {
+  "prompt_prefix": {
+    "enabled": true,
+    "file": ".github/ebak-prompt-prefix.md"
+  },
   "management_files": {
     "requirements": "docs/requirements-definition.md",
     "requirements_dir": "docs/requirements",
@@ -46,7 +50,7 @@
   },
   "gates": {
     "enabled": true,
-    "allow_hook_edit": false,
+    "allow_hook_edit": true,
     "subagent_verify": {
       "implementer": ["--quick"],
       "test-designer": ["--docs-only"],

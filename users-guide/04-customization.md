@@ -115,6 +115,7 @@ hook は、読み取り専用・記録だけのツール（`view`・`grep`・`sq
 | `management_files` | `docs/requirements-definition.md` など | 管理データのパス。既存のディレクトリ構成に合わせて変更できます |
 | `enterprise_data_catalog` | なし（未設定） | 任意。企業データカタログの参照元。`{"source": "<ファイルのパスまたは http(s) の URL>", "name_column": "<名前の列・項目（省略可）>", "format": "auto|csv|json|markdown|html（省略可）"}`。`scripts/entities.py check` / `todo` が読み取りだけで照合します。URL に認証情報を埋め込めません（その場合は「照合不能」）。取得の待ち時間は PARAM-016、揺れ候補の類似度は PARAM-015 です |
 | `base_branch` | `main` | マージ先のブランチ。差分の検査（CHK-12/13）と、push の拒否（G-5）に使います |
+| `prompt_prefix` | `{"enabled": true, "file": ".github/ebak-prompt-prefix.md"}` | 利用者が Prompt を送るたびに、`file` の文章を内部の指示として自動で付けます（FR-1081。`/build template` には付けません）。文章は自由に書き換えられます。止めるには `enabled` を `false` にするか、ファイルを空にする・消します（インストーラは、ファイルが無いときだけ既定の文章を作り、あるファイルは上書きしません） |
 | `work.retention_days` | 14 | `/work/runs/` の保持日数 |
 | `checks.ambiguous_words` | 適切、迅速、直感的 など | 曖昧な語のリスト（CHK-13） |
 | `checks.id_scan_exclude` | `docs/**`、`EABK-Studio/**` など | コードから要求 ID を検索するときに除外するパス（CHK-17/19） |
