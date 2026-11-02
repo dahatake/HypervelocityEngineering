@@ -106,6 +106,8 @@ python scripts/ledger.py set E2E-001 blocked --reason "…"
 python scripts/ledger.py digests [--update]
 python scripts/ledger.py repair [--apply]          # Fix the ledger to match the requirements definition (used from rdfix.py)
 python scripts/ledger.py preflight [--cases ID,..] [--all]   # Check pytest with collect-only (0 collected means a syntax/import/-k/node id error). Must exit 0 before test-designer finishes and before stage 4 completes
+python scripts/ledger.py cost [--top N] [--check]            # Case count, test files, mergeable cases, slow commands, budget (system_test.budget; --check exits 1 when exceeded)
+python scripts/ledger.py consolidate [--apply] [--reason ..]  # Merge cases sharing test file, layer, and requirements into one (plan only by default; ACs unioned, old cases blocked)
 python scripts/ledger.py --by conductor run --select changed|failed|all [--canary-first] [--stop-on-canary-fail] [--max-minutes N]
 python scripts/ledger.py run --cases E2E-001,IT-002 --no-record   # In a worker's worktree, only run without updating the ledger
 ```

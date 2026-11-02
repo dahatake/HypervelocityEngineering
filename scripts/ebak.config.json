@@ -34,6 +34,17 @@
     "enabled": true,
     "dirs": ["node_modules"]
   },
+  "system_test": {
+    "_note": "jobs: ケースを同時に実行する数（N または auto）。ポートやデータを共有しないケースだけで使う。batch_pytest: 同じ pytest ファイルのケースを 1 プロセスにまとめる。budget: ledger.py cost --check が見る上限（System Test の数と実行時間の最小化）。",
+    "jobs": "auto",
+    "batch_pytest": true,
+    "budget": {
+      "max_active_cases": 100,
+      "max_cases_per_requirement": 5,
+      "max_case_seconds": 180,
+      "max_total_seconds": 1200
+    }
+  },
   "verify": {
     "timeout_sec": 1800,
     "commands": [

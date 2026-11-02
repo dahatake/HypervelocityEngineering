@@ -4,6 +4,7 @@ The assertions below are derived from docs/requirements-definition.md.  The
 application is used only to discover the browser entry points and controls.
 """
 
+import atexit
 import hashlib
 import json
 import os
@@ -30,7 +31,7 @@ def _free_port():
         return sock.getsockname()[1]
 
 
-def _start_studio():
+def _launch_studio():
     port = _free_port()
     proc = subprocess.Popen(
         [sys.executable, str(STUDIO), "--repo", str(ROOT), "--port", str(port), "--no-open"],
@@ -49,7 +50,10 @@ def _start_studio():
     else:
         proc.kill()
         raise RuntimeError("EABK Studio did not start")
-    yield f"http://127.0.0.1:{port}"
+    return proc, f"http://127.0.0.1:{port}"
+
+
+def _stop_studio(proc):
     proc.terminate()
     try:
         proc.wait(timeout=3)
@@ -57,10 +61,32 @@ def _start_studio():
         proc.kill()
 
 
+def _start_studio():
+    proc, url = _launch_studio()
+    yield url
+    _stop_studio(proc)
+
+
+_SHARED = {}
+
+
+def _shared_studio():
+    """読み取りだけのテストが使うサーバーを、テストプロセス全体で 1 つにする。
+
+    fixture を import し合うファイルが多く、fixture のスコープではファイルごとに起動し直しになるため、
+    プロセスに 1 つの実体を持つ。終了は atexit で行う。
+    """
+    proc = _SHARED.get("proc")
+    if proc is None or proc.poll() is not None:
+        if proc is None:
+            atexit.register(lambda: _stop_studio(_SHARED["proc"]))
+        _SHARED["proc"], _SHARED["url"] = _launch_studio()
+    return _SHARED["url"]
+
+
 @pytest.fixture(scope="module")
 def studio_url():
-    # 読み取りだけのテストでサーバーを共有する（起動をファイルに 1 回にして、時間を短くする）
-    yield from _start_studio()
+    yield _shared_studio()
 
 
 @pytest.fixture()

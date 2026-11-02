@@ -247,13 +247,13 @@ def test_ac187_language_switch_changes_words_and_nothing_is_sent_or_written(brow
     page.evaluate("() => window.eabkView.select('注文')")
     page.evaluate("() => window.eabkView.setScale(8)")
     expect(page.locator('[data-testid="sz-side"] thead')).to_contain_text("列名")
-    page.locator("#lang").click()
+    page.locator('#lang [data-lang="en"]').click()
     expect(page.locator('[data-testid="sz-level"]')).to_contain_text("Level: Detail")
     expect(page.locator('[data-testid="sz-side"] thead')).to_contain_text("Column")
     expect(page.locator('[data-testid="sz-side"] thead')).to_contain_text("References")
     state(page, 2)
     expect(page.locator('[data-edge][data-kind="外部キー"]').first).to_contain_text("Foreign key")
-    page.locator("#lang").click()
+    page.locator('#lang [data-lang="ja"]').click()
     expect(page.locator('[data-testid="sz-level"]')).to_contain_text("粒度: 中")
     assert hosts <= {url.split("/")[2]}  # 外部へ通信しない
     assert snapshot(repo) == before        # 対象リポジトリを書き換えない

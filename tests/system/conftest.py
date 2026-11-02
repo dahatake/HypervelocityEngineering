@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 
+import snapshots
+
 
 SOURCE = Path(__file__).resolve().parents[2]
 
@@ -35,9 +37,7 @@ def run(args, cwd: Path, check: bool = True):
     return result
 
 
-@pytest.fixture
-def installed_repo(tmp_path: Path) -> Path:
-    repo = tmp_path / "EABK system test repository with spaces"
+def _build_installed(repo: Path) -> None:
     repo.mkdir()
     run(["git", "init", "-q", "-b", "main"], repo)
     run(["git", "config", "user.email", "system-test@example.invalid"], repo)
@@ -52,5 +52,10 @@ def installed_repo(tmp_path: Path) -> Path:
     )
     run(["git", "add", "-A"], repo)
     run(["git", "commit", "-q", "-m", "install EABK"], repo)
-    return repo
+
+
+@pytest.fixture
+def installed_repo(tmp_path: Path) -> Path:
+    # install は 1 プロセスに 1 回だけ行い、各テストにはそのコピーを渡す（分離は同じ）
+    return snapshots.clone("installed", _build_installed, tmp_path / "EABK system test repository with spaces")
 

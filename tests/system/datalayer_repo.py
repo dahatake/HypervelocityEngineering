@@ -31,6 +31,8 @@ import sys
 from pathlib import Path
 from typing import Dict, Iterable, Tuple
 
+import snapshots
+
 SOURCE = Path(__file__).resolve().parents[2]
 SEP = "\u3000"
 
@@ -129,8 +131,7 @@ def write_clean_data_layer(root: Path) -> None:
                     encoding="utf-8", newline="\n")
 
 
-def make_clean_installed(root: Path) -> Path:
-    """Installed EABK + clean data layer, committed.  Precondition: verify --docs-only passes."""
+def _build_clean_installed(root: Path) -> None:
     git_init(root)
     install(root, "--skip-verify")
     commit(root, "install EABK")
@@ -138,7 +139,12 @@ def make_clean_installed(root: Path) -> Path:
     commit(root, "clean data layer")
     v = py(root, "scripts/verify.py", "--docs-only")
     assert v.returncode == 0, f"前提: 合成したデータ層が verify --docs-only に合格しない（テストの誤り）\n{v.stdout}\n{v.stderr}"
-    return root
+
+
+def make_clean_installed(root: Path) -> Path:
+    """Installed EABK + clean data layer, committed.  Precondition: verify --docs-only passes.
+    Built once per process and copied (the copy is as isolated as a fresh build)."""
+    return snapshots.clone("clean-installed", _build_clean_installed, root)
 
 
 DATA_FILES = (RD, INTEGRATIONS, CATALOG, REGISTRY, HISTORY, LEDGER)

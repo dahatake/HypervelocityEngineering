@@ -126,7 +126,11 @@ def test_concurrent_claim_and_start_keep_owners_ac417(repo):
         assert len(set(trees.values())) == PROCS
         for k, tree in trees.items():
             assert meta_in(tree).get("session_id") == out[k][0], (rnd, k, out[k][2].stdout, out[k][2].stderr)
-            assert not denied(create(repo, out[k][0], tree / "work" / f"n{k}.txt")), (rnd, k)
+        # 後の確認（独立した hook 呼び出し）は同時に行う。反復回数・同時数は PARAM-051・052 のまま
+        denials = {}
+        run_threads([lambda k=k, tree=tree: denials.__setitem__(k, denied(create(repo, out[k][0], tree / "work" / f"n{k}.txt")))
+                     for k, tree in trees.items()])
+        assert not any(denials.values()), (rnd, denials)
         claims = h.read_json(h.start_claims_file(repo.path, h.load_config(repo.path)), default=[]) or []
         assert not claims, "every claim was consumed exactly once"
 

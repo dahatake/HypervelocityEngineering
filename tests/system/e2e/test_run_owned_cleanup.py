@@ -16,6 +16,8 @@ from pathlib import Path
 
 import pytest
 
+import snapshots
+
 
 SOURCE = Path(__file__).resolve().parents[3]
 RID = "209901020304"
@@ -36,10 +38,7 @@ def git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProce
     return run(repo, "git", *args, check=check)
 
 
-@pytest.fixture()
-def installed_repo(tmp_path: Path) -> Path:
-    """Install the shipping artifact into a consumer repository."""
-    repo = tmp_path / "consumer repo"
+def _build_consumer(repo: Path) -> None:
     repo.mkdir()
     git(repo, "init", "-q", "-b", "main")
     git(repo, "config", "user.email", "system-test@example.invalid")
@@ -51,7 +50,12 @@ def installed_repo(tmp_path: Path) -> Path:
         "--target", str(repo), "--skip-verify")
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", "install EABK")
-    return repo
+
+
+@pytest.fixture()
+def installed_repo(tmp_path: Path) -> Path:
+    """Install the shipping artifact into a consumer repository (installed once per process, copied per test)."""
+    return snapshots.clone("consumer", _build_consumer, tmp_path / "consumer repo")
 
 
 def write_json(path: Path, value: object) -> None:

@@ -6,6 +6,12 @@ from conftest import SAMPLE_CATALOG, SAMPLE_RD, Repo, git
 
 def test_full_run_rehearsal(repo):
     p = repo.path
+    # この試験が確かめるのは run の流れ。toolkit 自身の単体試験（verify.commands の既定。1 回あたり約 8 秒 × 4 回）は、
+    # 下の verify の呼び出しの意味を変えないまま、同じ形式の軽い命令に置き換える
+    cfg = json.loads(repo.read("scripts/ebak.config.json"))
+    cfg["verify"]["commands"] = [{"name": "stand-in", "run": 'python -c "print(1)"'}]
+    repo.write("scripts/ebak.config.json", json.dumps(cfg, ensure_ascii=False, indent=2) + "\n")
+    repo.commit("stand-in verify command")
     # stage 0
     out = repo.py("run-state.py", "start", "--options", "max_hours: 24\nparallel_workers: 2", check=True).stdout
     rid = out.split()[1]
