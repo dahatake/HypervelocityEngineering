@@ -62,7 +62,7 @@ The foundation is the fourth measure, **persistent data management**. Requiremen
 
 ### Architecture
 
-![Component structure of Enterprise App Build Kit](images/enterprise-app-build-kit-components.svg)
+![Component structure of Enterprise App Build Kit](images/enterprise-app-build-kit-components.en.svg)
 
 The user just hands one request to conductor.
 
