@@ -123,3 +123,81 @@ def test_ledger_run_skips_repeat_failure(sample):
     forced = sample.py("ledger.py", "run", "--select", "all", "--results", res, "--rerun-failed")
     assert "IT-001 FR-001 fail" in forced.stdout and "repeat_fail_skipped=0" in forced.stdout
 
+
+
+def test_split_repeat_passes_unit():
+    import importlib.util
+    from conftest import SOURCE
+    spec = importlib.util.spec_from_file_location("ledger_mod2", SOURCE / "scripts" / "ledger.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    todo = [{"id": "A", "status": "pass", "last_commit": "h1"}, {"id": "B", "status": "pass", "last_commit": "h1"},
+            {"id": "C", "status": "fail", "last_commit": "h1"}, {"id": "D", "status": "pass", "last_commit": "h0"}]
+    runs = [{"case": "A", "status": "pass", "commit": "h1"}, {"case": "B", "status": "pass", "commit": "h1"},
+            {"case": "B", "status": "fail", "commit": "h1"}, {"case": "C", "status": "pass", "commit": "h1"},
+            {"case": "D", "status": "pass", "commit": "h0"}]
+    keep, reused = mod.split_repeat_passes(todo, runs, "h1", True)
+    assert reused == ["A"] and [c["id"] for c in keep] == ["B", "C", "D"]
+    assert mod.split_repeat_passes(todo, runs, "h1", False) == (todo, [])
+
+
+def test_ledger_run_reuses_pass_in_same_run(sample):
+    sample.py("ledger.py", "add", "--req", "FR-001", "--ac", "AC-001", "--title", "t", "--layer", "api",
+              "--command", "python -c \"pass\"", check=True)
+    res = str(sample.path / "work" / "r.json")
+    sample.py("ledger.py", "run", "--select", "all", "--results", res)
+    git(sample.path, "add", "-A")
+    git(sample.path, "commit", "-qm", "ledger")
+    sample.py("ledger.py", "run", "--select", "all", "--results", res)
+    again = sample.py("ledger.py", "run", "--select", "all", "--results", res)
+    assert again.returncode == 0 and "reused_pass=1" in again.stdout and "IT-001 FR-001 pass" not in again.stdout
+    forced = sample.py("ledger.py", "run", "--select", "all", "--results", res, "--rerun-passed")
+    assert "IT-001 FR-001 pass" in forced.stdout and "reused_pass=0" in forced.stdout
+
+
+def _ledger_mod(name):
+    import importlib.util
+    from conftest import SOURCE
+    spec = importlib.util.spec_from_file_location(name, SOURCE / "scripts" / "ledger.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_parse_nodetest_and_plan():
+    mod = _ledger_mod("ledger_mod3")
+    assert mod.parse_nodetest('node --test --test-name-pattern="AC-001" tests/system/a.test.js') == ("tests/system/a.test.js", "AC-001")
+    assert mod.parse_nodetest("node --test --test-name-pattern=AC-002 ./tests/a.test.mjs") == ("tests/a.test.mjs", "AC-002")
+    assert mod.parse_nodetest('node --test --test-name-pattern="AC-1|AC-2" a.test.js') is None
+    assert mod.parse_nodetest('node --test --test-concurrency=1 --test-name-pattern="AC-1" a.test.js') is None
+    reps = [{"command": f'node --test --test-name-pattern="AC-00{i}" a.test.js'} for i in (1, 2)]
+    reps.append({"command": 'node --test --test-name-pattern="AC-009" b.test.js'})
+    units, used = mod.plan_node_batches(reps, lambda c: False, lambda c: False)
+    assert len(units) == 1 and units[0]["_batch"]["file"] == "a.test.js" and len(used) == 2
+
+
+def test_run_node_batch_attribution_and_fallback(tmp_path):
+    import shutil
+    if not shutil.which("node"):
+        import pytest
+        pytest.skip("node is not installed")
+    mod = _ledger_mod("ledger_mod4")
+    (tmp_path / "a.test.js").write_text(
+        "const t=require('node:test');const a=require('node:assert');\n"
+        "t('AC-001 ok',()=>{});t('AC-002 ok',()=>{});t('AC-003 bad',()=>{a.fail('x')});\n", encoding="utf-8")
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    cases = [{"id": f"IT-00{i}", "command": f'node --test --test-name-pattern="AC-00{i}" a.test.js'} for i in (1, 2, 3)]
+    units, _ = mod.plan_node_batches(cases, lambda c: False, lambda c: False)
+    calls = []
+
+    def single(c):
+        calls.append(c["id"])
+        rc, out = mod.run_shell(c["command"], str(tmp_path), 60)
+        log = logs / f"{c['id']}.log"
+        log.write_text(out, encoding="utf-8")
+        return c, (rc, 0.0, log)
+
+    res = mod.run_batch(units[0], tmp_path, logs, 60, single)
+    assert res[cases[0]["command"]][0] == 0 and res[cases[1]["command"]][0] == 0
+    assert res[cases[2]["command"]][0] != 0 and calls == ["IT-003"]  # the failing member is judged by its own run

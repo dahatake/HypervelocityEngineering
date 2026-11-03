@@ -5,6 +5,10 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+- `ledger.py run`: 同じファイルを指す `node --test --test-name-pattern=<ID> <file>` のケース（2 件以上）を 1 つの node プロセスにまとめる（pytest のまとめ実行と同じ方針。JUnit の結果を各ケースに割り当て、fail・一致 0 件・どのケースにも属さない fail があるときはそのケースを単独で再実行して判定）。実測（Graphic-Recording-Panel の 6,513 回の実行の 90% が 2 秒未満・時間の 21%）: `startbar.test.js` の 7 ケースを 2.49 秒 → 0.43 秒、startbar・detail の 13 ケースで `ledger.py run` 全体が 1.3 秒 → 0.6 秒。`--no-batch` と `system_test.batch_pytest: false` で無効にできる。
+
+- `ledger.py run`: 同じ run の同じ clean commit ですでに pass し、台帳も pass のケースは再実行しない（出力に `reused_pass=N`、`--rerun-passed` で再実行）。実測（BusinessAnalyticsStudio・Graphic-Recording-Panel・本リポジトリーの `results.json` 計 11,253 回）で、同じ commit の pass 後の再実行は 10%・10%・2%（BusinessAnalyticsStudio は 11,087 秒）。
+
 - System Test の数と実行時間の最小化（実測: `tests/system` 全体 33 分・遅い上位は画素の総当たり走査とテストごとの install）。
   - `ledger.py consolidate [--apply]`: 同じテストファイル・層・要求の有効なケース（canary・serial を除く）を 1 つに統合する。AC は和集合、command は `-k` で元の選択の和集合（統合の前後で選択されるテストが同じことを確認済み）、元のケースは blocked（`merged_into`・理由を history）、統合したケースは not_run。この台帳は有効なケースが 139 → 88。
   - `ledger.py cost [--top N] [--check]`: 有効なケース数・テストファイル数・統合できる数・既知の実行時間の上位・予算（`system_test.budget` の `max_active_cases`・`max_cases_per_requirement`・`max_case_seconds`・`max_total_seconds`）。`--check` は超過で exit 1。

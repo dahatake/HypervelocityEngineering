@@ -657,6 +657,57 @@ def parse_pytest(cmd: str):
     return f, node, k
 
 
+def parse_nodetest(cmd: str):
+    """`node --test --test-name-pattern[=| ]<AC-001> <file>` -> (file, pattern). Anything else (other options, shell syntax) -> None."""
+    if any(ch in cmd for ch in "\\&|;<>%^`$"):
+        return None
+    try:
+        t = shlex.split(cmd)
+    except ValueError:
+        return None
+    if t[:2] != ["node", "--test"]:
+        return None
+    pat, target, i = None, None, 2
+    while i < len(t):
+        a = t[i]
+        if a.startswith("--test-name-pattern=") and pat is None:
+            pat = a.split("=", 1)[1]
+        elif a == "--test-name-pattern" and pat is None and i + 1 < len(t):
+            pat = t[i + 1]
+            i += 1
+        elif not a.startswith("-") and target is None and re.search(r"\.(c|m)?js$", a):
+            target = a
+        else:
+            return None
+        i += 1
+    if not pat or not target or not re.fullmatch(r"[A-Za-z0-9_ .:-]+", pat):
+        return None
+    return re.sub(r"^\./", "", target), pat
+
+
+def plan_node_batches(reps, is_serial, is_canary):
+    """Group `node --test --test-name-pattern=<id> <file>` commands that name the same file (>= 2) into one node process
+    each: the process start (about 0.4 s of a typical 0.5 s case) is paid once. Returns (units, used command set)."""
+    byfile: dict = {}
+    for c in reps:
+        if is_serial(c) or is_canary(c):
+            continue
+        p = parse_nodetest(c["command"])
+        if p:
+            byfile.setdefault(p[0], []).append((c, p))
+    units, used = [], set()
+    for f, ms in byfile.items():
+        if len(ms) < 2:
+            continue
+        pats = list(dict.fromkeys(p[1] for _, p in ms))
+        sel = " ".join(f'--test-name-pattern="{x}"' for x in pats)
+        units.append({"id": "BATCH:" + f, "command": f"BATCH {f} {sel}",
+                      "_batch": {"kind": "node", "file": f, "target": f'"{f}"', "sel": sel,
+                                 "members": [(c, (f, None, p[1])) for c, p in ms]}})
+        used.update(c["command"] for c, _ in ms)
+    return units, used
+
+
 def _kmatcher(names):
     low = [n.lower() for n in names]
     return lambda ident, **kw: any(ident.lower() in n for n in low)
@@ -785,8 +836,10 @@ def run_batch(unit, root, logs_dir, timeout, execute_single):
     A member whose tests failed (or that matched no test) is re-run alone, so a failure is always judged and logged
     exactly as before and interference between tests cannot create a false fail. Returns {command: (rc, seconds, log)}."""
     import xml.etree.ElementTree as ET
-    from _pytest.mark.expression import Expression
     b = unit["_batch"]
+    if b.get("kind") == "node":
+        return run_node_batch(unit, root, logs_dir, timeout, execute_single)
+    from _pytest.mark.expression import Expression
     stamp = h.new_run_id()
     junit = logs_dir / f"BATCH-{re.sub(r'[^A-Za-z0-9]+', '_', b['file'])}-{stamp}.xml"
     cmd = f'python -m pytest {b["target"]} {b["sel"]} -q --junitxml="{junit}"'
@@ -834,6 +887,44 @@ def run_batch(unit, root, logs_dir, timeout, execute_single):
     return res
 
 
+def run_node_batch(unit, root, logs_dir, timeout, execute_single):
+    """One node:test process for several name patterns of one file; each member's result comes from the JUnit report.
+    A member with a failed test, with no matching test, or any batch with a failure no member claims, is re-run alone."""
+    import xml.etree.ElementTree as ET
+    b = unit["_batch"]
+    stamp = h.new_run_id()
+    safe = re.sub(r"[^A-Za-z0-9]+", "_", b["file"])
+    junit = logs_dir / f"BATCH-{safe}-{stamp}.xml"
+    cmd = (f'node --test {b["sel"]} --test-reporter=spec --test-reporter-destination=stdout '
+           f'--test-reporter=junit --test-reporter-destination="{junit}" {b["target"]}')
+    _rc, out = run_shell(cmd, str(root), timeout * max(1, len(b["members"])) if timeout else timeout)
+    mlog = logs_dir / f"BATCH-{safe}-{stamp}.log"
+    mlog.write_text(out, encoding="utf-8")
+    tcs = []
+    try:
+        for tc in ET.parse(junit).getroot().iter("testcase"):
+            bad = tc.find("failure") is not None or tc.find("error") is not None
+            tcs.append((tc.get("name") or "", float(tc.get("time") or 0), bad))
+    except (OSError, ET.ParseError, ValueError):
+        tcs = []
+    hits = {}
+    for c, (_f, _n, pat) in b["members"]:
+        hits[c["command"]] = [t for t in tcs if re.search(pat, t[0])]
+    claimed = {id(t) for v in hits.values() for t in v}
+    unclaimed_bad = any(t[2] and id(t) not in claimed for t in tcs)
+    res: dict = {}
+    for c, _ in b["members"]:
+        hit = hits[c["command"]]
+        if not tcs or unclaimed_bad or not hit or any(t[2] for t in hit):
+            res[c["command"]] = execute_single(c)[1]
+            continue
+        log = logs_dir / f"{c['id']}-{stamp}.log"
+        log.write_text(f"BATCH {b['file']}: {len(hit)} tests passed (merged run log: {mlog.name})\n"
+                       + "\n".join(f"PASSED {t[0]}" for t in hit), encoding="utf-8")
+        res[c["command"]] = (0, round(sum(t[1] for t in hit), 1), log)
+    return res
+
+
 def tree_is_clean(root: Path) -> bool:
     """True when nothing but work/ (logs, run data) differs from HEAD, so "same commit" means "same code"."""
     rc, out = h.git(["status", "--porcelain", "--untracked-files=normal"], root)
@@ -860,6 +951,21 @@ def split_repeat_failures(todo, runs, head, clean):
     for c in todo:
         (held if c["id"] in prev else keep).append((c, prev[c["id"]]) if c["id"] in prev else c)
     return keep, held
+
+
+def split_repeat_passes(todo, runs, head, clean):
+    """(to run, [reused case ids]). A case whose latest result in `runs` (results.json of this run) is a pass at `head`,
+    on a clean tree, with the ledger still saying pass, is not executed again: same code, same command."""
+    if not clean:
+        return todo, []
+    last = {}
+    for r in runs:
+        if r.get("commit") == head:
+            last[r.get("case")] = r.get("status")
+    keep, reused = [], []
+    for c in todo:
+        (reused if last.get(c["id"]) == "pass" and c.get("status") == "pass" and c.get("last_commit") == head else keep).append(c)
+    return keep, [c["id"] for c in reused]
 
 
 def cmd_run(args, root, cfg) -> int:
@@ -906,10 +1012,16 @@ def cmd_run(args, root, cfg) -> int:
     todo = [c for c in sel if c.get("command")]
     # a case that already failed (not timed out) at this same clean commit in this run fails again: do not pay for it twice
     repeat_fail: list = []
+    clean = bool(head) and not args.cases and not (args.rerun_failed and args.rerun_passed) and tree_is_clean(root)
     if not args.cases and not args.rerun_failed and head:
-        todo, repeat_fail = split_repeat_failures(todo, results.get("runs", []), head, tree_is_clean(root))
+        todo, repeat_fail = split_repeat_failures(todo, results.get("runs", []), head, clean)
         for c, prev in repeat_fail:
             print(f"skip {c['id']}: 同じ commit {head[:7]} で fail 済み（{prev.get('at', '')}, {prev.get('log', '')}）。直して commit してから、または --rerun-failed で再実行")
+    reused_pass: list = []
+    if not args.cases and not args.rerun_passed and head:
+        todo, reused_pass = split_repeat_passes(todo, results.get("runs", []), head, clean)
+        if reused_pass:
+            print(f"reuse {len(reused_pass)} case(s): 同じ clean commit {head[:7]} で、この run がすでに pass 済み（--rerun-passed で再実行）")
     done: dict = {}
     pats = [p for p in ((cfg.get("system_test") or {}).get("serial_patterns") or []) if p]
     dur_path = h.work_dir(cerr, cfg) / ".ebak" / "durations.json"
@@ -957,6 +1069,11 @@ def cmd_run(args, root, cfg) -> int:
             groups[u["command"]] = [x for m, _ in u["_batch"]["members"] for x in groups[m["command"]]]
         rest = [c for c in rest if c["command"] not in used] + units
         batched = sum(len(u["_batch"]["members"]) for u in units)
+        nunits, nused = plan_node_batches(rest, is_serial, is_canary)
+        for u in nunits:
+            groups[u["command"]] = [x for m, _ in u["_batch"]["members"] for x in groups[m["command"]]]
+        rest = [c for c in rest if c["command"] not in nused] + nunits
+        batched += sum(len(u["_batch"]["members"]) for u in nunits)
 
     def dur_key(c):
         if c.get("_batch"):
@@ -1027,7 +1144,7 @@ def cmd_run(args, root, cfg) -> int:
         h.save_ledger(root, cfg, data)
     print("\n".join(lines_out))
     result = stop_reason or ("全件 pass" if summary["fail"] == 0 and not repeat_fail else "fail あり")
-    print(f"ledger run: pass={summary['pass']} fail={summary['fail']} skipped={summary['skipped']} repeat_fail_skipped={len(repeat_fail)} results={results_path} 結果: {result}"
+    print(f"ledger run: pass={summary['pass']} fail={summary['fail']} skipped={summary['skipped']} repeat_fail_skipped={len(repeat_fail)} reused_pass={len(reused_pass)} results={results_path} 結果: {result}"
           f" unique_commands={len(reps)} dedup_omitted={omitted} batched_commands={batched} jobs={jobs} elapsed={time.time() - t_start:.1f}s")
     return 0 if summary["fail"] == 0 and not stop_reason and not repeat_fail else 1
 
@@ -1134,6 +1251,7 @@ def main(argv=None) -> int:
     r.add_argument("--no-record", action="store_true", help="台帳を書き換えない（作業役の worktree で使う）")
     r.add_argument("--no-batch", action="store_true", help="同じ pytest ファイルのケースを 1 プロセスにまとめない（既定はまとめる。system_test.batch_pytest: false でも止められる）")
     r.add_argument("--results")
+    r.add_argument("--rerun-passed", action="store_true", help="この run で同じ clean commit ですでに pass したケースも再実行する（既定は省く）")
     r.add_argument("--rerun-failed", action="store_true", help="この run で同じ commit ですでに fail したケースも再実行する（既定は省く）")
     args = ap.parse_args(argv)
     root = Path(args.root).resolve() if args.root else h.repo_root()
