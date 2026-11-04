@@ -395,6 +395,45 @@ def landed(root: Path, branch: str, base: str) -> bool:
     return rc == 0
 
 
+def _fail_signature(out: str) -> set:
+    """Failure lines of a verify run, without volatile parts (log paths, timings, hashes)."""
+    sig = set()
+    in_fail = False
+    for line in out.splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        if not line[0].isspace():
+            in_fail = line.startswith("FAIL")
+            if not in_fail:
+                continue
+        elif not in_fail:
+            continue
+        s = re.sub(r"log=\S+", "", s)
+        s = re.sub(r"\(\d+s\)|\b[0-9a-f]{7,40}\b", "", s)
+        sig.add(re.sub(r"\s+", " ", s).strip())
+    return sig
+
+
+def foreign_only_failure(primary: Path, tmp: Path, old: str, vout: str, vtimeout: int):
+    """True when every verify failure on the merged tree already fails on the base commit,
+    i.e. it comes from other runs' or earlier work, not from this run's changes."""
+    base_tmp = tmp.with_name(tmp.name + "-base")
+    remove_land_tmp(primary, base_tmp)
+    try:
+        rc, _ = h.git(["worktree", "add", "--detach", str(base_tmp), old], primary)
+        if rc != 0:
+            return False, []
+        brc, bout = h.run([sys.executable, str(base_tmp / "scripts" / "verify.py"), "--quick", "--no-cache"],
+                          cwd=base_tmp, timeout=vtimeout + 120)
+        if brc == 0:
+            return False, []
+        mine = sorted(_fail_signature(vout) - _fail_signature(bout))
+        return (not mine), sorted(_fail_signature(vout) & _fail_signature(bout))
+    finally:
+        remove_land_tmp(primary, base_tmp)
+
+
 def land_core(args) -> int:
     """Merge this run's integration branch into the base branch in the primary tree, one run at a time."""
     root, cfg = ctx(args)
@@ -452,8 +491,14 @@ def land_core(args) -> int:
                 vrc, vout = h.run([sys.executable, str(tmp / "scripts" / "verify.py"), "--quick"], cwd=tmp,
                                   timeout=vtimeout + 120)
                 if vrc != 0:
-                    print(f"LAND-VERIFY-FAIL {rid}: 統合後の verify が失敗したので取り込みません\n" + "\n".join(vout.splitlines()[-12:]))
-                    return 1
+                    foreign, notes = foreign_only_failure(primary, tmp, old, vout, vtimeout)
+                    if not foreign:
+                        print(f"LAND-VERIFY-FAIL {rid}: 統合後の verify が、この run の変更によって失敗したので取り込みません\n"
+                              + "\n".join(vout.splitlines()[-12:]))
+                        return 1
+                    print(f"LAND-FOREIGN-FAIL {rid}: verify の失敗はすべて {base} の時点で既に存在する（他の run・以前の作業）ため、"
+                          "この run の取り込みは続けます。次の失敗は利用者に通知します（この run では対応しません）:\n  "
+                          + "\n  ".join(notes[:15]))
                 rc, new = h.git(["rev-parse", "HEAD"], tmp)
                 new = new.strip()
                 restart = False

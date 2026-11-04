@@ -5,6 +5,8 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+- `run-state.py land`: 統合後の verify が失敗したとき、`main` の時点（他の run の取り込み分・以前の作業）で同じ失敗がすでにある場合は、この run の変更が原因ではないとして取り込みを続け、`LAND-FOREIGN-FAIL` で失敗の内容を通知する（その対応はこの run では行わない）。この run の変更で新しく生じた失敗だけが取り込みを止める（`LAND-VERIFY-FAIL`）。競合はもともと git の 3 者マージで、この run が編集したファイルのうち `main` 側も変わったものだけが対象になる（`tests/system/ledger.json` は従来どおり自動で統合）。
+
 - `run-state.py land`: 取り込みに成功したあと、`complete-check` が通れば run-report に清掃前の契約欄（main 統合・完了条件・統合後 verify など）を補い、`clean-work.py` で run の worktree・統合ブランチを自動で削除する（従来は進行役が契約欄を書き忘れると `clean-work.py` が「清掃前版 run-report が未確定」で保持し、worktree が残り続けた）。`complete-check` が通らないときは `CLEAN-SKIP` で保持する。`--no-cleanup` で無効にできる。
 
 - `ledger.py run`: 同じファイルを指す `node --test --test-name-pattern=<ID> <file>` のケース（2 件以上）を 1 つの node プロセスにまとめる（pytest のまとめ実行と同じ方針。JUnit の結果を各ケースに割り当て、fail・一致 0 件・どのケースにも属さない fail があるときはそのケースを単独で再実行して判定）。実測（Graphic-Recording-Panel の 6,513 回の実行の 90% が 2 秒未満・時間の 21%）: `startbar.test.js` の 7 ケースを 2.49 秒 → 0.43 秒、startbar・detail の 13 ケースで `ledger.py run` 全体が 1.3 秒 → 0.6 秒。`--no-batch` と `system_test.batch_pytest: false` で無効にできる。

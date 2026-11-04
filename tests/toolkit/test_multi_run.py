@@ -82,6 +82,44 @@ def test_land_removes_run_worktree_and_branch_when_complete(sample):
     assert str(wt).replace("\\", "/") not in git(sample.path, "worktree", "list")
 
 
+def _add_flag_check(sample):
+    cfg_path = sample.path / "scripts" / "ebak.config.json"
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    code = ("import os,sys\n"
+            "bad=[f for f in ('other.flag','mine.flag') if os.path.exists(f)]\n"
+            "[print('BAD '+f) for f in bad]\n"
+            "sys.exit(1 if bad else 0)")
+    (sample.path / "flagcheck.py").write_text(code, encoding="utf-8")
+    cfg["verify"]["commands"] = [{"name": "flags", "run": "python flagcheck.py"}]
+    cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    sample.commit("flag check")
+
+
+def test_land_ignores_verify_failures_that_exist_on_main(sample):
+    _add_flag_check(sample)
+    wt = start_in_worktree(sample)
+    (sample.path / "other.flag").write_text("x", encoding="utf-8")
+    sample.commit("other run's breakage")
+    commit_in(wt)
+    patch_meta(wt, status="finished", result="全件完了")
+    proc = py(wt, "run-state.py", "land", "--wait", "20", "--no-cleanup")
+    assert proc.returncode == 0 and "LAND-FOREIGN-FAIL" in proc.stdout and "BAD other.flag" in proc.stdout, proc.stdout + proc.stderr
+    assert (sample.path / "work.txt").exists()
+
+
+def test_land_blocks_verify_failures_caused_by_own_changes(sample):
+    _add_flag_check(sample)
+    wt = start_in_worktree(sample)
+    (sample.path / "other.flag").write_text("x", encoding="utf-8")
+    sample.commit("other run's breakage")
+    (wt / "mine.flag").write_text("x", encoding="utf-8")
+    commit_in(wt, "mine.flag")
+    patch_meta(wt, status="finished", result="全件完了")
+    proc = py(wt, "run-state.py", "land", "--wait", "20", "--no-cleanup")
+    assert proc.returncode == 1 and "LAND-VERIFY-FAIL" in proc.stdout, proc.stdout + proc.stderr
+    assert not (sample.path / "mine.flag").exists()
+
+
 def test_land_refuses_unfinished_or_blocked_run(sample):
     wt = start_in_worktree(sample)
     assert py(wt, "run-state.py", "land", "--wait", "1").returncode == 1
