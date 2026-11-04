@@ -66,6 +66,22 @@ def test_land_merges_finished_run_into_main(sample):
     assert "LANDED" in py(wt, "run-state.py", "land", "--wait", "5").stdout
 
 
+def test_land_removes_run_worktree_and_branch_when_complete(sample):
+    wt = start_in_worktree(sample)
+    rid, _ = meta_path(wt)
+    (wt / "landed.txt").write_text("x\n", encoding="utf-8")
+    (wt / "work" / "runs" / rid / "run-report.md").write_text("結果: 全件完了\n", encoding="utf-8")
+    git(wt, "add", "-A")
+    git(wt, "commit", "-q", "-m", "work")
+    patch_meta(wt, status="finished", result="全件完了", stages_done=[1, 3, 6])
+    proc = py(wt, "run-state.py", "land", "--wait", "5")
+    assert proc.returncode == 0 and "LANDED" in proc.stdout, proc.stdout + proc.stderr
+    assert (sample.path / "landed.txt").exists()
+    assert not wt.exists()
+    assert f"run/{rid}" not in git(sample.path, "branch", "--list", "run/*")
+    assert str(wt).replace("\\", "/") not in git(sample.path, "worktree", "list")
+
+
 def test_land_refuses_unfinished_or_blocked_run(sample):
     wt = start_in_worktree(sample)
     assert py(wt, "run-state.py", "land", "--wait", "1").returncode == 1
