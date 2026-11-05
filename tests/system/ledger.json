@@ -141,7 +141,8 @@
     "AC-442": "sha256:4900ea1b7b109d53",
     "AC-443": "sha256:56844dcc502cae93",
     "AC-444": "sha256:7a0a7b59545d11ae",
-    "AC-457": "sha256:bcd423b094734a96"
+    "AC-457": "sha256:bcd423b094734a96",
+    "AC-459": "sha256:5c55a7e59ab02430"
   },
   "cases": [
     {
@@ -4809,6 +4810,31 @@
       "history": [
         {
           "at": "2026-11-03T06:27:58+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-234",
+      "requirement_ids": [
+        "FR-1082"
+      ],
+      "ac_ids": [
+        "AC-459"
+      ],
+      "title": "登録した検査の拡張が toolkit 更新（--force）後も登録を書き直さず呼ばれ、壊れた拡張は拡張名つきで不合格",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/test_extension_points_system.py -k \"ac459\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-11-06T05:29:17+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
