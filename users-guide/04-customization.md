@@ -97,6 +97,18 @@ EABK はモデルを指定しません。conductor も作業役も、	ask の `m
 
 hook は、読み取り専用・記録だけのツール（`view`・`grep`・`sql`・`report_intent` など）を、設定やリポジトリを読まずに即座に許可します。
 
+## 4.3c プロジェクト固有の検査の拡張（`extensions.checks` / `scripts/ext/`）
+
+データ層の検査（`rdcheck.py`・`rdfix.py`・`verify.py`）に、プロジェクト固有の検査（例: 外部連携カタログの検査）を足すときは、toolkit のファイル（`scripts/*.py`・`scripts/metadata.json`）を編集せず、次のどちらかで登録します。登録先は toolkit の更新（`tools/install.py`・`--force`）で上書きされません。
+
+1. `scripts/ebak.config.json` の `extensions.checks` に `{"module": "project_checks", "function": "check_integrations", "target": "rdcheck"}` を書きます。`module` は `scripts/` から import できるモジュール名（`scripts/project_checks.py`）、`target` は `rdcheck`・`rdfix`・`both`（省略時）です。
+2. `scripts/ext/*.py` に置きます。ファイルの公開関数（`_` で始まらないもの。`CHECKS = [...]` があればそれだけ）を自動で読み込みます。関数の属性 `target` かファイルの `TARGET` で対象を決めます（既定 `both`）。
+
+検査は `f(root, cfg)`（`root` は リポジトリの `Path`、`cfg` は `ebak.config.json` の内容）で、指摘の一覧を返します。空（または `None`）なら合格です。指摘は `{"level": "ERROR", "chk": "PRJ-01", "loc": "docs/integrations.md:7", "msg": "…"}`、`(level, chk, loc, msg)` の組、または文字列で、標準の検査と同じ `ERROR <検査項目> <位置> <内容>` の形式で出力されます（`WARN` は終了コードに影響せず、`ERROR` は不合格）。同じ検査を両方に登録しても 1 回だけ呼ばれます。
+
+`verify.py`（`--docs-only` を含む）は、呼ばれた拡張ごとに 1 行 `EXT <モジュール>.<関数> target=… result=pass|warn|fail …` を出します。登録があるのに呼ばれない拡張（`target` が `rdfix` だけなど）は `EXT-WARN` の行、読み込めない・例外の拡張は、拡張名つきの `ERROR EXT-LOAD` / `EXT-ERROR` で不合格です。登録が 0 件のときは何も出ません。
+
+toolkit を更新するとき、`tools/install.py` は `.ebak-backup-*` を作る前に、利用側が `scripts/*.py` や `scripts/metadata.json` に足した配線（拡張点に未登録のモジュールの import と呼び出しなど）を調べ、脱落するものを `WARN-WIRING  <ファイル>:<行>` で表示します（`--dry-run`・`--check` では判定の表示だけです）。警告が出たら、その検査を上の方法で登録し直します。警告は上書き・バックアップ・終了コードを変えません。
 ## 4.4 MCP Server・plugin・拡張機能を使う
 
 利用者が GitHub Copilot に設定した MCP Server・plugin・拡張機能のツールと skill は、追加の設定なしで、conductor とすべての作業役が使えます。例は Work IQ（社内のメール・会議・チャット・ドキュメント）、Microsoft Learn、Azure MCP Server、Copilot Studio・Microsoft 365 Agents Toolkit の plugin です。

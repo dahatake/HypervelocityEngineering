@@ -97,6 +97,19 @@ EABK does not specify a model. Both the conductor and the workers call task with
 
 Hooks immediately allow read-only and record-only tools (`view`, `grep`, `sql`, `report_intent`, and so on) without reading settings or the repository.
 
+## 4.3c Project-specific check extensions (`extensions.checks` / `scripts/ext/`)
+
+To add project-specific checks (for example, a check of the external-integration catalog) to the data-layer checks (`rdcheck.py`, `rdfix.py`, `verify.py`), do not edit the toolkit files (`scripts/*.py`, `scripts/metadata.json`). Register the check in one of two ways. The registration is not overwritten by a toolkit update (`tools/install.py`, including `--force`).
+
+1. In `extensions.checks` of `scripts/ebak.config.json`, write `{"module": "project_checks", "function": "check_integrations", "target": "rdcheck"}`. `module` is a module importable from `scripts/` (`scripts/project_checks.py`); `target` is `rdcheck`, `rdfix`, or `both` (the default).
+2. Put the file in `scripts/ext/*.py`. Its public functions (not starting with `_`; only those in `CHECKS = [...]` if it exists) are loaded automatically. A function attribute `target` or a module-level `TARGET` selects the target (default `both`).
+
+A check is `f(root, cfg)` (`root` is the repository `Path`, `cfg` is the contents of `ebak.config.json`) and returns a list of findings; an empty list (or `None`) means pass. A finding is `{"level": "ERROR", "chk": "PRJ-01", "loc": "docs/integrations.md:7", "msg": "..."}`, a `(level, chk, loc, msg)` tuple, or a string, and is printed in the same `ERROR <check> <location> <message>` form as the standard checks (`WARN` does not affect the exit code; `ERROR` fails). A check registered both ways is called once.
+
+`verify.py` (including `--docs-only`) prints one line per called extension: `EXT <module>.<function> target=... result=pass|warn|fail ...`. An extension that is registered but not called (for example, `target` is only `rdfix`) gets an `EXT-WARN` line; one that cannot be loaded or raises fails with an `ERROR EXT-LOAD` / `EXT-ERROR` line that names the extension. Nothing is printed when no extension is registered.
+
+When you update the toolkit, `tools/install.py` checks, before it makes `.ebak-backup-*`, whether you added wiring to `scripts/*.py` or `scripts/metadata.json` (for example, an import and calls of a module that is not registered as an extension), and shows what would be dropped as `WARN-WIRING  <file>:<line>` (`--dry-run` and `--check` only display the result). When it appears, register that check as above. The warning does not change the overwrite, the backup, or the exit code.
+
 ## 4.4 Using MCP Servers, plugins, and extensions
 
 The tools and skills of the MCP Servers, plugins, and extensions that you have configured in GitHub Copilot are available to the conductor and all workers with no additional configuration. Examples are Work IQ (internal email, meetings, chat, and documents), Microsoft Learn, the Azure MCP Server, and the Copilot Studio and Microsoft 365 Agents Toolkit plugins.

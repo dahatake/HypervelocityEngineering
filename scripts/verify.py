@@ -263,6 +263,10 @@ def main(argv=None) -> int:
         for l in lines:
             if l.startswith("WARN"):
                 print("  " + l)
+    # FR-1082 AC-460: one line per registered extension (name / function / target / result); none when nothing is registered
+    for l in lines:
+        if l.startswith("EXT ") or l.startswith("EXT-WARN "):
+            print("  " + l)
     if lines:
         print("  " + lines[-1])
 

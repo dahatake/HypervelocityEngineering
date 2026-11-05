@@ -59,6 +59,10 @@
       }
     ]
   },
+  "extensions": {
+    "_note": "FR-1082: プロジェクト固有の検査の登録。checks の要素は {\"module\": \"scripts/ から import できるモジュール名\", \"function\": \"関数名\", \"target\": \"rdcheck|rdfix|both\"}。関数は (root, cfg) を受け取り、指摘の一覧（空なら合格）を返す。scripts/ext/*.py も自動で読み込む。toolkit の更新で上書きされない。",
+    "checks": []
+  },
   "gates": {
     "enabled": true,
     "allow_hook_edit": false,
