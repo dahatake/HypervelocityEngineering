@@ -192,6 +192,8 @@ def require_own_worktree(root: Path, cfg: dict, args) -> Optional[int]:
         print("ERROR run-state: 空いている run ID が見つかりませんでした")
         return 4
     # start the run inside the new worktree right away: no second VS Code window and no re-sent request
+    for note in h.share_dirs(root, path, cfg):
+        print(note)
     cmd = [sys.executable, str(path / "scripts" / "run-state.py"), "start", "--run-id", rid]
     sid = getattr(args, "session_id", None) or take_start_claim(root, cfg)
     if sid:
@@ -297,7 +299,16 @@ def land_tmp_path(primary: Path) -> Path:
     return (d if d.is_absolute() else primary / d) / "ebak-land-wt"
 
 
-def remove_land_tmp(primary: Path, tmp: Path) -> None:
+def share_tmp(primary: Path, tmp: Path, cfg: dict) -> None:
+    for note in h.share_dirs(primary, tmp, cfg):
+        print(note)
+
+
+def remove_land_tmp(primary: Path, tmp: Path, cfg: Optional[dict] = None) -> None:
+    if tmp.exists():
+        # drop the share links first so deleting the tree can never reach the primary's node_modules
+        h.unshare_dirs(tmp, cfg if cfg is not None else h.load_config(primary))
+        h.git(["worktree", "remove", "--force", str(tmp)], primary)
     if tmp.exists():
         h.git(["worktree", "remove", "--force", str(tmp)], primary)
     if tmp.exists():
@@ -415,6 +426,17 @@ def _fail_signature(out: str) -> set:
     return sig
 
 
+def dep_hint(tmp: Path, cfg: dict, vout: str) -> str:
+    """One line telling whether a verify failure looks like missing dependencies or a real failure."""
+    missing = [rel for rel in (cfg.get("worktree_share") or {}).get("dirs", []) if not (tmp / rel).is_dir()]
+    sig = re.search(r"is not recognized|command not found|Cannot find module|ModuleNotFoundError|ENOENT", vout)
+    if missing and sig:
+        return f"HINT: 依存の不足の可能性が高い（{', '.join(missing)} がこの worktree にありません）。主の作業ツリーで依存を導入してから再実行してください\n"
+    if missing:
+        return f"HINT: {', '.join(missing)} がこの worktree にありません。失敗が依存の不足か実際の失敗かは下のログで確認してください\n"
+    return "HINT: 依存は揃っています。下の失敗は実際の失敗です\n"
+
+
 def foreign_only_failure(primary: Path, tmp: Path, old: str, vout: str, vtimeout: int):
     """True when every verify failure on the merged tree already fails on the base commit,
     i.e. it comes from other runs' or earlier work, not from this run's changes."""
@@ -424,6 +446,7 @@ def foreign_only_failure(primary: Path, tmp: Path, old: str, vout: str, vtimeout
         rc, _ = h.git(["worktree", "add", "--detach", str(base_tmp), old], primary)
         if rc != 0:
             return False, []
+        share_tmp(primary, base_tmp, h.load_config(primary))
         brc, bout = h.run([sys.executable, str(base_tmp / "scripts" / "verify.py"), "--quick", "--no-cache"],
                           cwd=base_tmp, timeout=vtimeout + 120)
         if brc == 0:
@@ -488,12 +511,14 @@ def land_core(args) -> int:
                           + (f"競合したファイル: {', '.join(files)}\n" if files else "")
                           + f"run の worktree で `git merge {base}` を行って競合を解消し、verify の後にもう一度 land を実行します")
                     return 2
+                share_tmp(primary, tmp, cfg)
                 vrc, vout = h.run([sys.executable, str(tmp / "scripts" / "verify.py"), "--quick"], cwd=tmp,
                                   timeout=vtimeout + 120)
                 if vrc != 0:
                     foreign, notes = foreign_only_failure(primary, tmp, old, vout, vtimeout)
                     if not foreign:
                         print(f"LAND-VERIFY-FAIL {rid}: 統合後の verify が、この run の変更によって失敗したので取り込みません\n"
+                              + dep_hint(tmp, cfg, vout)
                               + "\n".join(vout.splitlines()[-12:]))
                         return 1
                     print(f"LAND-FOREIGN-FAIL {rid}: verify の失敗はすべて {base} の時点で既に存在する（他の run・以前の作業）ため、"

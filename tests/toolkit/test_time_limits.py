@@ -58,6 +58,24 @@ def test_share_dirs_skips_when_lock_differs_or_disabled(tmp_path):
     assert h.share_dirs(src, wt, {"worktree_share": {"enabled": False, "dirs": ["node_modules"]}}) == []
 
 
+def test_share_dirs_nested_path_uses_adjacent_lock(tmp_path):
+    src, wt = tmp_path / "primary", tmp_path / "wt"
+    for r in (src, wt):
+        (r / "tests" / "system").mkdir(parents=True)
+    (src / "tests" / "system" / "package-lock.json").write_text("{}")
+    (wt / "tests" / "system" / "package-lock.json").write_text("{}")
+    (src / "tests" / "system" / "node_modules").mkdir()
+    (src / "tests" / "system" / "node_modules" / "a.txt").write_text("x")
+    cfg = {"worktree_share": {"enabled": True, "dirs": ["tests/system/node_modules"]}}
+    assert any(n.startswith("SHARED") for n in h.share_dirs(src, wt, cfg))
+    assert (wt / "tests" / "system" / "node_modules" / "a.txt").exists()
+    h.unshare_dirs(wt, cfg)
+    assert not (wt / "tests" / "system" / "node_modules").exists()
+    (wt / "tests" / "system" / "package-lock.json").write_text('{"a":1}')
+    assert h.share_dirs(src, wt, cfg)[0].startswith("NOTE")
+    assert (src / "tests" / "system" / "node_modules" / "a.txt").exists()
+
+
 def test_credit_estimate(tmp_path):
     rs = load_run_state()
     cfg = {"work": {"dir": "work"}, "credits": {"default_multiplier": 1, "model_multipliers": {"big": 3}}}

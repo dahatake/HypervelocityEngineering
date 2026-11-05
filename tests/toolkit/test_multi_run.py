@@ -66,6 +66,21 @@ def test_land_merges_finished_run_into_main(sample):
     assert "LANDED" in py(wt, "run-state.py", "land", "--wait", "5").stdout
 
 
+def test_start_and_land_share_node_modules_and_keep_primary_copy(sample):
+    nm = sample.path / "node_modules"
+    nm.mkdir()
+    (nm / "a.txt").write_text("x")
+    wt = start_in_worktree(sample)
+    assert (wt / "node_modules" / "a.txt").read_text() == "x"
+    (wt / "landed.txt").write_text("x\n", encoding="utf-8")
+    git(wt, "add", "landed.txt")
+    git(wt, "commit", "-q", "-m", "work")
+    patch_meta(wt, status="finished", result="全件完了")
+    proc = py(wt, "run-state.py", "land", "--wait", "20", "--no-cleanup")
+    assert proc.returncode == 0 and "SHARED: node_modules" in proc.stdout, proc.stdout + proc.stderr
+    assert (nm / "a.txt").read_text() == "x"
+
+
 def test_land_removes_run_worktree_and_branch_when_complete(sample):
     wt = start_in_worktree(sample)
     rid, _ = meta_path(wt)
