@@ -3,7 +3,14 @@ installer's warning about wiring that an update would drop."""
 import json
 import sys
 
-from conftest import SOURCE, run
+import importlib.util
+from pathlib import Path
+
+SOURCE = Path(__file__).resolve().parents[2]
+_spec = importlib.util.spec_from_file_location("eabk_toolkit_fixtures", SOURCE / "tests" / "toolkit" / "conftest.py")
+_fx = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_fx)
+run, sample = _fx.run, _fx.sample  # pytest fixtures
 
 FAIL_EXT = '''def project_integration_check(root, cfg):
     return [{"level": "ERROR", "chk": "PRJ-01", "loc": "docs/integrations.md:7", "msg": "連携先が未定義"}]
