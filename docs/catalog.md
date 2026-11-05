@@ -113,6 +113,8 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1079 | Graph 表示モード（関係をノードと辺で見る） | 承認済み | `EABK-Studio/web/js/graph.js`、`EABK-Studio/web/js/mapgraph.js`、`EABK-Studio/web/js/dim.js`、`EABK-Studio/web/js/app.js`、`EABK-Studio/web/js/diagrams.js`、`EABK-Studio/web/js/entities.js`、`EABK-Studio/web/js/ui.js`、`EABK-Studio/web/js/i18n.js`、`EABK-Studio/web/app.css` | `EABK-Studio/tests/test_graph_mode_ui.py`、`tests/system/e2e/test_studio_header_dim_3d_part1_system.py` | Graph 描画部品、2D・3D 切替、UI 部品、デザイン基盤 |
 | FR-1080 | Studio の全可視化要素の動的なデータ表現（データ結合・トランジション・ホバー・ズーム・force 風レイアウト） | 承認済み | `EABK-Studio/web/js/viz.js`、`EABK-Studio/web/js/graph.js`、`EABK-Studio/web/js/map2d.js`、`EABK-Studio/web/js/semzoom.js`、`EABK-Studio/web/js/diagrams.js`、`EABK-Studio/web/js/dashboard.js`、`EABK-Studio/web/js/insights.js`、`EABK-Studio/web/js/implstatus.js`、`EABK-Studio/web/js/tables.js`、`EABK-Studio/web/js/ui.js`、`EABK-Studio/web/js/i18n.js`、`EABK-Studio/web/app.css`、`EABK-Studio/web/index.html` | `EABK-Studio/tests/test_dynamic_viz_ui.py`、`EABK-Studio/tests/test_graph_dynamics_ui.py`、`tests/system/e2e/test_studio_dynamic_viz_system.py` | 動的可視化の小部品、Graph 描画部品、UI 部品、デザイン基盤 |
 | NFR-UX-018 | 動的な可視化の性能・外部依存なし・安全な更新 | 承認済み | `EABK-Studio/web/js/viz.js` | `EABK-Studio/tests/test_dynamic_viz_ui.py`、`tests/system/e2e/test_studio_dynamic_viz_system.py` | 動的可視化の小部品 |
+| FR-1082 | データ層の検査へのプロジェクト固有の拡張の登録と実行の確認 | 承認済み | 未実装 | 未実装 | - |
+| FR-1083 | toolkit 更新時の利用側の配線の脱落警告 | 承認済み | 未実装 | 未実装 | - |
 
 
 ## API・イベント
