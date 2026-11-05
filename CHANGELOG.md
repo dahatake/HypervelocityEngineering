@@ -5,6 +5,9 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+- データ層の検査の拡張点（FR-1082）: `scripts/ebak.config.json` の `extensions.checks`（`module`・`function`・`target`）と `scripts/ext/*.py` の自動読み込みで、プロジェクト固有の検査を `rdcheck`・`rdfix` に登録できる（`scripts/extpoints.py`）。`verify.py` は拡張ごとに 1 行（`EXT <モジュール>.<関数> target=… result=…`）を出し、読み込み失敗・例外は拡張名つきで不合格にする。登録先は toolkit の更新で上書きされない。
+- 更新時の配線の脱落警告（FR-1083）: `tools/install.py` が `.ebak-backup-*` を作る（`--dry-run`・`--check` では作る見込みの）とき、利用側が `scripts/*.py`・`scripts/metadata.json` に足した配線で拡張点に未登録のものを、ファイルと行つきで警告し、拡張点への移行方法を示す（上書き・終了コードは変えない）。
+
 - `run-state.py land`: 統合後の verify が失敗したとき、`main` の時点（他の run の取り込み分・以前の作業）で同じ失敗がすでにある場合は、この run の変更が原因ではないとして取り込みを続け、`LAND-FOREIGN-FAIL` で失敗の内容を通知する（その対応はこの run では行わない）。この run の変更で新しく生じた失敗だけが取り込みを止める（`LAND-VERIFY-FAIL`）。競合はもともと git の 3 者マージで、この run が編集したファイルのうち `main` 側も変わったものだけが対象になる（`tests/system/ledger.json` は従来どおり自動で統合）。
 
 - `run-state.py land`: 取り込みに成功したあと、`complete-check` が通れば run-report に清掃前の契約欄（main 統合・完了条件・統合後 verify など）を補い、`clean-work.py` で run の worktree・統合ブランチを自動で削除する（従来は進行役が契約欄を書き忘れると `clean-work.py` が「清掃前版 run-report が未確定」で保持し、worktree が残り続けた）。`complete-check` が通らないときは `CLEAN-SKIP` で保持する。`--no-cleanup` で無効にできる。
