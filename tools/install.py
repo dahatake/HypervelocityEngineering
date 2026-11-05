@@ -33,6 +33,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -67,7 +68,7 @@ MANAGED = [
     "scripts/rdcheck.py",
     "scripts/rdfix.py",
     "scripts/entities.py",
-    "scripts/metadata.json",
+    "scripts/extpoints.py",    "scripts/metadata.json",
     "scripts/verify.py",
     "scripts/verify.ps1",
     "scripts/verify.sh",
@@ -290,6 +291,76 @@ def is_recorded(path: Path, recorded) -> bool:
     return bool(recorded) and recorded in (sha(path), sha_raw(path))
 
 
+IMPORT_RE = re.compile(r"^\s*(?:from\s+([\w.]+)\s+import\s+(.+?)|import\s+([\w.]+)(?:\s+as\s+(\w+))?)\s*(?:#.*)?$")
+
+
+def _flatten_json(node, prefix: str = "") -> Dict[str, str]:
+    out: Dict[str, str] = {}
+    if isinstance(node, dict):
+        for k, v in node.items():
+            out.update(_flatten_json(v, f"{prefix}/{k}"))
+    elif isinstance(node, list):
+        for v in node:
+            out[f"{prefix}[{json.dumps(v, ensure_ascii=False, sort_keys=True)[:80]}]"] = ""
+    else:
+        out[prefix] = ""
+    return out
+
+
+def find_dropped_wiring(rel: str, old_text: str, new_text: str, target: Path,
+                        registered: set, toolkit_modules: set) -> List[Tuple[int, str]]:
+    """FR-1083: lines the user added to a toolkit file (in `old_text`, the backup) that wire a project-specific check in
+    and would be lost by the overwrite, unless the module is already registered as an extension (FR-1082).
+    Returns [(line number in the backup, line)].  Conservative on purpose: only imports of a module that exists in the
+    target's scripts/ but is not a toolkit module, and calls through the names it binds, plus keys added to metadata.json."""
+    out: List[Tuple[int, str]] = []
+    if rel == "scripts/metadata.json":
+        try:
+            old_p, new_p = _flatten_json(json.loads(old_text)), _flatten_json(json.loads(new_text))
+        except ValueError:
+            return out
+        lines = old_text.splitlines()
+        for path in old_p:
+            if path in new_p:
+                continue
+            key = path.rsplit("/", 1)[-1].split("[", 1)[0]
+            n = next((i for i, l in enumerate(lines, 1) if key and f'"{key}"' in l), 0)
+            out.append((n, f"metadata.json に追加された定義 {path}"))
+        return out
+    if not (rel.startswith("scripts/") and rel.endswith(".py")):
+        return out
+    new_lines = {l.strip() for l in new_text.splitlines()}
+    added = [(i, l) for i, l in enumerate(old_text.splitlines(), 1)
+             if l.strip() and not l.strip().startswith("#") and l.strip() not in new_lines]
+    bound: Dict[str, int] = {}
+    skip_names: set = set()
+    for i, l in added:
+        m = IMPORT_RE.match(l)
+        if not m:
+            continue
+        mod = m.group(1) or m.group(3)
+        top = mod.split(".")[0]
+        if top in toolkit_modules or not ((target / "scripts" / f"{top}.py").is_file() or (target / "scripts" / top).is_dir()):
+            continue
+        names = [n.strip().split(" as ")[-1].strip("() ") for n in m.group(2).split(",")] if m.group(2) else [m.group(4) or top]
+        keys = {mod.rsplit(".", 1)[-1]} | {n for n in names if n}
+        if keys & registered:
+            skip_names |= set(names)
+            continue
+        out.append((i, l.strip()))
+        for n in names:
+            if n and n != "*":
+                bound[n] = i
+    for i, l in added:
+        if IMPORT_RE.match(l):
+            continue
+        for n in bound:
+            if n not in skip_names and re.search(rf"\b{re.escape(n)}\s*[.(]", l):
+                out.append((i, l.strip()))
+                break
+    return sorted(set(out))
+
+
 def toolkit_version(source: Path) -> str:
     for line in (source / "scripts" / "ebaklib.py").read_text(encoding="utf-8").splitlines():
         if line.startswith("TOOLKIT_VERSION"):
@@ -304,6 +375,30 @@ class Installer:
         self.manifest = self.load_manifest()
         self.new_hashes: Dict[str, str] = {}
         self.stamp = dt.datetime.now().strftime("%Y%m%d%H%M%S")
+        self.warnings: List[str] = []
+
+    def check_wiring(self, rel: str, dest: Path, src: Path) -> None:
+        """FR-1083: before `dest` is overwritten (and backed up), warn about wiring the user added that would be lost."""
+        if not ((rel.startswith("scripts/") and rel.endswith(".py")) or rel == "scripts/metadata.json"):
+            return
+        try:
+            old = dest.read_text(encoding="utf-8")
+            new = src.read_text(encoding="utf-8")
+            cfg = json.loads((self.target / CONFIG).read_text(encoding="utf-8")) if (self.target / CONFIG).is_file() else {}
+        except (OSError, ValueError):
+            return
+        registered = {str(c.get("module")).rsplit(".", 1)[-1] for c in ((cfg.get("extensions") or {}).get("checks") or [])
+                      if isinstance(c, dict) and c.get("module")}
+        ext_dir = self.target / "scripts" / "ext"
+        if ext_dir.is_dir():
+            registered |= {p.stem for p in ext_dir.glob("*.py")}
+        owned = {Path(r).stem for r in list(MANAGED) + OBSOLETE + list(self.manifest.get("files", {})) if r.startswith("scripts/")}
+        hits = find_dropped_wiring(rel, old, new, self.target, registered, owned)
+        if not hits:
+            return
+        backup = f"{rel}.ebak-backup-{self.stamp}"
+        for n, text in hits:
+            self.warnings.append(f"WARN-WIRING  {rel}:{n or '?'}  {text}  （{backup} の行。拡張点に未登録のため、この更新で脱落します）")
 
     def load_manifest(self) -> dict:
         p = self.target / MANIFEST
@@ -350,6 +445,8 @@ class Installer:
             old = self.manifest.get("files", {}).get(rel)
             unmodified = is_recorded(dest, old)
             if unmodified or self.force:
+                if not unmodified:
+                    self.check_wiring(rel, dest, src)  # FR-1083: also in --dry-run / --check (display only)
                 if not unmodified and not self.dry:
                     shutil.copy2(dest, dest.with_name(dest.name + f".ebak-backup-{self.stamp}"))
                 self.note("UPDATE" if unmodified else "OVERWRITE", rel)
@@ -671,6 +768,15 @@ def main(argv=None) -> int:
     else:
         mode = "check" if args.check else ("dry-run" if args.dry_run else "install")
     print(f"\nEnterprise App Build Kit {version}: {mode} {target}  changes={len(pending)}")
+    if ins.warnings:
+        print(f"\n警告: 利用側が足した配線のうち、拡張点（extensions.checks / scripts/ext/*.py）に未登録のものが {len(ins.warnings)} 件あり、"
+              "この更新で脱落します（上書き・バックアップ・終了コードは変わりません）:" if not dry else
+              f"\n警告（判定だけ・書き込みなし）: 更新すると、拡張点に未登録の配線 {len(ins.warnings)} 件が脱落します:")
+        for w in ins.warnings:
+            print("  " + w)
+        print("  移行: 検査を scripts/ 配下のモジュールの関数 f(root, cfg)（指摘の一覧を返す）にして、"
+              "scripts/ebak.config.json の extensions.checks に {\"module\": \"…\", \"function\": \"…\", \"target\": \"rdcheck\"} を足すか、"
+              "scripts/ext/ に置きます。toolkit のファイルは編集しません（users-guide/04-customization.md の「検査の拡張」）。")
     if kept:
         if uninstalling:
             print(f"注意: ローカルで変更されたファイルは削除していません（{len(kept)} 件）。削除するには --force。")

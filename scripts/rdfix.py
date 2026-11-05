@@ -55,6 +55,7 @@ from typing import Callable, Dict, List, Optional, Set, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ebaklib as h  # noqa: E402
+import extpoints  # noqa: E402
 
 
 def _strip_dot_slash(p: str) -> str:
@@ -971,7 +972,18 @@ class FullReport:
     def __init__(self, as_json: bool, apply: bool):
         self.as_json, self.apply = as_json, apply
         self.infos: List[str] = []
+        self.ext_items: List["Item"] = []
+        self.ext_lines: List[str] = []
 
+    def run_extensions(self, root: Path, cfg: dict) -> None:
+        results, skipped, errors = extpoints.run(root, cfg, "rdfix")
+        self.ext_lines = [r.line("rdfix") for r in results]
+        self.ext_lines += [f"EXT-WARN {e.name} target={e.target} result=not-called 登録されていますが rdfix では呼ばれません（対象が {e.target}）"
+                           for e in skipped]
+        self.ext_items = [Item("MANUAL", c, loc, msg, "拡張の作者", "", _file_of(loc), 0, "拡張の指摘を直す（登録: extensions.checks / scripts/ext）", "extension")
+                          for lv, c, loc, msg in extpoints.all_findings(results, errors) if lv == "ERROR"]
+        for l in self.ext_lines:
+            self.info(l)
     def info(self, line: str) -> None:
         self.infos.append(line)
         print(line, file=sys.stderr if self.as_json else sys.stdout, flush=True)
@@ -982,6 +994,12 @@ class FullReport:
                undone: Optional[List[Item]] = None, restored: Optional[List[str]] = None,
                not_restored: Optional[List[Tuple[str, str]]] = None, rounds: int = 0) -> int:
         fixes, manual, errors = fixes or [], manual or [], errors or []
+        # FR-1082: project-specific extensions (called once per rdfix run, before the first inspection)
+        ext_items = [] if rc == 2 else list(self.ext_items)
+        if ext_items:
+            manual = manual + ext_items
+            if rc == 0:
+                rc, result = 1, "manual"
         new_errors, unconverged, undone = new_errors or [], unconverged or [], undone or []
         restored, not_restored = restored or [], not_restored or []
         mode = "apply" if self.apply else "check"
@@ -1172,6 +1190,7 @@ def run_full(root: Path, cfg: dict, args, only: Set[str]) -> int:
             n = sweep_temp(root, cfg)
             if n:
                 rep.info(f"INFO rdfix: 中断した修復が残した一時ファイル {n} 件を取り除きました")
+        rep.run_extensions(root, cfg)  # FR-1082: once per run, shown in the report
         insp = inspect(root, cfg, args.adopt, only)
         if not args.apply:
             fixes = _items(insp.fixes, "FIX")
@@ -1281,9 +1300,14 @@ def main(argv=None) -> int:
         return 2
     fx = Fixer(root, cfg, args.adopt, only)
     actions = fx.plan()
+    ext_results, ext_skipped, ext_errors = extpoints.run(root, cfg, "rdfix")  # FR-1082
+    ext_find = extpoints.all_findings(ext_results, ext_errors)
+    ext_lines = [r.line("rdfix") for r in ext_results]
+    ext_lines += [f"EXT-WARN {e.name} target={e.target} result=not-called 登録されていますが rdfix では呼ばれません（対象が {e.target}）"
+                  for e in ext_skipped]
     fixes = [a for a in actions if a.kind == "FIX"]
     manual = [a for a in actions if a.kind == "MANUAL"]
-    rc = 1 if fixes and not args.apply else 0
+    rc = 1 if (fixes and not args.apply) or any(f[0] == "ERROR" for f in ext_find) else 0
     after: List[str] = []
     if args.apply and fixes:
         fx.apply()
@@ -1296,10 +1320,17 @@ def main(argv=None) -> int:
         after += [l for l in lines if l.startswith("ERROR")][:15] + lines[-1:]
     if args.json:
         print(json.dumps({"applied": bool(args.apply and fixes), "fix": [asdict(a) for a in fixes],
-                          "manual": [asdict(a) for a in manual], "after": after}, ensure_ascii=False, indent=2))
+                          "manual": [asdict(a) for a in manual], "after": after,
+                          "extensions": ext_lines,
+                          "extension_findings": [{"level": a, "chk": b, "loc": c, "msg": d} for a, b, c, d in ext_find]},
+                         ensure_ascii=False, indent=2))
         return rc
     for a in fixes + manual:
         print(a.line())
+    for lv, c, loc, msg in ext_find:
+        print(f"{lv} {c} {loc} {msg}")
+    for l in ext_lines:
+        print(l)
     for l in after:
         print("  " + l if not l.startswith("ERROR rdfix") else l)
     mode = "applied" if args.apply else "dry-run"

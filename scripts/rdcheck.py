@@ -29,6 +29,7 @@ sys.dont_write_bytecode = True  # FR-1062 AC-343: 導出は読み取り専用。
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ebaklib as h  # noqa: E402
 import entities as ent  # noqa: E402
+import extpoints  # noqa: E402
 
 # requirements that must have a row in the function table of the catalog (same as rdfix.CATALOG_STATES)
 CATALOG_STATES = ("承認済み", "承認待ち", "保留")
@@ -1089,15 +1090,24 @@ def cmd_check(args, root, cfg) -> int:
         run_id = h.current_run(h.conductor_root(root, cfg), cfg)
     ck = Checker(root, cfg, base, run_id, args.strict, True if args.strict_ledger else (False if args.no_strict_ledger else None))
     findings = ck.run_all()
+    # FR-1082: project-specific extensions (extensions.checks / scripts/ext/*.py) run with the standard checks
+    ext_results, ext_skipped, ext_errors = extpoints.run(root, cfg, "rdcheck")
+    findings += [Finding(*f) for f in extpoints.all_findings(ext_results, ext_errors)]
+    ext_lines = [r.line("rdcheck") for r in ext_results]
+    ext_lines += [f"EXT-WARN {e.name} target={e.target} result=not-called 登録されていますが rdcheck では呼ばれません（対象が {e.target}）"
+                  for e in ext_skipped]
     findings.sort(key=lambda f: (f.level != "ERROR", f.chk, f.loc))
     errors = sum(1 for f in findings if f.level == "ERROR")
     warns = len(findings) - errors
     if args.json:
-        print(json.dumps({"errors": errors, "warnings": warns, "findings": [f.__dict__ for f in findings]}, ensure_ascii=False, indent=2))
+        print(json.dumps({"errors": errors, "warnings": warns, "findings": [f.__dict__ for f in findings],
+                          "extensions": ext_lines}, ensure_ascii=False, indent=2))
     else:
         shown = [f for f in findings if f.level == "ERROR" or not args.errors_only]
         for f in shown:
             print(f.line())
+        for l in ext_lines:
+            print(l)
         if getattr(ck, "area_info", None) is not None and ck.doc.exists and not args.errors_only:
             if ck.area_assignment() is None:
                 print(f"INFO 領域未所属の要求: {ck.area_info} 件（領域の割り当て表の承認まで任意）")
