@@ -2806,10 +2806,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac276_render_p95_within_tolerance_of_baseline_and_absolute_limits\" -q",
       "canary": false,
-      "status": "fail",
-      "last_commit": "30ae6c99",
-      "last_run_at": "2026-11-06T06:17:50+09:00",
-      "evidence": "work/runs/202611060524/logs/system-test/E2E-152-202611060613.log",
+      "status": "pass",
+      "last_commit": "26d19da4",
+      "last_run_at": "2026-11-06T06:42:10+09:00",
+      "evidence": "work/runs/adhoc-202611060640/logs/system-test/E2E-152-202611060641.log",
       "history": [
         {
           "at": "2026-10-17T14:41:15+09:00",
@@ -4111,10 +4111,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac367_header_dim_toggle_exists_on_every_screen or test_ac367_header_dim_toggle_never_disappears_or_duplicates_when_switching_screens or test_ac367_in_screen_toggle_and_header_toggle_share_one_state\" -q",
       "canary": true,
-      "status": "fail",
-      "last_commit": "30ae6c99",
-      "last_run_at": "2026-11-06T06:17:50+09:00",
-      "evidence": "work/runs/202611060524/logs/system-test/E2E-199-202611060609.log",
+      "status": "pass",
+      "last_commit": "26d19da4",
+      "last_run_at": "2026-11-06T06:42:10+09:00",
+      "evidence": "work/runs/adhoc-202611060640/logs/system-test/E2E-199-202611060640.log",
       "history": [
         {
           "at": "2026-10-19T21:06:42+09:00",

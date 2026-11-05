@@ -63,7 +63,7 @@ def test_ac389_degradation_rule_is_pure_and_uses_param_047():
 
 
 @pytest.fixture(scope="module")
-def studio():
+def studio(shared_browser):
     sync_api = pytest.importorskip("playwright.sync_api")
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
@@ -77,10 +77,7 @@ def studio():
             break
         except OSError:
             time.sleep(0.1)
-    with sync_api.sync_playwright() as pw:
-        browser = pw.chromium.launch()
-        yield browser, f"http://127.0.0.1:{port}"
-        browser.close()
+    yield shared_browser, f"http://127.0.0.1:{port}"
     proc.terminate()
 
 

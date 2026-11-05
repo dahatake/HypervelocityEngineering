@@ -53,7 +53,7 @@ def test_parse_placements_does_not_guess(tmp_path):
 
 
 @pytest.fixture(scope="module")
-def studio(tmp_path_factory):
+def studio(tmp_path_factory, shared_browser):
     repo = make_zoom(tmp_path_factory.mktemp("arch") / "r")
     cat = repo / CAT
     cat.write_text(cat.read_text(encoding="utf-8") + SECTION, encoding="utf-8")
@@ -69,10 +69,7 @@ def studio(tmp_path_factory):
             break
         except OSError:
             time.sleep(0.1)
-    with sync_api.sync_playwright() as pw:
-        browser = pw.chromium.launch()
-        yield browser, f"http://127.0.0.1:{port}"
-        browser.close()
+    yield shared_browser, f"http://127.0.0.1:{port}"
     proc.terminate()
 
 

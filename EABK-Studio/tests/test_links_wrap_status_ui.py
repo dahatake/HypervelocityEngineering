@@ -40,19 +40,7 @@ def studio(tmp_path_factory, request):
             break
         except OSError:
             time.sleep(0.1)
-    try:
-        # pytest-playwright の browser（プロセスで 1 つ）を使う。別に sync_playwright を開くと、
-        # ほかのファイルと同じプロセスで動かしたときに asyncio ループの衝突で落ちる
-        shared = request.getfixturevalue("browser")
-    except pytest.FixtureLookupError:
-        shared = None
-    if shared is not None:
-        yield shared, f"http://127.0.0.1:{port}"
-    else:
-        with sync_api.sync_playwright() as pw:
-            browser = pw.chromium.launch()
-            yield browser, f"http://127.0.0.1:{port}"
-            browser.close()
+    yield request.getfixturevalue("shared_browser"), f"http://127.0.0.1:{port}"
     proc.terminate()
 
 
