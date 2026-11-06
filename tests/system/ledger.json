@@ -2912,9 +2912,9 @@
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac105 -q",
       "canary": true,
       "status": "pass",
-      "last_commit": "30ae6c99",
-      "last_run_at": "2026-11-06T06:17:50+09:00",
-      "evidence": "work/runs/202611060524/logs/system-test/IT-008-202611060609.log",
+      "last_commit": "67e3d3df",
+      "last_run_at": "2026-11-06T10:42:50+09:00",
+      "evidence": "work/runs/202611060711/logs/system-test/IT-008-202611061042.log",
       "history": [
         {
           "at": "2026-10-14T20:55:51+09:00",
@@ -2949,9 +2949,9 @@
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac106 -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "30ae6c99",
-      "last_run_at": "2026-11-06T06:17:50+09:00",
-      "evidence": "work/runs/202611060524/logs/system-test/IT-009-202611060610.log",
+      "last_commit": "67e3d3df",
+      "last_run_at": "2026-11-06T10:42:50+09:00",
+      "evidence": "work/runs/202611060711/logs/system-test/IT-009-202611061042.log",
       "history": [
         {
           "at": "2026-10-14T20:56:17+09:00",
@@ -3458,9 +3458,9 @@
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac240_check_clean\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "30ae6c99",
-      "last_run_at": "2026-11-06T06:17:50+09:00",
-      "evidence": "work/runs/202611060524/logs/system-test/IT-023-202611060610.log",
+      "last_commit": "67e3d3df",
+      "last_run_at": "2026-11-06T10:42:50+09:00",
+      "evidence": "work/runs/202611060711/logs/system-test/IT-023-202611061042.log",
       "history": [
         {
           "at": "2026-10-16T09:09:14+09:00",
@@ -3483,9 +3483,9 @@
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_automatic_only\" -q",
       "canary": true,
       "status": "pass",
-      "last_commit": "30ae6c99",
-      "last_run_at": "2026-11-06T06:17:50+09:00",
-      "evidence": "work/runs/202611060524/logs/system-test/IT-026-202611060609.log",
+      "last_commit": "67e3d3df",
+      "last_run_at": "2026-11-06T10:42:50+09:00",
+      "evidence": "work/runs/202611060711/logs/system-test/IT-026-202611061042.log",
       "history": [
         {
           "at": "2026-10-16T09:09:24+09:00",
@@ -3509,9 +3509,9 @@
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"(ac237_new_install) or (ac238_no_repair)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "30ae6c99",
-      "last_run_at": "2026-11-06T06:17:50+09:00",
-      "evidence": "work/runs/202611060524/logs/system-test/IT-031-202611060610.log",
+      "last_commit": "67e3d3df",
+      "last_run_at": "2026-11-06T10:42:50+09:00",
+      "evidence": "work/runs/202611060711/logs/system-test/IT-031-202611061042.log",
       "history": [
         {
           "at": "2026-10-16T09:09:40+09:00",
@@ -4582,9 +4582,9 @@
       "command": "python -m pytest tests/system/test_ledger_batch_across_files_system.py -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "30ae6c99",
-      "last_run_at": "2026-11-06T06:17:50+09:00",
-      "evidence": "work/runs/202611060524/logs/system-test/E2E-225-202611060610.log",
+      "last_commit": "67e3d3df",
+      "last_run_at": "2026-11-06T10:42:50+09:00",
+      "evidence": "work/runs/202611060711/logs/system-test/E2E-225-202611061042.log",
       "history": [
         {
           "at": "2026-10-27T23:24:56+09:00",
@@ -4829,9 +4829,9 @@
       "command": "python -m pytest tests/system/test_extension_points_system.py -k \"ac459\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "30ae6c99",
-      "last_run_at": "2026-11-06T06:17:50+09:00",
-      "evidence": "work/runs/202611060524/logs/system-test/E2E-234-202611060610.log",
+      "last_commit": "67e3d3df",
+      "last_run_at": "2026-11-06T10:42:50+09:00",
+      "evidence": "work/runs/202611060711/logs/system-test/E2E-234-202611061042.log",
       "history": [
         {
           "at": "2026-11-06T05:29:17+09:00",

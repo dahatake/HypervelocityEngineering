@@ -1028,6 +1028,6 @@
 | FR-1083 | FR | 使用中 | 2026-11-06T05:25:48+09:00 | run/202611060524@75a71377 |  |
 | AC-462 | AC | 使用中 | 2026-11-06T05:26:23+09:00 | run/202611060524@75a71377 |  |
 | E2E-234 | E2E | 使用中 | 2026-11-06T05:29:17+09:00 | run/202611060524@9619cc6b | 登録した検査の拡張が toolkit 更新（--force）後も登録を書き直さず |
-| SRC-042 | SRC | 採番済み | 2026-11-06T07:17:16+09:00 | run/202611060711@53779698 | 202611060711 explicit request and read-only source evidence |
-| AC-463 | AC | 採番済み | 2026-11-06T07:17:18+09:00 | run/202611060711@53779698 | 202611060711 declarative extension repair and dependency sharing |
-| AC-464 | AC | 採番済み | 2026-11-06T07:17:18+09:00 | run/202611060711@53779698 | 202611060711 declarative extension repair and dependency sharing |
+| SRC-042 | SRC | 使用中 | 2026-11-06T07:17:16+09:00 | run/202611060711@53779698 | 202611060711 explicit request and read-only source evidence |
+| AC-463 | AC | 使用中 | 2026-11-06T07:17:18+09:00 | run/202611060711@53779698 | 202611060711 declarative extension repair and dependency sharing |
+| AC-464 | AC | 使用中 | 2026-11-06T07:17:18+09:00 | run/202611060711@53779698 | 202611060711 declarative extension repair and dependency sharing |
