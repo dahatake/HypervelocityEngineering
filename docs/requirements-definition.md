@@ -15,6 +15,7 @@ ID（FR・NFR・AC・Q・PARAM）は `python scripts/next-id.py <種別>` でだ
 
 | 日付 | 依頼の要約 | 行き先（要求 ID・Q・不採用の理由） | 反映した回答 | 監査で直した不整合 |
 |---|---|---|---|---|
+| 2026-11-06 | 拡張の list・trace／宣言的修復、配線警告の漏れと判定不能、依存共有の改行互換（run 202611060711） | 変更: FR-1082（AC-458〜AC-460、追加 AC-463）、FR-1083（AC-461・AC-462）、NFR-PERF-003（追加 AC-464）。新規要求・統合・廃止なし。similar と pairs を確認し、範囲内に統合対象なし。共有専用要求はなく、worktree pool 管理を使う既存の性能要求へ集約。出典 SRC-042。実装境界は extensions（依頼1+2）／installer（3）／share（4）。影響: AC-459 の既存ケース E2E-234 は test-designer が拡張し、新 AC は integration。台帳・利用側・外部連携カタログの内容は変更しない | 明示依頼による承認。包括承認の追加なし | 書込許可は拡張しない。FR-1046・AC-241 の保護対象への修復提案は MANUAL とし、自動作成の例に用いない |
 | 2026-11-06 | toolkit 更新で利用側の検査の配線が脱落する問題（run 202611060524） | 新規 FR-1082（AC-458〜AC-460）、FR-1083（AC-461・AC-462）、SRC-041。similar で重複なし。FR-1017/1018/1044/1045/1046（検査・修復の入口とインストール時の確認）の文面は変更せず、拡張点と脱落警告は目的・対象が別のため新規。競合なし。影響: 共通部品「データ層検査」「データ層修復」「配布同期対象」。test-designer が AC-458〜462 のケースを追加 | なし（依頼による承認） | なし |
 | 2026-11-03 | 定型文の自動付与（run 202611030557） | 新規 FR-1081（AC-453〜AC-457）、目的 G-009、用語「定型文」、領域「利用者 Prompt の補助」（9.1・9.2）、SRC-040。similar で重複なし（FR-1077 は template 状態の分離で対象が別）。競合なし。影響: 共通部品「hook ゲート」、「配布同期対象」。test-designer が AC-453〜457 のケースを追加 | なし（依頼による承認） | なし |
 | 2026-11-02 | RPG 削除 run の工程 6 最終転記（run 202611020515） | 要求・AC の本文変更、新規要求・AC はなし。RPG 削除の既存要求を依頼により承認（包括承認なし）。前回 BLOCKED は RPG コード統合 32a19a34、reviewer 承認、integration 16/16・System Tests pass、AC-391 の同期 e5b4fec2、テスト機構修正 2b85230e を確認して解消。CAT-001 は現行カタログの参照と CHK-24 を確認して解消。AUD-052 の領域件数を現行の非廃止要求から更新。既存の URL 安全境界（AUD-009）・NFR-UX-009 等（AUD-053）の指摘は今回範囲外として維持 | 明示依頼による承認、包括承認なし | CAT-001、AUD-052 |
@@ -563,28 +564,30 @@ G-008（並列 run の持ち主）の PARAM は次のとおり。
   - 検証レベル: system
 
 #### FR-1082 データ層の検査へのプロジェクト固有の拡張の登録と実行の確認
-- 要求: EABK を導入したリポジトリの開発者は、rdcheck・rdfix・verify が行うデータ層の検査に、プロジェクト固有の検査（例: 外部連携カタログ・エンティティ区分の検査）を、toolkit 本体のファイル（`scripts/*.py`、`scripts/metadata.json`）を編集せずに登録できる。登録は `scripts/ebak.config.json` の `extensions.checks`（モジュール名・関数名・対象 rdcheck／rdfix／両方）か、`scripts/ext/*.py` の自動読み込みのどちらかで行い、登録先は toolkit の更新（`tools/install.py`、`scripts/*.py` の上書き）で上書きされない。`verify.py --docs-only` は、登録済みの拡張ごとに、実際に呼ばれたことを 1 行（名前・呼ばれた対象・結果）で出す。拡張の読み込み失敗・例外は握りつぶさず、拡張名つきの不合格として示す。
+- 要求: EABK を導入したリポジトリの開発者は、プロジェクト固有の検査、別名つきの一覧、追跡、宣言的修復を、toolkit 本体（`scripts/*.py`、`scripts/metadata.json`）を編集せずに登録できる。登録先は `scripts/ebak.config.json` の `extensions.checks` または `scripts/ext/*.py` とし、toolkit 更新で上書きされない。従来の検査は `kind` 省略時の `check` として rdcheck／rdfix／both の対象を保ち、それとは別に `kind: list` と `kind: trace` を登録できる。rdcheck list の組込でない種別は登録した一覧とその `names` 別名へ委譲し、trace は組込の結果を失わず拡張結果を追加する。rdfix 対象の検査は、関数のシグネチャがキーワード `apply` を受け取れる場合だけ実際の適用モードを渡し、旧来の関数はそのまま呼べる。修復は拡張が `Fix(path, content, reason)` 相当の宣言的な提案を返し、本体が既存の許可範囲・hook G-2・レポート・冪等性を保証して書き込む。拡張が自分で書く方式や `sys.argv` によるモード判定は必要としない。ロード・実行失敗は拡張名つきで不合格とし、登録だけで実行されなかったものも識別できる。無登録時の挙動は変えない。
 - 決定状態: 承認済み（依頼 2026-11-06）　出自: 依頼原文　優先度: MUST（toolkit の更新のたびに利用側が足した検査の配線が脱落し、検査されないまま合格に見えるのを防ぐため）
-- 上位: G-005　出典: SRC-041、SRC-023　領域: データ層の検査・修復
+- 上位: G-005　出典: SRC-041、SRC-023、SRC-042　領域: データ層の検査・修復
 - 対象エンティティ: データ層　関係する状態: 検査合格、要修復　参照パラメータ: なし
-- 関連する既存資産: 共通部品「データ層検査」、共通部品「データ層修復」、共通部品「配布同期対象」、FR-1017、FR-1044、FR-1045、FR-1058、`scripts/ebak.config.json`
-- 適用方式（[ASSUMPTION]）: 設定ファイルへの登録と `scripts/ext/*.py` の自動読み込みの両方を提供し、同じ検査が両方にあれば 1 回だけ呼ぶ。`ebak.config.json` は更新時に利用側の値を残してマージされる既存の仕組み（`install_config`）を使い、`scripts/ext/` は toolkit の配布対象に含めない。覆す条件: 利用者が一方だけを指定したとき。
-- 受入基準 AC-458: `extensions.checks` または `scripts/ext/*.py` に登録した検査は、rdcheck・rdfix の確認で呼ばれ、結果（検査項目 ID・位置・重大度）が toolkit 標準の検査と同じ形式で出力され、不合格の拡張は終了コードに反映される。
+- 関連する既存資産: 共通部品「データ層検査」、共通部品「データ層修復」、共通部品「配布同期対象」、FR-1017、FR-1044、FR-1045、FR-1046、FR-1058、NFR-REL-002、NFR-COMPAT-004、`scripts/ebak.config.json`
+- 適用方式（依頼の互換条件の具体化）: 既存の `extensions.checks` 配列を再利用し、`kind` の既定は `check` とする。設定例は `{"module":"project_checks","function":"list_integrations","kind":"list","names":["外部連携","IC"]}`。自動発見は従来の CHECKS／target に加え、関数属性 `kind`／`names`、または `LISTS` 辞書（別名→関数）／`TRACERS` リストで登録できる。同じ関数の同じ kind は設定と自動発見で重複実行しないが、別名は失わない。`ebak.config.json` の既存マージと、配布対象外の `scripts/ext/` を維持する。修復対象の許可・保護規則は FR-1046・NFR-REL-002・NFR-COMPAT-004 を継承し、拡張登録を新しい書込許可と解釈しない。
+- 受入基準 AC-458: 設定と自動発見のそれぞれで check・list・trace を登録できる。check の検査結果（検査項目 ID・位置・重大度）と終了コードへの反映は従来どおりで、kind 省略の既存登録、旧来の引数形式も動く。list は組込でない種別と `names` の別名（外部連携／IC）で同じ関数を呼び、既存の絞り込みを保つ。trace は既存の組込結果を置換せず登録結果を追加する。CHECKS、関数属性、LISTS／TRACERS、設定と自動発見の重複の各登録経路を確かめる。
   - 検証レベル: integration
-- 受入基準 AC-459: 拡張を登録した導入先で、`tools/install.py`（`--force` を含む）により `scripts/*.py` が toolkit の版で上書きされた後も、登録した拡張は登録を書き直さずに呼ばれ、更新前と同じ結果を返す。
+- 受入基準 AC-459: 拡張を登録した導入先で `tools/install.py`（`--force` を含む）により `scripts/*.py` を toolkit の版で上書きした後も、check・list・trace と宣言的修復の登録・利用側の独立した定義ファイルが残り、登録を書き直さずに呼ばれる。利用側の本体直接配線を除き拡張へ移した同一データで、`list 外部連携`・`list IC`・`trace <INT-ID>`（既存の連携名による追跡も含む）の標準出力・標準エラー・終了コードが移行前と一致し、組込の一覧・追跡も変わらない。利用側の既存 Node テスト群（SRC-042 の依頼時点では89件）を隔離複製で実行し、新しい不合格を生じない。基点で不合格ならその原因・件数と移行で増えた差分を分け、基点を合格扱いしない。
   - 検証レベル: system
-- 受入基準 AC-460: `verify.py --docs-only` は、登録済みの拡張ごとに 1 行（名前・呼ばれた対象・結果）を出す。登録があるのに呼ばれなかった拡張は警告行として出し、読み込めない・例外の拡張は拡張名つきで不合格にする。登録が 0 件のときは行を出さない。
+- 受入基準 AC-460: `verify.py --docs-only` は、登録済みの拡張ごとに名前・呼ばれた対象・結果を示す1行を出す。実行対象でなく呼ばれなかった list・trace を含む登録は、既存の `EXT-WARN` 流儀で明示する。check・list・trace のロード失敗は名つき `EXT-LOAD`、実行例外は名つき `EXT-ERROR` として、そのコマンドを非0にする。成功時の list・trace の業務出力へ診断行を混ぜない。拡張が未登録なら、拡張の行を出さず、既存の各コマンドの出力・終了コードと一致する。
+  - 検証レベル: integration
+- 受入基準 AC-463: rdfix／both の検査で、キーワード `apply` を受け取れる関数には確認時 False・適用時 True を渡し、受け取れない旧2引数関数は追加キーワードなしで動く。許可された未作成ファイルへの宣言的修復を返した場合、確認だけでは作成も更新もせず MANUAL と理由を出し、`--apply` のときだけ本体が作成・更新して拡張欄（`ext_lines` 相当、JSON では対応する extension 欄）にファイル名を表示する。再適用で内容と更新時刻が変わらない。許可範囲外・保護対象・hook G-2 で不許可の修復は書かず、理由を示す。要求定義書と外部連携カタログの保護は AC-241 のままとし、確認と適用、`--full` の有無のすべてで境界を維持する。例外時も本体の既存の取り消し・報告規則を迂回しない。
   - 検証レベル: integration
 
 #### FR-1083 toolkit 更新時の利用側の配線の脱落警告
-- 要求: EABK のインストーラは、更新で toolkit のファイルを上書きして `.ebak-backup-*` を作るとき、バックアップと新しいファイルの差分に、利用側が足した配線（`scripts/*.py` への検査・拡張の呼び出しや import の追加、`scripts/metadata.json` への追加定義、`extensions.checks` の登録の欠落）が含まれるかを調べる。含まれ、かつ更新後に拡張点（FR-1082）の登録として残っていなければ、脱落するものをファイルと行つきで警告し、拡張点への移行の方法を示す。警告は表示だけで、上書き・終了コードは変えない。
+- 要求: EABK のインストーラは、更新で toolkit のファイルを上書きして `.ebak-backup-*` を作るとき、バックアップと新しいファイルの差分に、利用側が足した配線（`scripts/*.py` への検査・拡張・list・trace の呼び出しや import の追加、`scripts/metadata.json` への追加定義、`extensions.checks` の登録の欠落）が含まれるかを調べる。含まれ、かつ該当する機能が更新後に拡張点（FR-1082）の登録として残っていなければ、脱落するものをファイルと行つきの `WARN-WIRING` で警告し、移行方法を示す。同じモジュールの check が登録済みという理由だけで、未登録の list・trace の配線を警告対象から除かない。既定では警告は表示だけで上書き・終了コードを変えない。既存の `--check`／`--dry-run` は非書込のまま、配布元と配布先が同じ実体または配布元が不完全で比較できない場合、「判定できなかった」と理由を示す。明示的な厳格判定オプションを併用した場合だけ、この判定不能を非0にできる。MANAGED／TEMPLATES 等の配布管理方式は変えない。
 - 決定状態: 承認済み（依頼 2026-11-06）　出自: 依頼原文　優先度: MUST（バックアップを作るだけでは、利用側の配線の脱落に気づけないため）
-- 上位: G-005　出典: SRC-041　領域: データ層の検査・修復
+- 上位: G-005　出典: SRC-041、SRC-042　領域: データ層の検査・修復
 - 対象エンティティ: データ層　関係する状態: なし　参照パラメータ: なし
 - 関連する既存資産: 共通部品「配布同期対象」、FR-1045、FR-1082、`tools/install.py`
-- 受入基準 AC-461: 利用側が `scripts/rdcheck.py` などに足した配線（または拡張点の登録の欠落）がある導入先で更新すると、インストーラが脱落する配線をファイルと行つきで警告し、拡張点への移行方法を示す。上書きと `.ebak-backup-*` の作成、終了コードは警告の有無で変わらない。
+- 受入基準 AC-461: 利用側が管理対象の `scripts/rdcheck.py` に `import integration_catalog as ic` と `ic.parse`／`ic._clean`／`ic.path_of`／`ic.trace` の list・trace 直接配線を足した状態から更新すると、脱落する import と直接参照の各行を、元ファイル:行つきの `WARN-WIRING` で漏らさず示し、拡張点への移行方法を案内する。check だけの登録では list・trace の警告を抑制しない。従来の検査配線・metadata の追加定義・登録の欠落の警告も残る。既定の上書き・バックアップ作成・終了コードは警告の有無で変わらない。
   - 検証レベル: integration
-- 受入基準 AC-462: 利用側が足した配線がない、または全て拡張点に登録済みの導入先で更新したとき、警告は出ない。`--dry-run`・`--check` では警告の判定結果だけを表示し、ファイルは変更されない。
+- 受入基準 AC-462: 比較可能な正常な配布元で、追加配線なし、または機能ごとにすべて拡張点へ移行済みなら `WARN-WIRING` は出ない。`--dry-run`／`--check` の各々で、ソース=配布先（同じ実体）と不完全ソースをそれぞれ与えたときは「判定できなかった」と理由を示し、明示的な厳格判定オプション併用時は非0、未指定時は従来の終了コードの意味を保つ。正常ソースの既存挙動も保つ。いずれの確認でも配布先の内容・更新時刻・manifest・バックアップは変更されず、配布管理方式を変えない。
   - 検証レベル: integration
 
 #### FR-1080 Studio の全可視化要素の動的なデータ表現（データ結合・トランジション・ホバー・ズーム・force 風レイアウト）
@@ -800,6 +803,7 @@ G-008（並列 run の持ち主）の PARAM は次のとおり。
 
 | 日付 | 対象 ID | 決定 | 根拠（依頼・Q・承認依頼・包括承認） | run-id |
 |---|---|---|---|---|
+| 2026-11-06 | FR-1082、FR-1083、NFR-PERF-003、AC-458〜AC-464 | 明示依頼の4点を既存要求へ反映し承認。extensions は check 互換のまま list・trace と宣言的修復を追加、installer は配線検出と明示オプションによる判定不能の非0、share は改行だけの同一視とする。実装はこの3境界に限定する。許可範囲の拡大はしないため、保護された外部連携カタログの自動作成は含めない。既存の検査・修復の安全条件と、既定の配布挙動を維持する | 承認済み（依頼 2026-11-06・SRC-042）。包括承認の追加なし。構成・関数属性・宣言的修復は明示された互換条件の具体化 | 202611060711 |
 | 2026-11-02 | FR-1053〜FR-1055、NFR-UX-012、FR-1063、FR-1066、FR-1067 | RPG 削除は依頼による承認（包括承認なし）。既存要求・ACの本文は変更せず、新規要求・ACも作らない。前回 BLOCKED は RPG コード統合、reviewer 承認、integration 16/16・System Tests pass、AC-391/E2E-216 同期後の確認で解消した（32a19a34、e5b4fec2。テスト機構修正 2b85230e）。監査 CAT-001 の現行カタログ参照は解消済み。監査の既存 URL 安全境界および NFR-UX-009 等は今回範囲外で、既存記録を維持 | 利用者依頼（run 202611020515）。包括承認なし | 202611020515 |
 | 2026-10-30 | FR-1080、NFR-UX-018、PARAM-058、PARAM-059 | Studio の全可視化要素に動的表現を要求にする。d3 は同梱せず外部通信・依存追加なし。トランジション上限 600ms、フレームレート下限 30fps（PARAM の変更で戻せる）。NFR-UX-018 と PARAM は包括承認 | 依頼（FR-1080）、包括承認 2026-10-30・approval_policy | 202610300421 |
 | 2026-10-22 | G-008、FR-1074〜FR-1077、NFR-OPS-009、NFR-OPS-010 | 複数 chat の並列 run で hook が持ち主を取り違える残存リスクを要求にする。R1・R2→FR-1074、R3→FR-1075、R4→FR-1076、R6→FR-1077、並列開始の統合試験→NFR-OPS-009、排他の安全性・配布・文書→NFR-OPS-010（AI提案）。R9（parallel_workers auto の再配分）は要求にせず 11.3 に記録のみ。R5・R7・R8 は仕様・待ち・安全側のため対象外 | 利用者依頼 2026-10-22、PARAM-051〜053 は包括承認 2026-10-22・approval_policy（安全範囲は推奨どおり） | 202610222228 |
@@ -2280,6 +2284,9 @@ EABK の要求定義書、カタログ、System Test 台帳、ID 台帳、実行
 
 ### 11.3 [ASSUMPTION]・TBD・競合
 
+- run 202611060711 の範囲・受入根拠（SRC-042）: データ層のローカルツールの変更であり、外部サービスとの新しい連携・認証・データ転送は追加しない。外部連携の16観点はすべて今回変更対象外（既存カタログを読む検査の配線のみ）。UI変更なし。FR-1046・AC-241 の要求定義書／外部連携カタログの保護は維持し、FR-1082 の宣言的修復は既存許可対象に限定する。保護対象の雛形が必要なら MANUAL として rd-author へ返す。これは今回の「既存許可範囲を保証」の条件を適用したもので、保護解除の推測承認は行わない。
+- run 202611060711 の検証計画: 移行前後の利用側 CLI 出力比較・更新後の拡張生存は AC-459、既存 Node テスト群の隔離複製での回帰確認も同 AC、改行の組合せと実内容差・OS別リンクは AC-464 に対応する。依頼時点の89件という数は資料の現状説明であり合格件数の固定閾値ではない。利用側の基点不合格は同じ基点との増分比較と分けて報告し、修復の範囲に加えない。Windows・Linux・macOS の未実行分は未検証と明示し、他OSの合格で代用しない。今回の要求編集で実行する `verify.py --docs-only` の合格は、これら実装の受入完了を意味しない。社内情報未確認・外部確認未実施（依頼・ローカル一次資料で条件を確定）。
+
 - 2026-11-01 の適用範囲: 下記の run 202610171423 の RPG 追加・3 モード化、および run 202610192052 の (1) RPG 無効ボタン・(4) NFR-UX-012 継承の記録は当時の履歴である。SRC-039 による廃止と FR-1063・FR-1066・FR-1067 の改訂後は適用しない。非 RPG の競合・仮定の扱いは変えない。カタログ NFR-UX-012 の実装ファイルは CHK-17 に従い「なし」（当該 ID を持つコードなし）とするが、RPG の現存する共有・専用実装は FR-1053〜FR-1055 と共通部品の行で削除対象として引き続き追跡する。
 
 - run 202611012156: RPG 表示削除の意図は依頼原文で確定しており、新しい質問票・BLOCKED・競合はなし。コード・テスト・台帳は未変更。test-designer は E2E-153（AC-286）・E2E-156（AC-295）の対応要求を FR-1066 に更新し、E2E-176（AC-347）・E2E-199（AC-367）・E2E-202（AC-368）とともに削除後の条件へ更新・再検証する。旧 pass は削除後の合格証跡として再利用しない。RPG 専用 PARAM-040・PARAM-041、SRC-033 と `docs/rpg-originality.md` は廃止仕様の証跡として保持する。社内情報未確認・外部確認未実施（外部製品仕様や連携の変更を含まない依頼で、既存契約と依頼原文から対象を特定できた）。
@@ -2448,6 +2455,7 @@ EABK の要求定義書、カタログ、System Test 台帳、ID 台帳、実行
 | SRC-036 | 利用者依頼（run 202610192052）「表示モード切替のヘッダー常設、3D の種別ごとのオブジェクトと演出スタイル、3D カメラのプリセット（カメラワーク分類）」（`work/runs/202610192052/request.md`）、`EABK-Studio/web/js` の `dim.js`・`semzoom.js`・`map3d.js`・`dgm3d.js`・`sz3d.js`・`app.js`・`i18n.js`、FR-1027・FR-1029・FR-1040・FR-1053・NFR-UX-012 | 2026-10-19 | 依頼全文（カメラワークの 4 要素の語彙と典型例を含む）。現状の構造（`data-testid="dim-toggle"`、`semantic-zoom` の `data-scale`）を確認。外部調査は未実施・社内情報未確認 | 2026-10-19 | 本文（構造の確認の範囲） |
 | SRC-040 | 利用者依頼（run 202611030557）「EABK の新機能として定型文の自動付与を追加する」（設定 `.github/ebak-prompt-prefix.md`・`ebak.config.json` の `prompt_prefix`、`scripts/hooks/gate.py` の user-prompt の additionalContext、`/build template` を除外、`tools/install.py` の TEMPLATES による既定の文章の作成）、`rdcheck.py similar` | 2026-11-03 | 依頼全文。similar で同目的の既存要求なし（FR-1077 は template 状態の分離で対象が別）。コードは未読込（実装工程で行う）。外部確認未実施・社内情報未確認 | 2026-11-03 | 本文 |
 | SRC-041 | 利用者依頼（run 202611060524）「toolkit 更新（scripts/*.py の上書き）で、rdcheck.py・rdfix.py・metadata.json に足したプロジェクト固有の検査（integration_catalog.py、entity_classes.py）の呼び出し配線が脱落する」（要望: 拡張点、更新時の警告、verify の 1 行表示。受入: 更新後も呼ばれる、登録を消して更新すると警告）、現状の `tools/install.py`（`install_managed` の `.ebak-backup-*`、`install_config` のマージ）、`scripts/ebak.config.json`、`rdcheck.py similar` | 2026-11-06 | 依頼全文。similar で同目的の既存要求なし。コードは概観のみ（実装工程で詳細を読む）。外部確認未実施・社内情報未確認 | 2026-11-06 | 本文 |
+| SRC-042 | 利用者依頼（run 202611060711）4点と読取専用一次資料。利用側 `C:\GitHub\BusinessAnalyticsStudio\scripts\ext\project_checks.py`（apply の argv 判定と直接書込）、`scripts/entity_classification.json`（独立定義）、`scripts/rdcheck.py` の list 1158行以降・trace 1559行以降（import integration_catalog／ic.*）、`scripts/integration_catalog.py` の parse・trace、`tests/system/integration-catalog/tooling.test.mjs` および support.mjs の基点比較。本体 `scripts/extpoints.py`、`scripts/rdcheck.py`、`scripts/rdfix.py`、`scripts/ebaklib.py` の share_dirs、`tools/install.py` の find_dropped_wiring／check_wiring、`tests/toolkit/test_time_limits.py`、既存の拡張 integration／system テスト、`users-guide/04-customization.md` | 2026-11-06 | 依頼全文と対象コード・テストの該当箇所を読取。現状はcheck専用登録、利用側のlist／trace直接配線、argvでの書込、manifest等のバイト比較。89件のNodeテストは依頼の申告で、この要求編集では利用側テスト・CLI移行・OS別リンクを未実行。新しい外部連携の要求やカタログ内容の整理は範囲外 | 2026-11-06 | 本文・該当箇所 |
 | SRC-037 | 利用者依頼（run 202610222228）「複数 chat で conductor（/build）を同時に動かしたときの hook の誤拒否（残存リスク）を起こさない」と、調査レポート `work/202610222225-PararellTaskExecution-Report.md`（§5 R1〜R9、§6 の改善案）、`scripts/run-state.py`（take_start_claim）、`scripts/hooks/gate.py`（record_start_claim・bind_sibling_run・on_user_prompt） | 依頼 2026-10-22・作業ツリー run/202610222228 | 依頼全文とレポートの記述（R1・R2 claim の FIFO とロックなし、R3 所有者なし run の救済、R4 主ツリー運用の run_active、R6 template 状態の共有、R9 auto の再配分なし）。コードの詳細な読込は実装工程で行う。外部確認未実施・社内情報未確認 | 2026-10-22 | 本文 |
 | SRC-038 | 利用者依頼（run 202610250847）「ヘッダーの 2D/3D/RPG に Graph を追加」と、文献: Ghoniem ら (2004) node-link と隣接行列の比較、Shneiderman (1996) Overview first、Herman ら (2000) グラフ可視化サーベイ、Purchase (1997) 辺の交差、Sugiyama ら (1981) 階層レイアウト、Fruchterman & Reingold (1991) 力学モデル、Cleland-Huang ら (2012) Traceability、Chen (1976)、Harel (1987)、Microsoft Fluent 2 / Fluent UI System Icons（MIT）、`EABK-Studio/web/js/dim.js`・`app.js`・`diagrams.js`・`entities.js`・`ui.js` | 2026-10-25 | 依頼の調査材料（conductor の references）。文献の原文は未取得で書誌情報による。社内情報未確認 | 2026-10-25 | 本文 |
 | SRC-033 | 利用者依頼（run 202610171423）「EABK Studio の表現に『RPG 風』を追加」、`EABK-Studio/web/js/dim.js`・`map2d.js`・`app.js`（2D/3D 切替と既定 2D）、FR-1040・FR-1041 | 2026-10-17 | 依頼全文（2D 既定を保つ、ファミコンの 2 次元 RPG の世界観、音楽・SE・キャラクターを外部アセットなしで生成、既存著作物の複製なし、ファミコン風の操作）。既存の切替・アイコン生成の前例を構造の範囲で確認。外部調査は未実施 | 2026-10-17 | 本文（構造の確認の範囲） |
@@ -2596,11 +2604,14 @@ EABK の要求定義書、カタログ、System Test 台帳、ID 台帳、実行
 - 受入基準 AC-076: 提出物を新しいプロセスで検証したとき、検証スクリプトの終了コードと結果ファイルから正常終了、部分完了、失敗を判別でき、エージェントの報告だけでは正常終了にならない。
   - 検証レベル: system
 
-#### NFR-PERF-003 EABK toolkit の子プロセス・ブラウザー起動の削減
+#### NFR-PERF-003 EABK toolkit の子プロセス・ブラウザー起動と依存再導入の削減
 - 要求: EABK toolkit（`scripts/`）の検査コマンドは、追跡ファイル一覧の取得で git 子プロセスを直列に待たず、同一実行内で同じ引数の `git ls-files` を重複して起動しない。
-- 決定状態: 承認済み（包括承認 2026-10-12・approval_policy）　出自: 依頼原文　優先度: SHOULD（`verify.py --no-cache` 約 2 秒、`--docs-only` 約 1 秒の大半が git 子プロセスの起動と pytest であるため）
-- 上位: 既定制約（EABK toolkit の運用）　出典: 依頼原文（run 202610121452）　対象エンティティ: なし　関係する状態: なし　参照パラメータ: なし　領域: データ層の検査・修復
-- 関連する既存資産: `scripts/ebaklib.py` の `tracked_files`、`scripts/rdcheck.py`、`scripts/rdfix.py`
+- 決定状態: 承認済み（依頼 2026-11-06）　出自: 依頼原文　優先度: SHOULD（検査の子プロセス・ブラウザー起動と worktree ごとの依存再導入を減らすため。従来部分の承認は決定記録に保持）
+- 上位: 既定制約（EABK toolkit の運用）　出典: 依頼原文（run 202610121452）、SRC-042　対象エンティティ: なし　関係する状態: なし　参照パラメータ: なし　領域: データ層の検査・修復
+- 関連する既存資産: `scripts/ebaklib.py` の `tracked_files` と `share_dirs`、`scripts/rdcheck.py`、`scripts/rdfix.py`、共通部品「worktree pool 管理」
+- 要求の拡張（依頼 2026-11-06）: worktree の依存共有は、隣接する `package.json`／`package-lock.json` の比較時だけ CRLF を LF へ正規化する。改行以外の実内容差は従来どおり NOTE で共有を拒否する。元ファイルは書き換えず、共有先の導入済み依存を再利用し、Windows junction と Linux／macOS symlink の既存方式を維持する。
+- 受入基準 AC-464: 共有元／worktree の隣接 `package.json` と `package-lock.json` をそれぞれ LF／LF、CRLF／CRLF、CRLF／LF、LF／CRLF とした組合せで、CRLF→LF 置換後が同一なら共有リンクが作られ、SHARED が示され、依存を再導入しない。一方、どちらかの実内容差（値、空白、単独CR、末尾改行の有無の差を含む）は同一視せず、NOTE を出してリンクを作らない。JSONの意味比較や空白除去は行わない。入れ子の依存ディレクトリも隣接ファイルを使い、共有無効・共有元なし・既存ディレクトリあり・ファイル欠落時は従来どおりとする。各OSの実リンクで依存を参照でき、unshare 後も共有元は残り、manifest／lock の内容・改行は変わらない。Windows junction と Linux／macOS symlink はそれぞれ実行したOSと結果を記録し、未実行のOSを合格扱いしない。
+  - 検証レベル: integration
 - 受入基準 AC-088: `tracked_files` を 1 回呼んだとき、必要な `git ls-files` 2 回が並列に実行され、返す一覧は直列実行時と同一である。
   - 検証レベル: integration
 - 受入基準 AC-089: `rdcheck.py` または `rdfix.py` を 1 回実行したとき、同一引数の `git ls-files` の起動は 1 回以下である。
