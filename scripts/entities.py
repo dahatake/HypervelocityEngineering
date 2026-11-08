@@ -1187,7 +1187,7 @@ def render_todo(rep: dict, todos: List[dict]) -> str:
         out.append("ToDo: 0 件（全てのエンティティが企業データカタログと一致、または質問票に同じ ToDo があります）")
         return "\n".join(out) + "\n"
     esc = lambda s: s.replace("|", "\\|")  # noqa: E731
-    out.append(f"ToDo: {len(todos)} 件（質問票の行の形式。ID は採番前。rd-author が next-id.py で採番して質問票へ転記します。このコマンドは管理データを書き換えません）")
+    out.append(f"ToDo: {len(todos)} 件（質問票の行の形式。ID は採番前。next-id.py で採番して質問票へ転記します。このコマンドは管理データを書き換えません）")
     out.append("| ID | 重要度 | 質問 | 選択肢 | 推奨 | 状態 | 回答 |")
     out.append("|---|---|---|---|---|---|---|")
     for t in todos:

@@ -71,10 +71,7 @@ def test_role_docs_require_reuse_and_are_distributed():
     # FR-1078 AC-424
     import importlib.util
     docs = {
-        ".github/agents/rd-author.agent.md": ("rdcheck.py similar", "統合"),
         ".github/skills/requirement-definition/SKILL.md": ("rdcheck.py similar", "既存の項目を変更"),
-        ".github/agents/test-designer.agent.md": ("CHK-33", "ledger.py update", "統合"),
-        ".github/agents/conductor.agent.md": ("既存の項目を変更", "similar_pairs"),
         ".github/skills/rd-audit/SKILL.md": ("rdcheck.py similar --pairs", "CHK-33"),
     }
     for rel, words in docs.items():

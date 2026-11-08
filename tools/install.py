@@ -9,13 +9,15 @@ From a local clone:
   python tools/install.py --target <repo> --purge        # uninstall + remove docs, ledger, config, /work, appended lines
   (one command: tools/uninstall.ps1 / tools/uninstall.sh, same options as install.ps1 / install.sh)
 
-What it does (idempotent):
-  * copies the managed files (.github/agents, .github/skills, .github/hooks, .github/workflows/ebak-verify.yml,
-    scripts/*, EABK-Studio/ = the read-only data-layer viewer with its role guides and screenshots)
-    and updates them on re-run unless you modified them locally;
-  * removes files that older versions installed but this version no longer ships (OBSOLETE), unless modified;
+What it does (idempotent) - EABK Lite: rules + data layer + deterministic checks, no orchestration:
+  * copies the managed files (.github/agents/rd-auditor, .github/skills, .github/workflows/ebak-verify.yml,
+    scripts/*, EABK-Studio/ = the read-only data-layer viewer with its role guides
+    and screenshots) and updates them on re-run unless you modified them locally;
+  * removes files that older versions installed but this version no longer ships (OBSOLETE: conductor, worktree
+    runs, role gates, the hooks and their scripts), unless modified; warns when a modified old hook file is kept;
   * creates the management-data templates only when missing (docs/*.md, tests/system/ledger.json);
-  * merges scripts/ebak.config.json (adds new keys, keeps your values);
+  * merges scripts/ebak.config.json (adds new keys, keeps your values, removes the orchestration keys
+    gates / limits / credits / worktree_share / prompt_prefix and the old default verify command toolkit-unit);
   * adds /work/ to .gitignore, union-merge rules to .gitattributes, and a marked block to AGENTS.md
     and .github/copilot-instructions.md;
   * records versions and hashes in .github/ebak-toolkit.json;
@@ -41,54 +43,32 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 MANAGED = [
-    ".github/agents/conductor.agent.md",
-    ".github/agents/rd-author.agent.md",
     ".github/agents/rd-auditor.agent.md",
-    ".github/agents/test-designer.agent.md",
-    ".github/agents/implementer.agent.md",
-    ".github/agents/reviewer.agent.md",
     ".github/skills/requirement-definition/SKILL.md",
     ".github/skills/requirement-definition/original.md",
     ".github/skills/requirement-definition/integration-checklist.md",
     ".github/skills/requirement-definition/integration-requirements.md",
-    ".github/skills/implement-fr/SKILL.md",
-    ".github/skills/implement-fr/ui-design.md",
-    ".github/skills/implement-fr/original-rd.md",
-    ".github/skills/implement-fr/original-fr.md",
-    ".github/skills/system-test-increment/SKILL.md",
     ".github/skills/rd-audit/SKILL.md",
     ".github/skills/adopt-existing/SKILL.md",
-    ".github/skills/build/SKILL.md",
-    ".github/skills/build-template/SKILL.md",
-    ".github/skills/dedupe/SKILL.md",
-    ".github/hooks/quality-gates.json",
     ".github/workflows/ebak-verify.yml",
     ".github/workflows/ebak-data-layer.yml",
     "scripts/ebaklib.py",
     "scripts/rdcheck.py",
     "scripts/rdfix.py",
     "scripts/entities.py",
-    "scripts/extpoints.py",    "scripts/metadata.json",
+    "scripts/extpoints.py",
+    "scripts/metadata.json",
     "scripts/verify.py",
     "scripts/verify.ps1",
     "scripts/verify.sh",
     "scripts/next-id.py",
     "scripts/ledger.py",
-    "scripts/select-tests.py",
     "scripts/summarize.py",
-    "scripts/clean-work.py",
-    "scripts/run-state.py",
-    "scripts/next-impl.py",
-    "scripts/build-request.py",
-    "scripts/integrate.py",
-    "scripts/watch.py",
-    "scripts/kpi.py",
     "scripts/adopt.py",
-    "scripts/hooks/gate.py",
     "tools/install.py",
     "users-guide/README.md",
     "users-guide/01-writing-requests.md",
-    "users-guide/02-during-and-after-run.md",
+    "users-guide/02-daily-workflow.md",
     "users-guide/03-requirements-format.md",
     "users-guide/04-customization.md",
     "users-guide/05-scripts-reference.md",
@@ -98,10 +78,9 @@ MANAGED = [
     "users-guide/09-versioning.md",
     "users-guide/10-adopting-existing-apps.md",
     "users-guide/11-integration-catalog.md",
-    "users-guide/11-integration-catalog.md",
     "users-guide/README.en.md",
     "users-guide/01-writing-requests.en.md",
-    "users-guide/02-during-and-after-run.en.md",
+    "users-guide/02-daily-workflow.en.md",
     "users-guide/03-requirements-format.en.md",
     "users-guide/04-customization.en.md",
     "users-guide/05-scripts-reference.en.md",
@@ -113,8 +92,6 @@ MANAGED = [
     "users-guide/11-integration-catalog.en.md",
     "users-guide/images/architecture-diagram.png",
     "users-guide/images/dashboard.png",
-    "tests/toolkit/test_clean_work.py",
-    "tests/toolkit/test_run_state.py",
     "EABK-Studio/eabk_model.py",
     "EABK-Studio/README.md",
     "EABK-Studio/start.ps1",
@@ -182,6 +159,35 @@ def dest_of(rel: str) -> str:
 # Files no longer shipped. Removed on update when unmodified.
 # EABK Studio guide moved from EABK-Studio/users-guide/ into the single users-guide/ (installed as EABK-docs/studio/).
 OBSOLETE: list[str] = [
+    # 0.6.0 EABK Lite: the conductor / worktree orchestration, the role gates and their scripts are no longer shipped
+    ".github/agents/conductor.agent.md",
+    ".github/agents/rd-author.agent.md",
+    ".github/agents/test-designer.agent.md",
+    ".github/agents/implementer.agent.md",
+    ".github/agents/reviewer.agent.md",
+    ".github/skills/implement-fr/SKILL.md",
+    ".github/skills/implement-fr/ui-design.md",
+    ".github/skills/implement-fr/original-rd.md",
+    ".github/skills/implement-fr/original-fr.md",
+    ".github/skills/system-test-increment/SKILL.md",
+    ".github/skills/build/SKILL.md",
+    ".github/skills/build-template/SKILL.md",
+    ".github/skills/dedupe/SKILL.md",
+    ".github/hooks/quality-gates.json",
+    ".github/hooks/prompt-prefix.json",
+    "scripts/hooks/gate.py",
+    "scripts/select-tests.py",
+    "scripts/clean-work.py",
+    "scripts/run-state.py",
+    "scripts/next-impl.py",
+    "scripts/build-request.py",
+    "scripts/integrate.py",
+    "scripts/watch.py",
+    "scripts/kpi.py",
+    "tests/toolkit/test_clean_work.py",
+    "tests/toolkit/test_run_state.py",
+    "EABK-docs/02-during-and-after-run.md",
+    "EABK-docs/02-during-and-after-run.en.md",
     "scripts/perf-report.py",
     "scripts/import-speckit.py",
     "tests/system/e2e/test_run_owned_cleanup.py",
@@ -217,10 +223,7 @@ TEMPLATES = [
     "docs/catalog.md",
     "docs/integrations.md",
     "docs/id-registry.md",
-    "docs/run-history.md",
-    "docs/integrations.md",
     "tests/system/ledger.json",
-    ".github/ebak-prompt-prefix.md",
 ]
 CONFIG = "scripts/ebak.config.json"
 MANIFEST = ".github/ebak-toolkit.json"
@@ -235,13 +238,18 @@ def block_markers(text: str):
         if b in text and e in text:
             return b, e
     return None
-INSTRUCTIONS_BLOCK = """## Enterprise App Build Kit（要求定義書・カタログ・System Test の一貫性）
+INSTRUCTIONS_BLOCK = """## Enterprise App Build Kit Lite（要求定義書・カタログ・System Test の一貫性）
 
-- 長時間の開発の依頼は、custom agent `conductor` に 1 回で渡します（VS Code・GitHub Copilot app では `/build`）。手順は `.github/agents/` と `.github/skills/` にあります。
-- 検証は `python scripts/verify.py`（`scripts/verify.ps1` / `scripts/verify.sh`）。exit 0 が合格です。
-- 要求の正本は `docs/requirements-definition.md` で、編集は rd-author だけが行います。ID は `python scripts/next-id.py <種別>` でだけ採番します。
-- System Test の台帳 `tests/system/ledger.json` は `python scripts/ledger.py` でだけ更新します。
-- 一時ファイル（ログ・証跡・実行結果・作業メモ）は `/work` に置きます（git の管理対象外。14 日で削除）。"""
+- 振る舞いを変える変更（機能の追加・変更・削除）では、同じ変更の中で `docs/requirements-definition.md` の要求と受入基準（AC）を更新します。誰が編集してもかまいません（手順は skill `requirement-definition`）。
+- 新しい ID は `python scripts/next-id.py <種別>` でだけ採番します。手で番号を振りません（複数の人・PC で並行しても重複させないため）。
+- テストの名前かコメントに、検証する要求 ID と AC ID を書きます（例: `FR-012 AC-031`）。System Test の台帳 `tests/system/ledger.json` は `python scripts/ledger.py` でだけ更新し、テストを消す・弱めるときは `--reason` で理由を残します。
+- ファイルを足す・名前を変える・消すときは、`docs/catalog.md` の行も直します（`python scripts/rdfix.py --apply` で追従できます）。
+- 完了の前に `python scripts/verify.py` を実行して exit 0 にします（CI の `ebak-verify` も同じ検査をします）。
+- 一時ファイル（ログ・証跡・作業メモ）は `/work` に置きます（git の管理対象外）。"""
+# Config keys of the orchestration and the hook (0.5.x and earlier). EABK Lite reads none of them; an update removes them.
+OBSOLETE_CONFIG_KEYS = ("gates", "limits", "credits", "worktree_share", "prompt_prefix")
+# verify.commands entries that older versions shipped and that run files this version no longer ships.
+OBSOLETE_VERIFY_RUNS = ("python -m pytest -q tests/toolkit/test_clean_work.py",)
 GITIGNORE_LINES = ["/work/"]
 GITATTR_LINES = ["docs/id-registry.md merge=union", "docs/run-history.md merge=union",
                  "scripts/*.sh text eol=lf", "EABK-Studio/*.sh text eol=lf"]
@@ -472,6 +480,10 @@ class Installer:
             else:
                 self.note("KEEP-LOCAL", rel)
                 self.new_hashes[rel] = old
+                if rel.startswith(".github/hooks/"):
+                    self.warnings.append(f"WARN-HOOK  {rel} を残しました（ローカルで変更あり）。EABK Lite には hook がなく、"
+                                         "このファイルが呼ぶ scripts/hooks/gate.py は削除されます。hook がエラーになると Copilot が"
+                                         "ツールの呼び出しを拒否するので、このファイルを削除してから Copilot のセッションを開き直します")
 
     def install_templates(self) -> None:
         for rel in TEMPLATES:
@@ -503,7 +515,18 @@ class Installer:
                 elif isinstance(v, dict) and isinstance(a[k], dict):
                     changed = merge(a[k], v) or changed
             return changed
-        if merge(cur, src):
+        pruned = [k for k in OBSOLETE_CONFIG_KEYS if k in cur]
+        for k in pruned:
+            del cur[k]
+        cmds = (cur.get("verify") or {}).get("commands")
+        if isinstance(cmds, list):
+            kept = [c for c in cmds if not (isinstance(c, dict) and str(c.get("run", "")).strip() in OBSOLETE_VERIFY_RUNS)]
+            if len(kept) != len(cmds):
+                cur["verify"]["commands"] = kept
+                pruned.append("verify.commands(toolkit-unit)")
+        if pruned:
+            self.note("PRUNE", f"{CONFIG} ({', '.join(pruned)})")
+        if merge(cur, src) or pruned:
             self.note("MERGE", CONFIG)
             self.write_bytes(CONFIG, (json.dumps(cur, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
         else:
@@ -768,6 +791,10 @@ def main(argv=None) -> int:
     else:
         mode = "check" if args.check else ("dry-run" if args.dry_run else "install")
     print(f"\nEnterprise App Build Kit {version}: {mode} {target}  changes={len(pending)}")
+    hook_warn = [w for w in ins.warnings if w.startswith("WARN-HOOK")]
+    ins.warnings = [w for w in ins.warnings if not w.startswith("WARN-HOOK")]
+    for w in hook_warn:
+        print("\n" + w)
     if ins.warnings:
         print(f"\n警告: 利用側が足した配線のうち、拡張点（extensions.checks / scripts/ext/*.py）に未登録のものが {len(ins.warnings)} 件あり、"
               "この更新で脱落します（上書き・バックアップ・終了コードは変わりません）:" if not dry else
@@ -789,7 +816,7 @@ def main(argv=None) -> int:
             print("\n次の手順:")
             print("  1. 変更を確認して commit します: git status && git add -A && git commit -m \"Remove Enterprise App Build Kit\"")
             if args.purge:
-                print("  2. run が作った worktree と work/* ブランチが残っていれば削除します: git worktree list / git branch --list \"work/*\"")
+                print("  2. 0.5.x 以前の run が作った worktree と work/* ブランチが残っていれば削除します: git worktree list / git branch --list \"work/*\"")
             else:
                 print("  2. 管理データ・設定・/work も消すには --purge で再実行します（先に --dry-run で確認できます）")
         return 0
@@ -811,11 +838,10 @@ def main(argv=None) -> int:
             print("取り消しの理由は上の表示を確認します。インストーラの終了コードはデータ層の結果で変わりません")
     print("\n次の手順（README.md の「インストール」「Quickstart」）:")
     print("  1. 変更を確認して commit します: git add -A && git commit -m \"Add Enterprise App Build Kit\"")
-    print("  2. scripts/ebak.config.json の verify.commands に、ビルド・静的検査・テストのコマンドを登録します（初回の実行で implementer が登録することもできます）")
-    print("  3. VS Code の Agents ウィンドウで Session Target=Copilot、Agent=conductor、Autopilot、New Worktree を選び、")
-    print("     チャット欄に「/build やりたいこと」と書いて送ります（入力欄は表示されません）")
-    print("     （雛形は「/build-template」（または「/build template」）で表示されます。Copilot CLI では `copilot --agent conductor --autopilot` などで同じ雛形を送ります）")
-    print("     GitHub Copilot app では、プロジェクトにこのリポジトリを追加し、新しい worktree・Autopilot・Agent=conductor で「/build やりたいこと」を送ります")
+    print("  2. scripts/ebak.config.json の verify.commands に、ビルド・静的検査・テストのコマンドを登録します")
+    print("  3. いつもの Copilot（既定のエージェント）に、ふだんどおり依頼します。AGENTS.md の規則に従って、")
+    print("     要求定義書・カタログ・テストが同じ変更の中で更新され、push すると CI の ebak-verify が同じ検査をします")
+    print("     （節目には custom agent `rd-auditor` に意味の監査を頼めます。手順: EABK-docs/06-quality-gates.md）")
     print("  4. （任意）要求・カタログ・試験を図と表で見るには、EABK Studio を起動します（読み取り専用。役割は pm / architect / swe）:")
     print("     python EABK-Studio/studio.py --check            # データ層が読めるか確認")
     print("     python EABK-Studio/studio.py --role pm          # ブラウザーが開きます。ガイド: EABK-docs/studio/README.md")

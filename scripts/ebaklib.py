@@ -20,13 +20,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
-TOOLKIT_VERSION = "0.5.2"
+TOOLKIT_VERSION = "0.6.0"
 
 
 SPECKIT_PATHS = [".specify/**", "specs/**/*.md"]
 
 DEFAULT_CONFIG: dict = {
-    "prompt_prefix": {"enabled": True, "file": ".github/ebak-prompt-prefix.md"},
     "management_files": {
         "requirements": "docs/requirements-definition.md",
         "requirements_dir": "docs/requirements",
@@ -39,15 +38,12 @@ DEFAULT_CONFIG: dict = {
     },
     "base_branch": "main",
     "work": {"dir": "work", "retention_days": 14},
-    # AI クレジットの推定（run-state.py finish が --credits なしのとき、models.jsonl の task 呼び出しから算出）
-    "credits": {"default_multiplier": 1, "model_multipliers": {}},
-    # 1 run の時間。default は max_hours 未指定時の値、cap は run_options の指定を切り詰める上限（夜間実行なら引き上げる）
-    "limits": {"max_hours_default": 2.5, "max_hours_cap": 3.0, "reserve_minutes": 30},
-    # worktree の依存ディレクトリの共有（主の作業ツリーの実体への junction / symlink）
-    "worktree_share": {"enabled": True, "dirs": ["node_modules"]},
     "verify": {"commands": [], "timeout_sec": 1800},
     "system_test": {"jobs": "auto", "serial_patterns": ["default_port"]},
     "checks": {
+        # EABK Lite: "lite" reports only LITE_CHECKS (structure and traceability); "full" reports every CHK.
+        "profile": "lite",
+        "lite_checks": ["CHK-01", "CHK-02", "CHK-03", "CHK-05", "CHK-09", "CHK-12", "CHK-17", "CHK-19", "CHK-24"],
         "ambiguous_words": [
             "適切", "適宜", "なるべく", "できるだけ", "可能な限り", "十分な", "迅速", "高速に", "簡単",
             "容易", "直感的", "柔軟", "使いやすい", "必要に応じて", "モダン", "シームレス",
@@ -57,55 +53,12 @@ DEFAULT_CONFIG: dict = {
         "id_scan_exclude": [
             "docs/**", "work/**", ".github/**", "scripts/**", "tools/**", "users-guide/**", "EABK-docs/**", "EABK-Studio/**",
             "tests/toolkit/**", "templates/**", "node_modules/**", "**/node_modules/**", ".git/**",
-            "**/*.lock", "**/package-lock.json", "AGENTS.md", "README.md", "**/*.svg",
+            "**/*.lock", "**/package-lock.json", "AGENTS.md", "README.md", "CHANGELOG.md", "**/*.svg",
             # GitHub Spec Kit artifacts use their own FR-/SC- numbering
             *SPECKIT_PATHS,
         ],
         "test_path_pattern": r"(^|/)(tests?|__tests__|spec|specs|e2e)(/|$)|(^|/)(test_[^/]*|[^/]*_test\.[^/]+|[^/]*\.(test|spec)\.[^/]+|[^/]*Tests?\.[^/]+)$",
         "temp_file_pattern": r"\.(log|har|trace|webm)$|(^|/)(trace[^/]*\.zip|results[^/]*\.json)$|(^|/)(evidence|screenshots|test-results|playwright-report)/",
-    },
-    "gates": {
-        "enabled": True,
-        "subagent_verify": {
-            "implementer": ["--quick"],
-            "test-designer": ["--docs-only"],
-            "rd-author": ["--docs-only"],
-        },
-        "subagent_verify_max_blocks": 3,
-        "agent_stop_max_blocks": 40,
-        "enforce_conductor_edit_scope": True,
-        "deploy_patterns": [
-            r"\bazd\s+(up|deploy|provision)\b",
-            r"\baz\s+deployment\s+\S+\s+create\b",
-            r"\baz\s+(webapp|functionapp|containerapp|staticwebapp)\s+(up|deploy|create)\b",
-            r"\bterraform\s+(apply|destroy)\b",
-            r"\bpulumi\s+(up|destroy)\b",
-            r"\bkubectl\s+(apply|delete|create|replace)\b",
-            r"\bhelm\s+(install|upgrade|uninstall)\b",
-            r"\bfunc\s+azure\s+functionapp\s+publish\b",
-            r"\bswa\s+deploy\b",
-            r"\b(vercel|netlify)\s+(deploy|--prod)\b",
-            r"\bfirebase\s+deploy\b",
-            r"\bcdk\s+deploy\b",
-            r"\bserverless\s+deploy\b",
-            r"\b(npm|pnpm|yarn)\s+publish\b",
-            r"\btwine\s+upload\b",
-            r"\bdotnet\s+nuget\s+push\b",
-            r"\bgh\s+release\s+create\b",
-            r"\bdocker\s+push\b",
-        ],
-        # Tools contributed by MCP servers, plugins and extensions (anything not in gate.py BUILTIN_TOOLS).
-        # A tool name whose words contain one of these verbs is treated as a change to an external system.
-        "external_write_verbs": [
-            "create", "update", "upsert", "delete", "remove", "destroy", "purge", "drop", "write", "insert",
-            "add", "put", "patch", "post", "send", "reply", "forward", "comment", "submit", "merge", "close",
-            "reopen", "resolve", "approve", "assign", "unassign", "cancel", "start", "stop", "restart", "scale",
-            "invoke", "do_action", "apply", "upload", "move", "rename", "archive", "share", "grant", "revoke",
-            "enable", "disable", "schedule", "accept", "decline", "transfer", "push", "commit", "trigger",
-            "dispatch", "rerun", "edit", "modify",
-        ],
-        "external_deploy_verbs": ["deploy", "provision", "publish", "release"],
-        "external_tool_allow": [],
     },
 }
 

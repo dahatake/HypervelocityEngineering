@@ -3,14 +3,14 @@
 
 Three layers, each with a different trust level (see users-guide/10-adopting-existing-apps.md):
   1. Facts       `scan`    deterministic inventory of the repository (no LLM). docs/baseline/inventory.{json,md}
-  2. Hypotheses  `anchor`  evidence anchors for requirements recovered from code (rd-author writes them as
+  2. Hypotheses  `anchor`  evidence anchors for requirements recovered from code (Copilot writes them as
                            出自: 逆生成 / 決定状態: 承認待ち). Each anchor pins a file range by hash.
   3. Pinned      `golden`  characterization (golden master) cases: record today's observable behaviour, replay later.
 `check` reports evidence drift, recovery coverage and unsafe approvals.
 
 Usage:
   python scripts/adopt.py scan [--since-days 365] [--json]
-  python scripts/adopt.py request [--clusters 6] [--cluster NAME] [--implement] [--stdout]   # /build request draft
+  python scripts/adopt.py request [--clusters 6] [--cluster NAME] [--implement] [--stdout]   # request draft for Copilot chat
   python scripts/adopt.py anchor SRC-003 src/orders.py:10-48 [src/db.py] [--note "..."]
   python scripts/adopt.py check [--strict] [--json]
   python scripts/adopt.py golden add NAME [--stdin TEXT] [--cwd DIR] [--env K=V] -- CMD ARG...
@@ -18,7 +18,7 @@ Usage:
   python scripts/adopt.py golden check [NAME...]
   python scripts/adopt.py golden list
 
-Never edits docs/requirements-definition.md (G-1) and never assigns toolkit IDs (G-3).
+Never edits docs/requirements-definition.md and never assigns toolkit IDs.
 Writes only under docs/baseline/ (facts, evidence), tests/system/golden/ (pinned behaviour) and work/import/ (request drafts).
 """
 from __future__ import annotations
@@ -257,7 +257,7 @@ def scan(root: Path, since_days: int) -> dict:
 def render_md(inv: dict) -> str:
     s = inv["summary"]
     L = ["# 既存アプリの棚卸し（adopt.py scan の出力）", "",
-         "> 決定的な事実だけを集めたものです（LLM は使っていません）。要求ではありません。要求の仮説は rd-author が、",
+         "> 決定的な事実だけを集めたものです（LLM は使っていません）。要求ではありません。要求の仮説は skill `adopt-existing` に従って、",
          "> 出典（SRC）と証跡の固定（`adopt.py anchor`）を付けて、「承認待ち」で書きます。", "",
          f"- 基準の commit: `{inv['commit'][:12]}`　生成: {inv['generated']}　churn の集計期間: {inv['since_days']} 日",
          f"- ファイル {s['files']} 件（{', '.join(f'{k} {v}' for k, v in sorted(s['by_role'].items()))}）",
@@ -535,18 +535,19 @@ def cmd_request(root: Path, a) -> int:
     for c in todo:
         L.append(f"- `{c['name']}`: ソース {len(c['source'])} 件 / {c['lines']} 行 / churn {c['churn']} / ルート {c['routes']} / "
                  f"テーブル {', '.join(c['tables'][:5]) or '-'} / テスト {len(c['tests'])} 件")
-    L += ["</request>", "<references>", f"{INVENTORY_MD}", *design, "</references>", "<run_options>",
-          "max_hours: 8", "approval_policy: 厳格", "parallel_workers: auto",
-          "scope: 承認済みすべて" if a.implement else "scope: なし",
-          "git_push: しない", "deploy: しない", "external_write: しない", "paid_services: 使わない",
-          "external_exposure: 公開しない", "</run_options>"]
+    L += ["</request>", "<references>", f"{INVENTORY_MD}", *design, "</references>", "<constraints>",
+          "- 承認: 厳格（逆生成の要求は包括承認しない。決定状態は「承認待ち」のまま）",
+          "- 実装: 承認済みの要求すべて" if a.implement else "- 実装: しない（コードを変更しない）",
+          "- git push・デプロイ・外部への書き込み・有料サービス・外部公開: しない",
+          "- 終わる前に `python scripts/adopt.py check` と `python scripts/verify.py --docs-only` を exit 0 にする",
+          "</constraints>"]
     text = "\n".join(L) + "\n"
     if a.stdout:
         print(text)
         return 0
     out = root / "work" / "import" / f"adopt-{time.strftime('%Y%m%d%H%M')}.md"
-    h.write_text_atomic(out, "# 既存アプリの導入: /build の依頼文（conductor に貼り付ける）\n\n```text\n" + text + "```\n")
-    print(f"WROTE {out.relative_to(root).as_posix()}（{len(todo)} まとまり）。内容を /build の後に貼り付けます（Agent は conductor）")
+    h.write_text_atomic(out, "# 既存アプリの導入: Copilot への依頼文（チャットに貼り付ける）\n\n```text\n" + text + "```\n")
+    print(f"WROTE {out.relative_to(root).as_posix()}（{len(todo)} まとまり）。内容を Copilot のチャット（既定のエージェント）に貼り付けます")
     return 0
 
 

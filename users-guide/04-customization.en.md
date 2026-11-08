@@ -1,21 +1,88 @@
 [日本語](04-customization.md) | **English**
 
-# 4. Configuration and Customization
+# 4. Configuration and customization
 
-Settings are consolidated in `scripts/ebak.config.json`. When you install or update, the values you have set are preserved and only new keys are added.
+All settings live in one file, `scripts/ebak.config.json`. When you update with the installer, the values you set are kept and only new keys are added.
 
-## 4.1 Build, static analysis, and test commands (`verify.commands`)
+```json
+{
+  "management_files": { "requirements": "docs/requirements-definition.md", "catalog": "docs/catalog.md", "...": "..." },
+  "base_branch": "main",
+  "work": { "dir": "work", "retention_days": 14 },
+  "checks": { "profile": "lite", "lite_checks": ["CHK-01", "CHK-02", "CHK-03", "CHK-05", "CHK-09", "CHK-12", "CHK-17", "CHK-19", "CHK-24"] },
+  "system_test": { "jobs": "auto", "batch_pytest": true, "budget": { "max_active_cases": 100, "...": "..." } },
+  "verify": { "timeout_sec": 1800, "commands": [ { "name": "studio-ui", "run": "python -m pytest -q EABK-Studio/tests", "slow": true } ] },
+  "extensions": { "checks": [] }
+}
+```
 
-After checking the managed data (CHK-01 to 27), `scripts/verify.py` runs the commands registered here in order. If even one fails, it exits with 1.
+Keys you omit take the defaults from `DEFAULT_CONFIG` in `scripts/ebaklib.py`. Keys starting with `_note` are explanations and do not affect behavior.
+
+## 4.1 Context you want on every request
+
+EABK Lite has no hooks and does not add a preamble automatically. If you want a standing preamble, put it in your own Copilot instructions (outside the `AGENTS.md` block, or in your per-user instructions).
+
+## 4.2 Management-data paths (`management_files`)
+
+| Key | Default | Content |
+|---|---|---|
+| `requirements` | `docs/requirements-definition.md` | Requirements definition (the source of truth) |
+| `requirements_dir` | `docs/requirements` | Where a split requirements definition lives |
+| `catalog` | `docs/catalog.md` | Catalog |
+| `id_registry` | `docs/id-registry.md` | ID registry (written only by `next-id.py`) |
+| `run_history` | `docs/run-history.md` | Run history from 0.5.x. Not created by new installs. If it remains, it is treated as a read-only record |
+| `ledger` | `tests/system/ledger.json` | System Test ledger (written only by `ledger.py`) |
+| `manual_tests` | `docs/manual-tests.md` | Record of manual tests |
+| `integrations` | `docs/integrations.md` | External integration catalog |
+
+You can change these to match your directory layout. After changing them, run `python scripts/verify.py --docs-only` to confirm that the checks can read the new paths.
+
+## 4.3 Base branch and work folder (`base_branch` / `work`)
+
+| Key | Default | Meaning |
+|---|---|---|
+| `base_branch` | `main` | The branch that diff checks (CHK-12 and others) compare against. rd-auditor's diff audit also uses the diff with this branch |
+| `work.dir` | `work` | Where temporary files go (logs, evidence, results, audit results). Not tracked by git |
+| `work.retention_days` | 14 | A guideline for retention. EABK Lite does not delete `/work` automatically; delete it by hand when you no longer need it |
+
+## 4.4 Check scope (`checks`)
+
+| Key | Default | Meaning |
+|---|---|---|
+| `profile` | `lite` | `lite` reports only the CHKs in `lite_checks`. `full` reports all CHKs from CHK-00 to CHK-34 |
+| `lite_checks` | `CHK-01, CHK-02, CHK-03, CHK-05, CHK-09, CHK-12, CHK-17, CHK-19, CHK-24` | The CHKs reported in lite: structure and traceability (IDs, references, links between ACs and tests) |
+| `ambiguous_words` | 適切, 迅速, 直感的, and so on | List of ambiguous words (CHK-13, full only) |
+| `unit_pattern` | A regular expression for seconds, counts, %, and so on | Pattern treated as a hard-coded number and unit (CHK-14, full only) |
+| `id_scan_exclude` | `docs/**`, `scripts/**`, `EABK-Studio/**`, and so on | Paths excluded when searching code for requirement IDs (CHK-17, CHK-19) |
+| `test_path_pattern` | `tests/`, `*.test.*`, and so on | Paths treated as test code (CHK-09) |
+| `temp_file_pattern` | `*.log`, `test-results/`, and so on | Temporary files that must not be committed (CHK-23) |
+
+- In lite, CHKs not in `lite_checks` affect neither the output nor the exit code. To report more CHKs, add their IDs to `lite_checks`. The list is not merged with the default; what you write replaces it.
+- To change the scope for one run, pass `--profile lite|full`, for example `python scripts/verify.py --profile full` (the same for `rdcheck.py check`). The option takes precedence over the setting. `profile=lite` in the summary line shows which scope was used.
+- The profile applies the same way to `rdcheck.py check`, `verify.py`, and `rdfix.py` (including `--full`). `rdfix.py --full` passes exactly when `verify.py --docs-only` passes with the same profile (the mechanical repairs themselves run regardless of the profile).
+- Format warnings (CHK-13 ambiguous words, CHK-14 hard-coded numbers, CHK-15 prohibited synonyms, and so on) exist only in full. Look at them at milestone audits, or whenever you want, with `python scripts/verify.py --docs-only --profile full --show-warnings` ([6.2](06-quality-gates.en.md#62-check-profiles-lite-and-full)).
+
+## 4.5 Running System Tests (`system_test`)
+
+| Key | Default | Meaning |
+|---|---|---|
+| `jobs` | `auto` | Number of cases `ledger.py run` runs at the same time (`N` or `auto`; auto is CPU count ÷ 4, between 2 and 6). Use it only with cases that share no ports or data |
+| `serial_patterns` | `["default_port"]` | Cases whose command contains this string run alone after the parallel run finishes. Adding `"serial": true` to a case does the same |
+| `batch_pytest` | `true` | Cases that point to the same pytest file run in one pytest process. Only failed cases are re-run alone. `ledger.py run --no-batch` also turns this off |
+| `budget` | `max_active_cases: 100`, and so on | Limits checked by `ledger.py cost --check` (active cases, cases per requirement, seconds per case and in total). Exceeding them exits 1 |
+
+## 4.6 Build, static analysis, and test commands (`verify.commands`)
+
+After the management-data checks, `scripts/verify.py` runs the commands registered here in order. If any one fails, it exits 1. The CI workflow `ebak-verify` runs the same commands.
 
 ```json
 "verify": {
   "timeout_sec": 1800,
   "commands": [
-    { "name": "install", "run": "npm ci" },
-    { "name": "lint", "run": "npm run lint" },
+    { "name": "install", "run": "npm ci", "cache_files": ["package.json", "package-lock.json"] },
     { "name": "build", "run": "npm run build" },
-    { "name": "unit", "run": "npm test -- --run" },
+    { "name": "lint", "run": "npm run lint", "parallel": true },
+    { "name": "unit", "run": "npm test -- --run", "parallel": true },
     { "name": "e2e-smoke", "run": "npx playwright test --grep @canary", "slow": true, "timeout_sec": 900 }
   ]
 }
@@ -24,16 +91,16 @@ After checking the managed data (CHK-01 to 27), `scripts/verify.py` runs the com
 | Key | Meaning |
 |---|---|
 | `name` | Display name. Also used for the log file name |
-| `run` | Shell command executed at the repository root |
-| `slow` | If `true`, the command is skipped in the worker gate (`verify.py --quick`) and runs only at integration time and in the final stage |
-| `timeout_sec` | Timeout for this command (default is `verify.timeout_sec`) |
-| `cache_files` | Example: `["package.json", "package-lock.json"]`. If these files have not changed since the last success, this command is skipped (intended for dependency installation such as `npm ci`; disabled with `--no-cache`). Register it separately from build |
+| `run` | Shell command run at the repository root |
+| `slow` | Commands with `true` are skipped by `verify.py --quick`. Use it for quick local checks (CI does not pass `--quick`, so they run there) |
+| `parallel` | Consecutive commands with `parallel: true` run at the same time (lint, type checks, unit tests, and so on). Do not set it on steps that need an earlier step (build) |
+| `timeout_sec` | Timeout for this command (defaults to `verify.timeout_sec`) |
+| `cache_files` | If these files have not changed since the last success, the command is skipped (for dependency installation; disable with `--no-cache`) |
 
-A failure caused by the environment that matches `verify.retry_on` (a regular expression; the default covers things like vitest's `Timeout calling` and `ECONNRESET`) is automatically retried once. To disable this, set `verify.retry_flaky: false`.
-
-You can also write only strings, as in `"commands": ["python -m pytest -q"]`. In that case, `name` becomes the first word of the command (for example, `python`). An element without `run`, or an element that is neither a string nor an object, makes verify fail with `FAIL config`.
-
-Examples by technology stack:
+- Environment-caused failures that match `verify.retry_on` (a regular expression; vitest `Timeout calling`, `ECONNRESET`, and so on) are retried once automatically. To stop this, set `verify.retry_flaky: false`.
+- You can also write plain strings, such as `"commands": ["python -m pytest -q"]` (`name` becomes the first word of the command). Elements without `run`, or invalid elements, fail verify with `FAIL config`.
+- Full logs are saved to `/work/logs/`; only a summary of failures is printed to the console.
+- Right after a new install, the EABK Studio test `studio-ui` (`slow`) is registered. You can remove it if you do not use Studio.
 
 | Stack | Example |
 |---|---|
@@ -42,140 +109,61 @@ Examples by technology stack:
 | Java (Gradle) | `./gradlew build` |
 | Go | `go vet ./...`, `go test ./...` |
 
-Full logs are saved in `/work/runs/<run-id>/logs/` (or `/work/logs/` when there is no run), and only a summary of failures is printed to the console.
+## 4.7 Project-specific checks (`extensions.checks` / `scripts/ext/`)
 
-## 4.2 Model selection
+To add project-specific checks to the data-layer checks (`rdcheck.py`, `rdfix.py`, `verify.py`), do not edit toolkit files (`scripts/*.py`, `scripts/metadata.json`). Register them in one of these two ways. Registrations are not overwritten by toolkit updates (including `--force`).
 
-EABK does not specify a model. Both the conductor and the workers call task without the `model` argument and leave the selection to Copilot (such as Copilot Fusion). The models actually used are recorded in `work/runs/<run-id>/models.jsonl` and appear under "Models actually used" in `kpi.py run`. If you want to pin a specific model, write `model:` in the frontmatter of each `.github/agents/*.agent.md`.
+1. Write `{"module": "project_checks", "function": "check_integrations", "target": "rdcheck"}` in `extensions.checks`. `module` is a module name importable from `scripts/`; `target` is `rdcheck`, `rdfix`, or `both` (when omitted).
+2. Put the file in `scripts/ext/*.py`. Public functions (not starting with `_`; only those in `CHECKS = [...]` if present) are loaded automatically. The target comes from the function attribute `target` or the file's `TARGET` (default `both`).
 
-**Item granularity**: `queue add` rejects an item with more than 12 ACs (an exception can be made with `--allow-large`). In actual measurements, rework was concentrated in items whose working time exceeded 200 minutes.
+A check has the form `f(root, cfg)` and returns a list of findings. Empty (or `None`) means pass. A finding is `{"level": "ERROR", "chk": "PRJ-01", "loc": "docs/integrations.md:7", "msg": "…"}`, a `(level, chk, loc, msg)` tuple, or a string. The output has the same `ERROR <check> <location> <message>` form as the standard checks. `WARN` does not affect the exit code.
 
-## 4.3 Tuning the gates (`gates`)
+For each extension it calls, `verify.py` prints one line `EXT <module>.<function> target=… result=pass|warn|fail …`. A registered extension that is never called becomes an `EXT-WARN` line. Extensions that cannot be loaded or that raise an exception fail with `ERROR EXT-LOAD` / `EXT-ERROR`.
 
-```json
-"gates": {
-  "enabled": true,
-  "subagent_verify": {
-    "implementer": ["--quick"],
-    "test-designer": ["--docs-only"],
-    "rd-author": ["--docs-only"]
-  },
-  "subagent_verify_max_blocks": 3,
-  "agent_stop_max_blocks": 40,
-  "enforce_conductor_edit_scope": true
-}
-```
+On a toolkit update, `tools/install.py` looks for wiring you added directly to `scripts/*.py` and prints what the update would drop as `WARN-WIRING  <file>:<line>`. If you see it, register the check again using one of the methods above.
 
-| Key | Meaning |
+## 4.8 Removed configuration keys (when updating from 0.5.x)
+
+In 0.6.0 (EABK Lite), the following run- and hook-based keys are gone. On update, the installer removes them from the configuration and prints `PRUNE scripts/ebak.config.json (gates, limits, …)`. You do not need to delete them by hand.
+
+| Removed key | Use in 0.5.x |
 |---|---|
-| `enabled` | If `false`, all hook gates are disabled (verify's checks remain). Use only when isolating a cause |
-| `subagent_verify` | Arguments of the verify run before a worker finishes (G-4). Workers not listed here are not checked |
-| `subagent_verify_max_blocks` | Upper limit on how many times the same worker is sent back. When exceeded, the result is returned with `GATE G-4` attached, and the conductor does not integrate that result |
-| `agent_stop_max_blocks` | Upper limit on how many times a conductor that has not met the completion conditions is sent back when it tries to finish |
-| `enforce_conductor_edit_scope` | Rejects the conductor editing anything other than `work/` and `docs/run-history.md`. Set to `false` only when subagent detection does not work in the harness ([07-troubleshooting.en.md](07-troubleshooting.en.md)) |
-| `allow_hook_edit` | Default `false`. Rejects workers editing `scripts/hooks/` and `.github/hooks/` (the gates themselves) during a run (G-5). Set to `true` only in a repository that maintains the hooks. Other gates are unchanged |
-| `deploy_patterns` | Regular expressions for commands regarded as deployment. If specified, it **replaces** the default (`DEFAULT_CONFIG` in `scripts/ebaklib.py`), so copy the default first and then add to it |
-| `external_write_verbs` | Among the tools of MCP Servers, plugins, and extensions, those whose names contain one of these verbs (`create`, `update`, `delete`, `send`, `do_action`, and so on) are regarded as "changes to an external system" (G-5. [4.4](#44-using-mcp-servers-plugins-and-extensions)). If specified, it **replaces** the default |
-| `external_deploy_verbs` | Likewise, tools whose names contain one of these verbs (`deploy`, `provision`, `publish`, `release`) are regarded as "deploy/publish" and are judged by the value of `deploy` |
-| `external_tool_allow` | Regular expressions of tool names that are not regarded as changes to an external system (example: `"^mcp_myindex_update_index$"`). Use it to allow a tool whose name contains a verb but that acts only locally |
+| `gates` | Role-based hook gates (G-1 to G-6), verify before ending, classification of external tools |
+| `limits` | Time budget of a run (`max_hours` and so on) |
+| `credits` | Estimate of AI credits |
+| `worktree_share` | Sharing dependency directories between worker worktrees |
+| `prompt_prefix` | Automatic preamble added by a hook |
+| `toolkit-unit` in `verify.commands` | Test of the removed `clean-work.py` |
 
-## 4.3b Time, dependency sharing, and credit settings (`limits` / `worktree_share` / `credits`)
+An existing `.github/ebak-prompt-prefix.md` in your repository is left alone but no longer read. Hook files (`.github/hooks/quality-gates.json`, `.github/hooks/prompt-prefix.json`, `scripts/hooks/gate.py`) are removed if unmodified. If a locally modified hook file is kept (`KEEP-LOCAL`), the installer prints `WARN-HOOK  <path>`: the file calls the deleted `gate.py`, and when a hook errors Copilot denies every tool, so delete the file and reopen the Copilot session.
 
-```json
-"limits": { "max_hours_default": 2.5, "max_hours_cap": 3, "reserve_minutes": 30 },
-"worktree_share": { "enabled": true, "dirs": ["node_modules"] },
-"credits": { "default_multiplier": 1, "model_multipliers": { "claude-sonnet-5.5": 1, "gpt-6.1-sol": 3 } }
-```
+## 4.9 Using MCP servers, plugins, and extensions
 
-| Key | Meaning |
-|---|---|
-| `limits.max_hours_default` | Time (in hours) used when run_options has no `max_hours` |
-| `limits.max_hours_cap` | Upper limit of `max_hours`. A value above this is truncated. To run for a long time overnight, raise this value (and `max_hours` in run_options) (for example, `8`). The default is 3 hours |
-| `limits.reserve_minutes` | Time reserved for stage 6 (the final stage). When the remaining time falls below this (or elapsed time exceeds 85%), no new items are started |
-| `worktree_share.enabled` / `dirs` | Makes the dependency directories of working worktrees (such as `node_modules`) links (junctions on Windows) to the real directories in the main working tree where they are already installed, eliminating `npm ci` for each worktree. Sharing happens only when `package.json` and `package-lock.json` are the same as in the share source. If there is no share source, `integrate.py prepare` prints a `NOTE:`, so install once in the main working tree. Can be disabled with `false` |
-| `credits.model_multipliers` | When `run-state.py finish` is run without `--credits`, records an "estimate" in the AI credits column of run-history, counting worker (task) calls by model multiplier. Calls by the conductor itself are not included. The duration of each worker is recorded in `work/runs/<run-id>/subagents.jsonl` |
+The tools and skills of the MCP servers, plugins, and extensions you have set up in GitHub Copilot can be used by your usual Copilot (the default agent) and by rd-auditor with no extra configuration. Examples are Work IQ (internal mail, meetings, chats, documents), Microsoft Learn, and the Azure MCP Server.
 
-Hooks immediately allow read-only and record-only tools (`view`, `grep`, `sql`, `report_intent`, and so on) without reading settings or the repository.
+- **Where to configure**: Per user (VS Code user settings, `~/.copilot/`, GitHub Copilot app **Customize** → **MCP**) or per repository (`.vscode/mcp.json`, GitHub repository settings). Do not put credentials in the repository; pass them through each user's sign-in or environment variables. The toolkit does not ship MCP server settings.
+- **Recording sources**: Facts obtained from internal information are recorded with their source in the source ledger (SRC-ID) of the requirements definition (skill `requirement-definition`). People without the same tools can follow the same information from the requirements definition alone.
+- **Changes to external systems**: EABK Lite does not block external changes (sending mail, creating tickets, creating resources, deploying). Copilot's usual confirmation (tool approval) decides.
+- **Restricting rd-auditor**: If you write `tools:` in the frontmatter of `.github/agents/rd-auditor.agent.md`, tools not listed (including MCP server tools) can no longer be used. To add them, list them in the form `<server name>/*`.
 
-## 4.3c Project-specific check extensions (`extensions.checks` / `scripts/ext/`)
+## 4.10 Changing rules, agents, and skills
 
-To add project-specific checks (for example, a check of the external-integration catalog) to the data-layer checks (`rdcheck.py`, `rdfix.py`, `verify.py`), do not edit the toolkit files (`scripts/*.py`, `scripts/metadata.json`). Register the check in one of two ways. The registration is not overwritten by a toolkit update (`tools/install.py`, including `--force`).
+- **Rules**: The installer writes a rules block into `AGENTS.md` and `.github/copilot-instructions.md`, between `<!-- ebak-abk:begin -->` and `<!-- ebak-abk:end -->`. The text between the markers is rewritten on every update. Write your project's own rules outside the markers.
+- **Look of the screens**: EABK does not prescribe a design system. Write the one you want (for example "Fluent 2 for the web" or "follow the company brand guide") in the default constraints of the requirements definition or in your request.
+- **Agents and skills**: You can edit `.github/agents/rd-auditor.agent.md` and `.github/skills/*/SKILL.md` directly. Re-running the installer does not overwrite locally modified files (`KEEP-LOCAL`). To take in a new version, check with `--dry-run`, then merge the diff by hand or use `--force` (which keeps `.ebak-backup-*`).
+- **Models**: EABK does not specify models. To pin rd-auditor to a model, write `model:` in its frontmatter.
 
-1. In `extensions.checks` of `scripts/ebak.config.json`, write `{"module": "project_checks", "function": "check_integrations", "target": "rdcheck"}`. `module` is a module importable from `scripts/` (`scripts/project_checks.py`); `target` is `rdcheck`, `rdfix`, or `both` (the default).
-2. Put the file in `scripts/ext/*.py`. Its public functions (not starting with `_`; only those in `CHECKS = [...]` if it exists) are loaded automatically. A function attribute `target` or a module-level `TARGET` selects the target (default `both`).
+## 4.11 CI
 
-A check is `f(root, cfg)` (`root` is the repository `Path`, `cfg` is the contents of `ebak.config.json`) and returns a list of findings; an empty list (or `None`) means pass. A finding is `{"level": "ERROR", "chk": "PRJ-01", "loc": "docs/integrations.md:7", "msg": "..."}`, a `(level, chk, loc, msg)` tuple, or a string, and is printed in the same `ERROR <check> <location> <message>` form as the standard checks (`WARN` does not affect the exit code; `ERROR` fails). A check registered both ways is called once.
+`.github/workflows/ebak-verify.yml` (ebak-verify) runs `scripts/verify.sh --show-warnings` on pull requests and on pushes to main. The check scope follows `checks.profile` (lite by default). It is the same check as your local `python scripts/verify.py`, so the rules in AGENTS.md are confirmed on every push, whoever made the change and on whichever PC. Add the toolchain your app build needs (such as `actions/setup-node`) before the verify step. You can also add CodeQL or dependency scanning to this workflow.
 
-`verify.py` (including `--docs-only`) prints one line per called extension: `EXT <module>.<function> target=... result=pass|warn|fail ...`. An extension that is registered but not called (for example, `target` is only `rdfix`) gets an `EXT-WARN` line; one that cannot be loaded or raises fails with an `ERROR EXT-LOAD` / `EXT-ERROR` line that names the extension. Nothing is printed when no extension is registered.
+### Data-layer workflow (ebak-data-layer)
 
-When you update the toolkit, `tools/install.py` checks, before it makes `.ebak-backup-*`, whether you added wiring to `scripts/*.py` or `scripts/metadata.json` (for example, an import and calls of a module that is not registered as an extension), and shows what would be dropped as `WARN-WIRING  <file>:<line>` (`--dry-run` and `--check` only display the result). When it appears, register that check as above. The warning does not change the overwrite, the backup, or the exit code.
+`.github/workflows/ebak-data-layer.yml` (ebak-data-layer) runs `python scripts/verify.py --docs-only` to check the data layer on pull requests (pull_request), pushes to main, manual runs (workflow_dispatch), and a weekly schedule (schedule).
 
-## 4.4 Using MCP Servers, plugins, and extensions
-
-The tools and skills of the MCP Servers, plugins, and extensions that you have configured in GitHub Copilot are available to the conductor and all workers with no additional configuration. Examples are Work IQ (internal email, meetings, chat, and documents), Microsoft Learn, the Azure MCP Server, and the Copilot Studio and Microsoft 365 Agents Toolkit plugins.
-
-- **How it works**: The frontmatter of `.github/agents/*.agent.md` does not contain `tools:`. In Copilot CLI and GitHub, omitting `tools` enables all tools, including those of configured MCP Servers. In VS Code, the tools you have enabled in the tool picker are used. If you write `tools:`, tools that are not listed (including MCP Server tools) become unavailable. To restrict by role, list the required MCP Servers in the form `<server-name>/*` in addition to the built-in tools.
-- **Where to configure**: Register MCP Servers and plugins either per user (VS Code user settings, settings in `~/.copilot/`, `copilot plugin install`, or **Customize** → **MCP** / **Plugins** in the GitHub Copilot app) or in the repository (`.vscode/mcp.json`, GitHub repository settings). The GitHub Copilot app automatically uses the settings for Copilot CLI (`~/.copilot/`) and the repository settings. For anything that needs credentials, do not put secrets in the repository; pass them through each user's sign-in or environment variables. The toolkit does not distribute MCP Server settings.
-- **How to use**: You do not need to name tools in your request, such as "use Work IQ to look up related meetings and emails". The skills (requirement-definition and implement-fr) instruct the agents to use MCP Servers and skills for internal information, official documentation, and the target technology when they are available. Facts obtained from internal information are recorded with their sources in the source ledger (SRC-ID). As a result, later people and agents that do not have the same tools can trace the same information from the requirements definition alone.
-- **Environments without the tools**: No particular tool is assumed to exist. If one is unavailable, proceed with ordinary search and the materials in `<references>`, and record something like "internal information not verified".
-- **Changes to external systems**: Reads (search, fetch, questions) are always allowed. External changes, such as sending email, creating tickets, or creating, updating, or deleting cloud resources or Copilot Studio agents, are allowed during a run only when run_options has `external_write: する` (yes). Deploy/publish is allowed only with `deploy: する` (yes). Both are enforced by hooks (G-5). rd-auditor and reviewer are read-only regardless of run_options. Among the built-in tools of the GitHub Copilot app, `rename_session` and `send_session_message`, which act only within the app, are not regarded as external changes. `rename_branch`, which renames the session's branch, is rejected only during a run because it would change the integration branch.
-- **Tool count limit**: In VS Code, up to 128 tools can be enabled per request. If registering many MCP Servers exceeds the limit, disable unused servers in the tool picker.
-
-## 4.5 Other settings
-
-| Key | Default | Meaning |
-|---|---|---|
-| `management_files` | `docs/requirements-definition.md` and others | Paths of the managed data. Can be changed to match an existing directory layout |
-| `enterprise_data_catalog` | None (unset) | Optional. The reference source of the enterprise data catalog. `{"source": "<file path or http(s) URL>", "name_column": "<name column/field (optional)>", "format": "auto|csv|json|markdown|html (optional)"}`. `scripts/entities.py check` / `todo` cross-check it read-only. Credentials cannot be embedded in the URL (in that case the result is "cannot be verified"). The fetch wait time is PARAM-016, and the similarity threshold for variant candidates is PARAM-015 |
-| `base_branch` | `main` | The merge target branch. Used for diff checks (CHK-12/13) and for rejecting pushes (G-5) |
-| `prompt_prefix` | `{"enabled": true, "file": ".github/ebak-prompt-prefix.md"}` | Every time the user sends a Prompt, the text in `file` is attached automatically as an internal instruction (FR-1081; not attached to `/build template`). You can edit the text freely. To stop it, set `enabled` to `false`, or empty or delete the file (the installer creates the default text only when the file is missing and never overwrites an existing file) |
-| `work.retention_days` | 14 | Retention period in days for `/work/runs/` |
-| `checks.ambiguous_words` | 適切, 迅速, 直感的, etc. (Japanese ambiguous words such as "appropriate", "prompt", "intuitive") | List of ambiguous words (CHK-13) |
-| `checks.id_scan_exclude` | `docs/**`, `EABK-Studio/**`, etc. | Paths excluded when searching code for requirement IDs (CHK-17/19) |
-| `checks.test_path_pattern` | tests/, *.test.*, etc. | Paths regarded as test code (CHK-09) |
-
-## 4.6 Look and feel of screens (design system)
-
-The requirements definition writes only "what must be satisfied"; it does not specify colors, decoration, or UI libraries. The implementer decides the look and feel according to "Look and feel of screens (UI design foundation)" in the `implement-fr` skill.
-
-- **Default**: Use the latest official design system and official components of the target platform. These are Microsoft Fluent 2 (Fluent UI) for the web, WinUI 3 for Windows, the Human Interface Guidelines and SwiftUI standard components for Apple platforms, and Material 3 for Android. If the repository already has a design system, it takes precedence.
-- **Consistency**: In the first item that builds a screen, the theme (light, dark, high contrast), design tokens, and the application shell are listed in the catalog's common components as the "design foundation". The conductor orders the other screen items after this item, and the reviewer checks screen diffs against the rules.
-- **When you want to specify one**: Write in your request something like "use Fluent 2 as the design system" or "follow the internal brand guide (attached)", or pass the guidelines in `<references>`. rd-author records it in the requirements definition as a default constraint, and the implementer gives it top priority.
-- **When you want to fix the look of an existing app**: Request "migrate the existing screens to the design foundation". Updating only the procedure documents does not change screens that have already been built.
-
-## 4.7 Changing agents and procedures
-
-- The behavior of each role is defined in `.github/agents/*.agent.md`, and the detailed procedures are defined in `.github/skills/*/SKILL.md`. You may edit them directly.
-- Re-running the install script does not overwrite files you have modified locally (`KEEP-LOCAL`). To take in a newer version of the toolkit, check with `--dry-run` and then merge the differences by hand, or use `--force` (which leaves a backup).
-- The body of each skill is the full text of the three original Prompts (RequirementDefinition creation, RD-FR_Prompt, and SystemTest-Increment-Run). The "translation table" at the top absorbs the differences between the original Prompts and unattended execution. If you revise an original Prompt, replace the body and leave the translation table as it is.
-
-## 4.8 CI
-
-`.github/workflows/ebak-verify.yml` runs `scripts/verify.sh --show-warnings`, triggered by pull requests and pushes to main. Add the toolchain needed to build the app (such as `actions/setup-node`) as a step before verify. If you add CodeQL or dependency scanning, add it to this workflow as well.
-
-### Data layer workflow (ebak-data-layer)
-
-`.github/workflows/ebak-data-layer.yml` (ebak-data-layer) runs `python scripts/verify.py --docs-only` on pull requests, pushes to main, manual runs (workflow_dispatch), and a weekly schedule, and checks the data layer.
-
-- On failure, it automatically repairs through the common entry point `python scripts/rdfix.py --full --apply` and re-checks (the same entry point as the installer and manual runs; it has no rewrite procedure of its own. For exit codes 0/1/2, see [05](05-scripts-reference.en.md)). By default, the installer calls the same entry point once after installation; `--no-repair` performs only the check and plan (no writes), and `--skip-verify` performs neither check nor repair. The design is that automatic repair does not change the requirements definition (`docs/requirements-definition.md` is restored after repair). The repair is committed only if the check passes. For a pull request from the same repository, it is pushed to that PR's branch; for pushes to main and scheduled runs, it is pushed to the repair branch `eabk/data-layer-fix` and a PR is created (none is added if one already exists).
-- If it is still not fixed after repair, an Issue with the label `eabk-data-layer` is created, containing a summary of the failure and a link to the run. If an unresolved Issue with the same content exists, a comment is added.
-- The permissions are only write on contents, pull-requests, and issues. For pull requests from forks, only the check is performed and nothing is written. The bot's repair commits are not repaired again.
-- To disable it, delete this file or Disable this workflow on the GitHub Actions page. If you do not want it installed, specify `--no-ci` at install time.
-
-## 4.9 Compute resources and the cloud
-
-**Match parallelism to CPU and memory.**
-- `parallel_workers: auto` (the default) allocates one implementer per 2 cores and 6 GB, up to 8. The number resolved by `run-state.py start` is left in `meta.json`.
-- Each worker is given CPU threads as "number of cores × 1.5 ÷ number of workers" (`HVE_CPUS`; 4 for 20 cores and 8 workers). At the same time, the environment variables for the main test runners' settings are also passed (`VITEST_MAX_WORKERS`, `VITEST_MAX_THREADS`, `VITEST_MAX_FORKS`, `PYTEST_XDIST_AUTO_NUM_WORKERS`, `CARGO_BUILD_JOBS`, `GOMAXPROCS`, `CMAKE_BUILD_PARALLEL_LEVEL`, `MAKEFLAGS`). Values already set by the user are not overwritten.
-- Measurements (the project's vitest with 8 parallel workers on 20 cores): letting each use all cores took 361 seconds and produced one test timeout. Limiting each to 2 threads took 404 seconds (slower), and 4 threads each took 371 seconds with no timeouts. That is why a slightly generous allocation is used. The `Timeout calling "onTaskUpdate"` in the previous run appeared in about 10% of the unit logs, in a situation where workers at a parallelism of 5 were also under load from things like browsers. For tools that do not read environment variables, such as Playwright, read it in the config file, as in `workers: Number(process.env.HVE_CPUS) || undefined`.
-
-**Run checks concurrently.**
-- In `verify.commands`, adding `"parallel": true` to consecutive steps runs them at the same time (for example, lint, type check, and unit tests). Do not add it to steps that need a previous step, such as build.
-- System Tests run concurrently with `ledger.py run --jobs N|auto` (or `system_test.jobs` in the settings). The default is `auto` (number of CPUs ÷ 4, between 2 and 6). A case with `"serial": true`, or whose command contains a string from `system_test.serial_patterns` (default: `default_port`), runs alone after the parallel run finishes. Cases with the same command are run only once and the result is shared. Furthermore, when two or more commands point to the same pytest file (in the form `python -m pytest <file>[::node] [-k expression] [-q]`), they are run together in one pytest process (`-k` uses the same grammar as pytest, and results are distributed to each case from the JUnit output), and only the cases that failed and the cases that matched no test are re-run individually (the judgment and logs are as before). In actual measurement (45 cases including GUI), this went from 320 seconds to 281 seconds. To turn it off, use `ledger.py run --no-batch` or `system_test.batch_pytest: false`. Canary and serial cases are not batched. Changing a fixture that starts the GUI server for each test (function scope) to module scope makes it even faster (after confirming that test state remains isolated). The canary always runs first and alone.
-
-**Azure is not used by default.** The user chooses it only when all of the following conditions are met (it is not implemented as a runtime option).
-1. The local machine is small (fewer than 8 cores or less than 32 GB of memory).
-2. In `kpi.py run`, the effective parallelism does not reach `parallel_workers`, and the cause is a lack of CPU (the duration of verify and System Tests dominates).
-3. Waiting for model responses (LLM time) is not dominant. Adding cloud VMs does not shorten LLM wait time.
-
-In the previous measurements, most of the non-LLM time was the serial section of integration, duplicated checks, and excessive parallelism in test runners. These can be resolved with the settings above and the cache, and no VM was needed. If you run only the checks on an Azure VM (for example, a 32-core Dev/Test), place the working tree on the VM, set `parallel_workers` to match the VM's core count, and allow the charges (paid_services) in the run options.
+- On failure, it repairs automatically through the common entry point `python scripts/rdfix.py --full --apply` and checks again. It is the same entry point as the installer and manual runs, with no rewrite procedure of its own (exit codes 0/1/2 are in [05](05-scripts-reference.en.md)). The installer calls this entry point once after installing. `--no-repair` checks and plans only (writes nothing); `--skip-verify` neither checks nor repairs.
+- By design, the automatic repair does not change the requirements definition: `docs/requirements-definition.md` and `docs/integrations.md` are compared byte by byte before and after, and every change is undone if they differ.
+- The repair is committed only when the re-check passes. For a pull request from the same repository, it is pushed to that PR's branch. For pushes to main and scheduled runs, it is pushed to the repair branch `eabk/data-layer-fix` and a PR is opened (unless one already exists).
+- If the repair does not fix it, an Issue labeled `eabk-data-layer` is created with a summary of the failure and a link to the run. If an open Issue with the same content exists, a comment is added instead.
+- Permissions are write for contents, pull-requests, and issues only. For pull requests from forks, it only checks and writes nothing. It does not repair again on the bot's own repair commit.
+- To disable it, delete this file or Disable the workflow in the GitHub Actions screen. To leave it out at install time, pass `--no-ci` (ebak-verify is not installed either).

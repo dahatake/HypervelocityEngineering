@@ -5,7 +5,7 @@ import sys
 from conftest import SOURCE, run
 
 MANIFEST = ".github/ebak-toolkit.json"
-AGENT = ".github/agents/reviewer.agent.md"
+AGENT = ".github/agents/rd-auditor.agent.md"
 
 
 def install(target, *args):

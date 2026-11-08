@@ -1,9 +1,9 @@
 # EABK Studio
 
-EABK のデータ層（要求定義書・カタログ・System Test の台帳・ID 台帳・実行履歴）を、Product Manager・Architect・Software Engineer の視点で見て回る、ローカル専用の Web アプリです。
+EABK Lite のデータ層（要求定義書・カタログ・System Test の台帳・ID 台帳。0.5.x の実行履歴が残っていればそれも）を、Product Manager・Architect・Software Engineer の視点で見て回る、ローカル専用の Web アプリです。
 EABK を使っている**どのリポジトリでも**動きます（このリポジトリに依存しません）。UI は日本語・英語を右上の `JA | EN` で切り替えます。
 
-*A local-only web app that lets a product manager explore the EABK data layer (requirements, catalog, system-test ledger, ID registry, run history) of **any** repository that uses EABK. The UI switches between Japanese and English with the `JA | EN` button.*
+*A local-only web app that lets a product manager explore the EABK Lite data layer (requirements, catalog, system-test ledger, ID registry, and a remaining 0.5.x run history if present) of **any** repository that uses EABK. The UI switches between Japanese and English with the `JA | EN` button.*
 
 > 初めての方は、役割に合うガイドから読んでください: [Product Manager](../users-guide/studio/05-product-manager.md)・[Architect](../users-guide/studio/06-architect.md)・[Software Engineer](../users-guide/studio/07-software-engineer.md)（索引は [users-guide/studio/README.md](../users-guide/studio/README.md)）。各画面が読むデータの一覧は [08-data-reference.md](../users-guide/studio/08-data-reference.md) です。`tools/install.py` で他のリポジトリへ入れると、これらのガイドも一緒に入ります。
 

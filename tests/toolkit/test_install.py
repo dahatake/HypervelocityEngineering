@@ -13,22 +13,61 @@ def install(target, *args):
 def test_fresh_install_layout(empty_repo):
     proc = install(empty_repo)
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    for rel in (".github/agents/conductor.agent.md", ".github/skills/rd-audit/SKILL.md", ".github/hooks/quality-gates.json",
-                ".github/skills/build/SKILL.md", ".github/workflows/ebak-verify.yml", ".github/workflows/ebak-data-layer.yml", "scripts/hooks/gate.py",
+    for rel in (".github/agents/rd-auditor.agent.md", ".github/skills/rd-audit/SKILL.md",
+                ".github/skills/requirement-definition/SKILL.md", ".github/workflows/ebak-verify.yml",
+                ".github/workflows/ebak-data-layer.yml", "scripts/next-id.py", "scripts/ledger.py",
                 "scripts/verify.sh", "docs/requirements-definition.md", "tests/system/ledger.json", ".github/ebak-toolkit.json"):
         assert (empty_repo / rel).exists(), rel
+    # EABK Lite: no orchestration, no role gates
+    for rel in (".github/agents/conductor.agent.md", ".github/agents/implementer.agent.md", ".github/skills/build/SKILL.md",
+                ".github/hooks", "scripts/hooks", ".github/ebak-prompt-prefix.md",
+                "scripts/run-state.py", "scripts/integrate.py", "scripts/clean-work.py"):
+        assert not (empty_repo / rel).exists(), rel
+    cfg = json.loads((empty_repo / "scripts/ebak.config.json").read_text(encoding="utf-8"))
+    assert cfg["checks"]["profile"] == "lite" and not {"gates", "limits", "credits", "worktree_share", "prompt_prefix"} & set(cfg)
     assert not (empty_repo / ".github/prompts").exists()
-    skill = (empty_repo / ".github/skills/build/SKILL.md").read_text(encoding="utf-8")
-    assert "name: build" in skill and "disable-model-invocation: true" in skill
-    assert "/build template" in skill and "max_hours: 2.5" in skill
-    block = re.compile(r"```text\n(.*?)```", re.S)
-    tmpl = (empty_repo / ".github/skills/build-template/SKILL.md").read_text(encoding="utf-8")
-    assert block.search(tmpl).group(1) == block.search(skill).group(1)
     assert "/work/" in (empty_repo / ".gitignore").read_text(encoding="utf-8")
     assert "merge=union" in (empty_repo / ".gitattributes").read_text(encoding="utf-8")
-    assert "ebak-abk:begin" in (empty_repo / "AGENTS.md").read_text(encoding="utf-8")
+    agents = (empty_repo / "AGENTS.md").read_text(encoding="utf-8")
+    assert "ebak-abk:begin" in agents and "Build Kit Lite" in agents and "next-id.py" in agents and "conductor" not in agents
     assert not (empty_repo / ".github/workflows/toolkit-tests.yml").exists()
     assert not (empty_repo / "tests/toolkit/test_install.py").exists()
+
+
+def test_upgrade_from_orchestration_version_removes_it(empty_repo):
+    """0.5.x -> Lite: unmodified orchestration files and config keys go away, modified ones and the data stay."""
+    install(empty_repo)
+    manifest_p = empty_repo / ".github/ebak-toolkit.json"
+    manifest = json.loads(manifest_p.read_text(encoding="utf-8"))
+    old = {".github/agents/conductor.agent.md": "conductor\n", "scripts/run-state.py": "print('run')\n",
+           ".github/hooks/quality-gates.json": "{}\n", "tests/toolkit/test_clean_work.py": "def test_x():\n    pass\n"}
+    for rel, text in old.items():
+        (empty_repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (empty_repo / rel).write_text(text, encoding="utf-8", newline="")
+        manifest["files"][rel] = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    for rel in (".github/agents/implementer.agent.md", ".github/hooks/prompt-prefix.json"):
+        (empty_repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (empty_repo / rel).write_text("利用者が直した\n", encoding="utf-8")
+        manifest["files"][rel] = "hash-of-the-shipped-copy"
+    manifest_p.write_text(json.dumps(manifest), encoding="utf-8")
+    cfg_p = empty_repo / "scripts/ebak.config.json"
+    cfg = json.loads(cfg_p.read_text(encoding="utf-8"))
+    cfg.update({"gates": {"enabled": True}, "limits": {"max_hours_cap": 3}, "credits": {}, "worktree_share": {},
+                "prompt_prefix": {"enabled": True}})
+    cfg["verify"]["commands"] = [{"name": "toolkit-unit", "run": "python -m pytest -q tests/toolkit/test_clean_work.py"},
+                                 {"name": "unit", "run": "npm test"}]
+    cfg_p.write_text(json.dumps(cfg), encoding="utf-8")
+    proc = install(empty_repo)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    for rel in old:
+        assert not (empty_repo / rel).exists(), rel
+    assert (empty_repo / ".github/agents/implementer.agent.md").exists() and "KEEP-LOCAL" in proc.stdout
+    # a kept old hook would call the removed gate.py and make Copilot deny every tool: the installer says so
+    assert (empty_repo / ".github/hooks/prompt-prefix.json").exists() and "WARN-HOOK  .github/hooks/prompt-prefix.json" in proc.stdout
+    cfg = json.loads(cfg_p.read_text(encoding="utf-8"))
+    assert not {"gates", "limits", "credits", "worktree_share", "prompt_prefix"} & set(cfg) and "PRUNE" in proc.stdout
+    assert [c["run"] for c in cfg["verify"]["commands"]] == ["npm test"]
+    assert (empty_repo / "docs/requirements-definition.md").exists() and (empty_repo / "tests/system/ledger.json").exists()
 
 
 def test_reinstall_is_idempotent_and_check(empty_repo):
@@ -40,24 +79,24 @@ def test_reinstall_is_idempotent_and_check(empty_repo):
 
 def test_local_modifications_are_kept(empty_repo):
     install(empty_repo)
-    agent = empty_repo / ".github/agents/conductor.agent.md"
+    agent = empty_repo / ".github/agents/rd-auditor.agent.md"
     agent.write_text(agent.read_text(encoding="utf-8") + "\n# local note\n", encoding="utf-8")
     manifest = json.loads((empty_repo / ".github/ebak-toolkit.json").read_text(encoding="utf-8"))
-    manifest["files"][".github/agents/reviewer.agent.md"] = "outdated"
+    manifest["files"][".github/skills/requirement-definition/SKILL.md"] = "outdated"
     (empty_repo / ".github/ebak-toolkit.json").write_text(json.dumps(manifest), encoding="utf-8")
     proc = install(empty_repo)
     assert "SAME" in proc.stdout
     assert "local note" in agent.read_text(encoding="utf-8")
-    src = (SOURCE / ".github/agents/conductor.agent.md").read_text(encoding="utf-8")
+    src = (SOURCE / ".github/agents/rd-auditor.agent.md").read_text(encoding="utf-8")
     # simulate a toolkit update: the manifest hash is the old one, so the locally edited file is kept
     manifest = json.loads((empty_repo / ".github/ebak-toolkit.json").read_text(encoding="utf-8"))
-    manifest["files"][".github/agents/conductor.agent.md"] = "something-else"
+    manifest["files"][".github/agents/rd-auditor.agent.md"] = "something-else"
     (empty_repo / ".github/ebak-toolkit.json").write_text(json.dumps(manifest), encoding="utf-8")
     proc = install(empty_repo)
     assert "KEEP-LOCAL" in proc.stdout and "local note" in agent.read_text(encoding="utf-8")
     proc = install(empty_repo, "--force")
     assert "OVERWRITE" in proc.stdout and agent.read_text(encoding="utf-8") == src
-    assert list(agent.parent.glob("conductor.agent.md.ebak-backup-*"))
+    assert list(agent.parent.glob("rd-auditor.agent.md.ebak-backup-*"))
 
 
 def test_existing_files_and_config_are_merged(empty_repo):
@@ -69,7 +108,7 @@ def test_existing_files_and_config_are_merged(empty_repo):
     install(empty_repo)
     assert (empty_repo / "docs/requirements-definition.md").read_text(encoding="utf-8") == "# 既存の要求定義書\n"
     cfg = json.loads((empty_repo / "scripts/ebak.config.json").read_text(encoding="utf-8"))
-    assert cfg["verify"]["commands"][0]["run"] == "npm test" and "gates" in cfg
+    assert cfg["verify"]["commands"][0]["run"] == "npm test" and cfg["checks"]["profile"] == "lite"
     agents = (empty_repo / "AGENTS.md").read_text(encoding="utf-8")
     assert agents.startswith("# 既存") and "独自の指示" in agents and agents.count("ebak-abk:begin") == 1
     install(empty_repo)
@@ -81,7 +120,7 @@ def test_uninstall(empty_repo):
     (empty_repo / "AGENTS.md").write_text((empty_repo / "AGENTS.md").read_text(encoding="utf-8") + "\n追記\n", encoding="utf-8")
     proc = install(empty_repo, "--uninstall")
     assert proc.returncode == 0
-    assert not (empty_repo / ".github/agents/conductor.agent.md").exists()
+    assert not (empty_repo / ".github/agents/rd-auditor.agent.md").exists()
     assert not (empty_repo / "scripts/rdcheck.py").exists()
     assert (empty_repo / "docs/requirements-definition.md").exists()
     assert "ebak-abk" not in (empty_repo / "AGENTS.md").read_text(encoding="utf-8")
@@ -98,13 +137,13 @@ def test_uninstall(empty_repo):
 
 def test_uninstall_keeps_modified_files_unless_forced(empty_repo):
     install(empty_repo)
-    agent = empty_repo / ".github/agents/conductor.agent.md"
+    agent = empty_repo / ".github/agents/rd-auditor.agent.md"
     agent.write_text("利用者の変更\n", encoding="utf-8")
     proc = install(empty_repo, "--uninstall", "--dry-run")
     assert "REMOVE" in proc.stdout and (empty_repo / "scripts/rdcheck.py").exists()
     proc = install(empty_repo, "--uninstall")
     assert "KEEP-LOCAL" in proc.stdout and agent.exists()
-    assert not (empty_repo / ".github/agents/reviewer.agent.md").exists()
+    assert not (empty_repo / ".github/skills/requirement-definition/SKILL.md").exists()
     # the manifest is gone now: the fallback compares with the toolkit's own copies, --force removes the rest
     proc = install(empty_repo, "--uninstall")
     assert "KEEP-LOCAL" in proc.stdout and agent.exists()
@@ -121,7 +160,7 @@ def test_purge_removes_everything_the_toolkit_added(empty_repo):
     (empty_repo / "docs/notes.md").write_text("利用者の文書\n", encoding="utf-8")
     (empty_repo / "scripts/build.sh").write_text("echo build\n", encoding="utf-8")
     (empty_repo / "tests/system/test_flow.py").write_text("def test_x():\n    pass\n", encoding="utf-8")
-    backup = empty_repo / ".github/agents/conductor.agent.md.ebak-backup-20260101000000"
+    backup = empty_repo / ".github/agents/rd-auditor.agent.md.ebak-backup-20260101000000"
     backup.write_text("old\n", encoding="utf-8")
     (empty_repo / "scripts/__pycache__").mkdir()
     (empty_repo / "scripts/__pycache__/ebaklib.cpython-312.pyc").write_bytes(b"\0")

@@ -1,7 +1,7 @@
 # 外部連携カタログ
 
 このアプリが API・ファイル・DB・イベントなどで行う、外部のアプリ・データとの連携を、1 連携 1 項目で記録します。外部連携がないアプリは、このファイルを使わなくてかまいません（任意です）。
-追加・変更・廃止は rd-author だけが行い、変更は要求定義書の変更履歴に記録します。ID は `python scripts/next-id.py INT` でだけ採番します。検査は `python scripts/verify.py --docs-only` です。
+追加・変更・廃止は振る舞いを変えた人が同じ変更の中で行い、変更は要求定義書の変更履歴に記録します。ID は `python scripts/next-id.py INT` でだけ採番します。検査は `python scripts/verify.py --docs-only` です。
 
 ## 書式
 

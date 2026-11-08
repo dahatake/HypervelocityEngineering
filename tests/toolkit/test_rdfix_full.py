@@ -17,7 +17,6 @@ from pathlib import Path
 import pytest
 
 from conftest import SAMPLE_CATALOG, SAMPLE_ID_REGISTRY, SAMPLE_RD, SOURCE, Repo, git, init_git, run
-from test_gate import denied, shell, start
 
 CHECK = ("--full",)
 APPLY = ("--full", "--apply")
@@ -27,7 +26,7 @@ LEDGER = "tests/system/ledger.json"
 HISTORY = "docs/run-history.md"
 RD = "docs/requirements-definition.md"
 INTEGRATIONS = "docs/integrations.md"
-ROLES = ("rd-author", "test-designer", "implementer", "conductor")
+ROLES = ("要求定義書", "System Test の台帳", "コードとカタログ", "リポジトリ")
 
 
 # ------------------------------------------------------------------------------------------- fixtures
@@ -40,6 +39,10 @@ def template(tmp_path_factory):
     git(path, "add", "-A")
     git(path, "commit", "-q", "-m", "init")
     run([sys.executable, str(SOURCE / "tools" / "install.py"), "--target", str(path), "--skip-verify"], path, check=True)
+    cfg_path = path / "scripts" / "ebak.config.json"  # every CHK, like tests/toolkit/conftest.py (FR-1084)
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    cfg.setdefault("checks", {})["profile"] = "full"
+    cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     r = Repo(path)
     r.commit("install toolkit")
     r.write(RD, SAMPLE_RD)
@@ -90,7 +93,8 @@ def plant_automatic(r: Repo) -> None:
 def plant_manual(r: Repo) -> None:
     row = "| 202610010000 | 2026-10-01 00:00 | 2026-10-01 01:00 | abc1234 | 完了 | FR-001 | なし | 100% | 60 分 | 100% | 0 | 0 | FR-001 |\n"
     other = row.replace("abc1234 | 完了", "def5678 | 中断")
-    r.write(HISTORY, r.read(HISTORY).rstrip("\n") + "\n" + row + other)
+    hist = r.read(HISTORY) if (r.path / HISTORY).exists() else (SOURCE / "tools" / "templates" / "docs" / "run-history.md").read_text(encoding="utf-8")  # 0.5.x leftover
+    r.write(HISTORY, hist.rstrip("\n") + "\n" + row + other)
 
 
 def repaired(r: Repo) -> dict:
@@ -199,9 +203,9 @@ def test_ac242_manual_items_have_chk_location_role_and_next_action(template, tmp
         assert re.match(r"^MANUAL CHK-\d{2} \S+:\d+ ", l), l
         assert any(f"担当: {role}" in l for role in ROLES), l
         assert "次の行動: " in l and l.split("次の行動: ", 1)[1].strip(), l
-    assert any(l.startswith("MANUAL CHK-23 docs/run-history.md:") and "conductor" in l for l in man), text
-    assert any(l.startswith("MANUAL CHK-11 tests/system/ledger.json:") and "test-designer" in l for l in man), text
-    assert any(l.startswith("MANUAL CHK-01 ") and "AC-077" in l and "rd-author" in l for l in man), text
+    assert any(l.startswith("MANUAL CHK-23 docs/run-history.md:") and "リポジトリ" in l for l in man), text
+    assert any(l.startswith("MANUAL CHK-11 tests/system/ledger.json:") and "System Test の台帳" in l for l in man), text
+    assert any(l.startswith("MANUAL CHK-01 ") and "AC-077" in l and "要求定義書" in l for l in man), text
 
     js = json.loads(r.py("rdfix.py", *CHECK, "--json").stdout)
     assert js["exit"] == 1 and js["mode"] == "check"
@@ -236,8 +240,8 @@ def test_ac243_verify_hint_and_identical_results_regardless_of_path(template, tm
     assert snapshot(a, mtime=False) == snapshot(b, mtime=False)
 
 
-# NFR-COMPAT-004 (FR-1046 の制限): the new apply command is limited by hook G-2 / G-5 like --apply
-def test_full_apply_is_limited_by_gates_like_apply(template, tmp_path):
+# NFR-COMPAT-004 (FR-1046 の制限): the new apply command is refused on a worker branch like --apply
+def test_full_apply_is_refused_on_worker_branch(template, tmp_path):
     r = fresh(template, tmp_path)
     git(r.path, "switch", "-q", "-c", "work/r/I-01")
     plant_automatic(r)
@@ -247,13 +251,6 @@ def test_full_apply_is_limited_by_gates_like_apply(template, tmp_path):
     assert snapshot(r) == before
     git(r.path, "checkout", "-q", "--", ".")
     git(r.path, "switch", "-q", "main")
-    start(r)
-    assert shell(r, "python scripts/rdfix.py --full") == {}
-    r.gate("subagent-start", {"agentName": "implementer"})
-    assert denied(shell(r, "python scripts/rdfix.py --full --apply"), "G-2")
-    r.gate("subagent-stop", {"agentName": "implementer", "agentId": "i1", "response": "RESULT: done"})
-    r.gate("subagent-start", {"agentName": "rd-author"})
-    assert denied(shell(r, "python scripts/rdfix.py --full --apply"), "G-5")
 
 
 # ------------------------------------------------------------------------------------------- NFR-REL-002

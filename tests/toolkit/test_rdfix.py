@@ -1,7 +1,6 @@
 import json
 
-from conftest import SAMPLE_RD, git
-from test_gate import denied, shell, start
+from conftest import SAMPLE_RD, SOURCE, git
 
 
 def fixes(out):
@@ -81,7 +80,7 @@ def test_registry_states_and_duplicates_but_not_reuse(sample):
     assert any("FR-001 の状態を 廃止 → 使用中" in l for l in fixes(out))
     assert any("FR-001 の重複した行" in l for l in fixes(out))
     assert any("AC-002 の状態を 使用中 → 削除済み" in l for l in fixes(out))
-    assert any("Q-001 は ID 台帳で削除済み" in l and "rd-author" in l for l in manual(out))
+    assert any("Q-001 は ID 台帳で削除済み" in l and "要求定義書" in l for l in manual(out))
     assert any("AC-077 が ID 台帳にありません" in l for l in manual(out))
 
     sample.py("rdfix.py", "--only", "registry", "--apply", check=True)
@@ -119,7 +118,7 @@ def test_ledger_repair_keeps_review_signals(sample):
     out = sample.py("rdfix.py", "--only", "ledger", "--apply").stdout
     assert any("E2E-001 の requirement_ids" in l for l in fixes(out))
     assert any("AC-002 の ac_digests を取り除きます" in l for l in fixes(out))
-    assert any("AC-001 の本文が台帳の作成時から変わっています" in l and "test-designer" in l for l in manual(out))
+    assert any("AC-001 の本文が台帳の作成時から変わっています" in l and "System Test の台帳" in l for l in manual(out))
     led = json.loads(sample.read("tests/system/ledger.json"))
     case = led["cases"][0]
     assert case["requirement_ids"] == ["FR-001"]
@@ -131,7 +130,9 @@ def test_gitignore_and_run_history(sample):
     gi = "\n".join(l for l in sample.read(".gitignore").splitlines() if "work" not in l) + "\n"
     sample.write(".gitignore", gi)
     row = "| 202610080900 | 2026-10-08 09:00 | 10:00 | abc | 全件完了 | FR-001 | - | 100% | 1h | 100% | - | 1 | 1 |\n"
-    sample.write("docs/run-history.md", sample.read("docs/run-history.md") + row + row)
+    # EABK Lite no longer creates docs/run-history.md; a repository updated from 0.5.x still has one
+    template = (SOURCE / "tools" / "templates" / "docs" / "run-history.md").read_text(encoding="utf-8")
+    sample.write("docs/run-history.md", template + row + row)
     out = sample.py("rdfix.py", "--apply").stdout
     assert any(".gitignore" in l for l in fixes(out)) and any("run-id 202610080900 の重複" in l for l in fixes(out))
     assert "/work/" in sample.read(".gitignore")
@@ -148,14 +149,7 @@ def test_apply_refused_for_workers(sample):
     git(sample.path, "switch", "-q", "-c", "work/r/I-01")
     assert sample.py("rdfix.py", "--apply").returncode == 2
     git(sample.path, "switch", "-q", "main")
-    start(sample)
-    assert shell(sample, "python scripts/rdfix.py") == {}
-    sample.gate("subagent-start", {"agentName": "implementer"})
-    assert denied(shell(sample, "python scripts/rdfix.py --apply"), "G-2")
-    sample.gate("subagent-stop", {"agentName": "implementer", "agentId": "i1", "response": "RESULT: done"})
-    sample.gate("subagent-start", {"agentName": "rd-author"})
-    assert denied(shell(sample, "python scripts/rdfix.py --apply"), "G-5")
-    assert shell(sample, "python scripts/rdfix.py --apply --only catalog,registry") == {}
+    assert sample.py("rdfix.py", "--apply", "--only", "catalog,registry").returncode == 0
 
 def test_common_parts_follow_function_table(sample):
     sample.write("docs/catalog.md", sample.read("docs/catalog.md").replace("| 未実装 | 未実装 | なし |", "| 未実装 | 未実装 | 下書き保存 |")

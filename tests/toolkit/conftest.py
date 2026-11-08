@@ -127,12 +127,6 @@ class Repo:
         git(self.path, "add", "-A")
         git(self.path, "commit", "-q", "-m", msg, "--allow-empty")
 
-    def gate(self, event, payload):
-        payload.setdefault("cwd", str(self.path))
-        proc = run([sys.executable, str(self.path / "scripts" / "hooks" / "gate.py"), event], self.path, json.dumps(payload))
-        assert proc.returncode == 0, proc.stderr
-        return json.loads(proc.stdout) if proc.stdout.strip() else {}
-
 
 def init_git(path: Path):
     path.mkdir(parents=True, exist_ok=True)
@@ -167,6 +161,12 @@ def _build_installed(path: Path) -> Path:
     git(path, "add", "-A")
     git(path, "commit", "-q", "-m", "init")
     run([sys.executable, str(SOURCE / "tools" / "install.py"), "--target", str(path), "--skip-verify"], path, check=True)
+    # Most toolkit tests check one CHK each, so they run with every CHK reported (FR-1084: the shipped default is
+    # "lite"; tests/toolkit/test_lite.py covers it and test_install.py checks the default).
+    cfg_path = path / "scripts" / "ebak.config.json"
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    cfg.setdefault("checks", {})["profile"] = "full"
+    cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     Repo(path).commit("install toolkit")
     return path
 

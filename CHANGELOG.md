@@ -5,6 +5,22 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+## [0.6.0]
+
+### EABK Lite（互換性のない変更）
+
+根拠: 3 つのリポジトリの git 履歴・セッションの記録・run-history の分析（オーケストレーションがトークン量と時間を増やし、hook が完成を妨げた実例があった一方、構造と追跡性の検査だけが複数の人・PC で効くと判断）。要求: G-010、FR-1084、FR-1085。
+
+- **やめたもの**: 進行役 conductor と作業役（rd-author・test-designer・implementer・reviewer）の agent、skill（build・build-template・implement-fr・system-test-increment・dedupe）、worktree の run と統合（`run-state.py`・`integrate.py`・`next-impl.py`・`build-request.py`・`watch.py`・`kpi.py`・`clean-work.py`・`select-tests.py`）、hook をすべて（`.github/hooks/` と `scripts/hooks/gate.py`。役割のゲート G-1〜G-6・subagent-stop の verify・agent-stop の完了条件・`/build template`・定型文の自動付与と `.github/ebak-prompt-prefix.md`・設定の `prompt_prefix`）。新規の導入では `docs/run-history.md` を作らない。これらの要求（FR-1009・FR-1010・FR-1015・FR-1016・FR-1064・FR-1065・FR-1074〜FR-1077・FR-1081・NFR-OPS-005・NFR-OPS-008〜010・NFR-COMPAT-001）は廃止。
+- **残したもの**: 規則（AGENTS.md・copilot-instructions のブロックを「振る舞いを変える変更の中で要求定義書・カタログ・テストを更新する」「ID は `next-id.py`」「テストに要求 ID」「台帳は `ledger.py`」「完了前に `verify.py`」に書き換え）、データ層、決定的な検査（手元の `verify.py` と CI の `ebak-verify`・`ebak-data-layer`）、節目の手動監査（rd-auditor。出力は `work/audit/<日時>/`）、EABK Studio、既存アプリの導入（`adopt.py request` は Copilot のチャットに貼る `<constraints>` の依頼文を出す）、外部連携カタログ。
+- **検査プロファイル（FR-1084）**: `checks.profile` が `lite`（既定）のとき、`rdcheck.py check`・`verify.py` は `checks.lite_checks`（CHK-01・02・03・05・09・12・17・19・24）だけを報告する。`full` ですべての CHK。`--profile lite|full` で上書き。プロファイルは `rdcheck.py`・`verify.py`・`rdfix.py` のすべてに同じように効くので、`rdfix.py --full` の合否は `verify.py --docs-only` の合否と同じ。
+- **インストーラ（FR-1085）**: 0.5.x からの更新で、変更していない旧ファイルを削除（REMOVE）、変更したものは KEEP-LOCAL。設定から `gates`・`limits`・`credits`・`worktree_share`・`prompt_prefix` と旧既定の `toolkit-unit` コマンドを削除（PRUNE）。変更した旧版の hook の設定が残るときは、それが削除済みの `gate.py` を呼んで Copilot のツールの呼び出しを止めるため、`WARN-HOOK` の行で削除を促す。0.5.x の run が残した worktree と `work/*` ブランチは手で消す。
+- `rdfix.py` の手動対応の「担当」を、役割名から作業の種類（`要求定義書`・`System Test の台帳`・`コードとカタログ`・`リポジトリ`）に変更。データ層の確認と修復の入口は従来どおり `python scripts/rdfix.py --full --apply`。
+- `CHANGELOG.md` を ID の走査（CHK-19）の既定の除外に追加（履歴の文書のため）。
+- 利用者ガイド: `users-guide/02-during-and-after-run.md` を `02-daily-workflow.md` に改名し、日々の進め方として書き直し。README・01〜11 を EABK Lite に合わせて改訂。
+
+### それ以前の未リリースの変更
+
 - データ層の検査の拡張点（FR-1082）: `scripts/ebak.config.json` の `extensions.checks`（`module`・`function`・`target`）と `scripts/ext/*.py` の自動読み込みで、プロジェクト固有の検査を `rdcheck`・`rdfix` に登録できる（`scripts/extpoints.py`）。`verify.py` は拡張ごとに 1 行（`EXT <モジュール>.<関数> target=… result=…`）を出し、読み込み失敗・例外は拡張名つきで不合格にする。登録先は toolkit の更新で上書きされない。
 - 更新時の配線の脱落警告（FR-1083）: `tools/install.py` が `.ebak-backup-*` を作る（`--dry-run`・`--check` では作る見込みの）とき、利用側が `scripts/*.py`・`scripts/metadata.json` に足した配線で拡張点に未登録のものを、ファイルと行つきで警告し、拡張点への移行方法を示す（上書き・終了コードは変えない）。
 

@@ -16,7 +16,7 @@ What is fixed (derived data follows the requirements definition, which is never 
                                     file references (CHK-08), implementation files of retired requirements (CHK-17),
                                     使っている要求 ID of the common-parts table from the function table (CHK-27)
   ledger    tests/system/ledger.json  missing fields, requirement_ids, missing / orphan ac_digests
-                                    -> through ledger.py with history (G-2)
+                                    -> through ledger.py with history
   gitignore .gitignore              /work/ (CHK-23)
   history   docs/run-history.md     rows duplicated by merge=union (CHK-23)
 What needs a judgment (changed AC text, reused or hand-numbered IDs, ...) is listed as MANUAL with the role
@@ -68,7 +68,7 @@ TARGETS = ("registry", "catalog", "ledger", "gitignore", "history")
 CATALOG_TEMPLATE = (
     "# カタログ\n\n"
     "既存の機能・API・テーブル・共通部品の対応表です。1 行 1 項目の短い表にし、詳細はリンク先のファイルに任せます。\n"
-    "機能の表は rd-author（要求 ID・題名・決定状態）と implementer（実装ファイル・テスト・共通部品）が更新します。\n"
+    "機能の表は、振る舞いを変えた人が同じ変更の中で更新します（要求 ID・題名・決定状態・実装ファイル・テスト・共通部品）。\n"
     "未実装の要求は、実装ファイルとテストの欄を「未実装」とします。\n\n"
     "## 機能\n\n"
     "| 要求 ID | 題名 | 決定状態 | 実装ファイル | テスト | 使っている共通部品 |\n"
@@ -246,19 +246,19 @@ class Fixer:
                 for id_ in plan["missing"]:
                     self.act("MANUAL", "CHK-01", reg,
                              f"{id_} が ID 台帳にありません。手で振った ID なら next-id.py で採番し直します。"
-                             "正しい ID と確認できたら `rdfix.py --adopt --apply` で取り込みます", "rd-author", t)
+                             "正しい ID と確認できたら `rdfix.py --adopt --apply` で取り込みます", "要求定義書", t)
         for id_, old, new in plan["changes"]:
             self.act("FIX", "CHK-01", reg, f"{id_} の状態を {old} → {new} に直します", "", t)
         for id_, ln in plan["dups_removed"]:
             self.act("FIX", "CHK-01", f"{reg}:{ln}", f"{id_} の重複した行（merge=union の名残り）を取り除きます", "", t)
         for id_, ln in plan["dups_conflict"]:
             self.act("MANUAL", "CHK-01", f"{reg}:{ln}",
-                     f"{id_} が二重に採番されています（採番日時・採番元が違う）。後から使った側を next-id.py で採番し直します", "rd-author", t)
+                     f"{id_} が二重に採番されています（採番日時・採番元が違う）。後から使った側を next-id.py で採番し直します", "要求定義書", t)
         for id_ in plan["reused"]:
             d = self.doc.defs.get(id_, [None])[0]
             loc = f"{d.file}:{d.line}" if d else reg
             self.act("MANUAL", "CHK-02", loc,
-                     f"{id_} は ID 台帳で削除済み／欠番です。廃止・削除した ID は再利用せず、next-id.py で採番し直します", "rd-author", t)
+                     f"{id_} は ID 台帳で削除済み／欠番です。廃止・削除した ID は再利用せず、next-id.py で採番し直します", "要求定義書", t)
         if plan["changes"] or plan["added"] or plan["dups_removed"] or not exists:
             self.writers.append(lambda: nid.write_sync(self.root, self.cfg, plan))
 
@@ -277,7 +277,7 @@ class Fixer:
         tables = h.parse_tables(h.strip_comments(text).splitlines())
         func = [tb for tb in tables if tb.col("要求 ID", "要求ID") is not None and tb.col("決定状態") is not None]
         if not func:
-            self.act("MANUAL", "CHK-07", cat, "カタログに機能の表（要求 ID・決定状態の列）がありません", "rd-author", t)
+            self.act("MANUAL", "CHK-07", cat, "カタログに機能の表（要求 ID・決定状態の列）がありません", "要求定義書", t)
         seen: Dict[str, List[str]] = {}
         used_by: Dict[str, Set[str]] = {}
         part_names: Set[str] = set()
@@ -294,7 +294,7 @@ class Fixer:
                 elif kind == "part" and nc is not None and nc < len(cells):
                     part_names.add(h.strip_md(cells[nc]))
         for p in sorted(set(used_by) - part_names):
-            self.act("MANUAL", "CHK-27", cat, f"機能の表が使っている共通部品「{p}」が共通部品の表にありません。行を追加します（{'、'.join(sorted(used_by[p]))}）", "implementer", t)
+            self.act("MANUAL", "CHK-27", cat, f"機能の表が使っている共通部品「{p}」が共通部品の表にありません。行を追加します（{'、'.join(sorted(used_by[p]))}）", "コードとカタログ", t)
         for tb in tables:
             is_func = any(tb is f for f in func)
             is_part = h.catalog_table_kind(tb) == "part"
@@ -317,14 +317,14 @@ class Fixer:
                                 ed.set(ln - 1, None)
                                 self.act("FIX", "CHK-07", loc, f"{rid} の重複した行を取り除きます", "", t)
                             else:
-                                self.act("MANUAL", "CHK-07", loc, f"{rid} の行が複数あり、内容が違います。1 行にまとめます", "rd-author", t)
+                                self.act("MANUAL", "CHK-07", loc, f"{rid} の行が複数あり、内容が違います。1 行にまとめます", "要求定義書", t)
                             continue
                         seen[rid] = [h.strip_md(c) for c in cells]
                         if req is None:
                             if has_files:
                                 self.act("MANUAL", "CHK-07", loc,
                                          f"要求定義書にない {rid} の行に実装ファイル・テストがあります。要求を戻すか、実装を取り除いて行を消します",
-                                         "rd-author", t)
+                                         "要求定義書", t)
                             else:
                                 ed.set(ln - 1, None)
                                 self.act("FIX", "CHK-07", loc, f"要求定義書にない {rid} の行を取り除きます（実装ファイル・テストの記載なし）", "", t)
@@ -410,7 +410,7 @@ class Fixer:
         for f in (out.splitlines() if rc == 0 else []):
             if (f.startswith("docs/") or f.startswith("tests/")) and rx.search(f):
                 self.act("MANUAL", "CHK-23", f, f"一時ファイルが commit されています。/{wd}/runs/<run-id>/ へ移し `git rm --cached` します",
-                         "conductor", "gitignore")
+                         "リポジトリ", "gitignore")
         gi = self.root / ".gitignore"
         lines = h.read_text(gi).splitlines() if gi.exists() else []
         if any(re.fullmatch(rf"/?{re.escape(wd)}/?\*{{0,2}}", l.strip()) for l in lines):
@@ -447,7 +447,7 @@ class Fixer:
                         ed.set(ln - 1, None)
                         self.act("FIX", "CHK-23", f"{rel}:{ln}", f"run-id {rid} の重複した行（merge=union の名残り）を取り除きます", "", "history")
                     else:
-                        self.act("MANUAL", "CHK-23", f"{rel}:{ln}", f"run-id {rid} の行が {seen[rid]} 行目と内容が違います。正しい 1 行を残します", "conductor", "history")
+                        self.act("MANUAL", "CHK-23", f"{rel}:{ln}", f"run-id {rid} の行が {seen[rid]} 行目と内容が違います。正しい 1 行を残します", "リポジトリ", "history")
                     continue
                 seen[rid] = ln
         if ed.dirty:
@@ -482,17 +482,16 @@ LOCK_REGION = 1 << 30  # Windows でロックするバイトの位置（PID の�
 LOC_LINE_RE = re.compile(r"^(.+?):(\d+)$")
 TOKEN_RE = re.compile(r"(?<![A-Za-z0-9\-])((?:[A-Z][A-Z0-9]*-)+\d{3,})(?![0-9])")
 NAME_RE = re.compile(r"[「『]([^」』]+)[」』]")
-ROLES = ("rd-author", "test-designer", "implementer", "conductor")
+ROLES = ("要求定義書", "System Test の台帳", "コードとカタログ", "リポジトリ")
 ROLE_ACTION = {
-    "rd-author": "conductor が rd-author に依頼して要求定義書・カタログ・ID 台帳を直し、`python scripts/rdfix.py --full` で確かめます",
-    "test-designer": "conductor が test-designer に依頼して System Test の台帳を直し（`ledger.py update`・`block`・`digests --update`）、"
-                     "`python scripts/rdfix.py --full` で確かめます",
-    "implementer": "conductor が implementer に依頼してカタログの実装ファイル・テスト・共通部品を直し、`python scripts/rdfix.py --full` で確かめます",
-    "conductor": "conductor が統合ブランチで直し、`python scripts/rdfix.py --full` で確かめます",
+    "要求定義書": "要求定義書・カタログ・ID 台帳を直し（ID は `next-id.py` で採番）、`python scripts/rdfix.py --full` で確かめます",
+    "System Test の台帳": "System Test の台帳を `ledger.py update`・`block`・`digests --update` で直し、`python scripts/rdfix.py --full` で確かめます",
+    "コードとカタログ": "カタログの実装ファイル・テスト・共通部品を直し、`python scripts/rdfix.py --full` で確かめます",
+    "リポジトリ": "既定のブランチの作業ツリーで直し、`python scripts/rdfix.py --full` で確かめます",
 }
-CHK_OWNER = {"CHK-08": "implementer", "CHK-09": "implementer", "CHK-17": "implementer", "CHK-19": "implementer",
-             "CHK-27": "implementer", "CHK-10": "test-designer", "CHK-11": "test-designer", "CHK-12": "test-designer",
-             "CHK-21": "conductor", "CHK-23": "conductor"}
+CHK_OWNER = {"CHK-08": "コードとカタログ", "CHK-09": "コードとカタログ", "CHK-17": "コードとカタログ", "CHK-19": "コードとカタログ",
+             "CHK-27": "コードとカタログ", "CHK-10": "System Test の台帳", "CHK-11": "System Test の台帳", "CHK-12": "System Test の台帳",
+             "CHK-21": "リポジトリ", "CHK-23": "リポジトリ"}
 CHK_HINT = {
     "CHK-00": "要求定義書を作成します",
     "CHK-01": "`next-id.py` で採番し直します（正しい ID と確認できたら `rdfix.py --full --apply --adopt` で取り込みます）",
@@ -596,11 +595,11 @@ class Locator:
 def manual_item(src, loc_of: Locator, source: str) -> Item:
     file, line = loc_of(src.loc, src.msg)
     if source == "rdfix":
-        owner = src.owner if src.owner in ROLES else "conductor"
+        owner = src.owner if src.owner in ROLES else "リポジトリ"
         action = ROLE_ACTION[owner]
         target = src.target
     else:
-        owner = CHK_OWNER.get(src.chk, "rd-author")
+        owner = CHK_OWNER.get(src.chk, "要求定義書")
         action = CHK_HINT.get(src.chk, "検査の指摘に従って直します") + "。" + ROLE_ACTION[owner]
         target = ""
     return Item("MANUAL", src.chk, f"{file}:{line}", src.msg, owner, target, file, line, action, source)
@@ -611,6 +610,11 @@ class Inspection:
     fixer: "Fixer"
     actions: List[Action]
     errors: list  # rdcheck Finding (ERROR level only)
+    scope: Optional[Set[str]] = None  # FR-1084: CHKs that decide the result (None = every CHK)
+
+    def counts(self, items) -> list:
+        """The items that decide pass/fail under the check profile; the others are still listed and repaired."""
+        return [a for a in items if self.scope is None or getattr(a, "chk", "") in self.scope]
 
     @property
     def fixes(self) -> List[Action]:
@@ -640,7 +644,8 @@ def inspect(root: Path, cfg: dict, adopt: bool, only: Set[str]) -> Inspection:
         fx._files, fx._file_set = ck._files, set(ck._files)
     if getattr(ck, "_ls_cache", None) is not None:
         fx._ls_cache = ck._ls_cache
-    return Inspection(fx, fx.plan(), errors)
+    scope = None if ck.profile == "full" else set(ck.lite_checks)
+    return Inspection(fx, fx.plan(), errors, scope)
 
 
 # -------------------------------------------------------------- atomic writes and undo (NFR-REL-002)
@@ -1048,7 +1053,7 @@ def _items(actions, kind: str) -> List[Item]:
 
 
 def _err_items(errors) -> List[Item]:
-    return [Item("ERROR", e.chk, e.loc, e.msg, CHK_OWNER.get(e.chk, "rd-author"), "", _file_of(e.loc),
+    return [Item("ERROR", e.chk, e.loc, e.msg, CHK_OWNER.get(e.chk, "要求定義書"), "", _file_of(e.loc),
                  int(LOC_LINE_RE.match(e.loc).group(2)) if LOC_LINE_RE.match(e.loc) else 0,
                  CHK_HINT.get(e.chk, ""), "rdcheck") for e in errors]
 
@@ -1078,12 +1083,12 @@ BROKEN_CHK = "CHK-20"  # the form of the data-layer files (an unreadable file is
 def _owner_of_file(root: Path, cfg: dict, rel: str) -> str:
     mfs = cfg["management_files"]
     if rel == h.mf(cfg, "ledger") or rel.startswith("tests/system/"):
-        return "test-designer"
+        return "System Test の台帳"
     if rel in (h.mf(cfg, "run_history"), ".gitignore"):
-        return "conductor"
+        return "リポジトリ"
     if rel == h.mf(cfg, "catalog"):
-        return "implementer"
-    return "rd-author"
+        return "コードとカタログ"
+    return "要求定義書"
 
 
 def scan_broken_input(root: Path, cfg: dict) -> List[Item]:
@@ -1163,8 +1168,8 @@ def run_full(root: Path, cfg: dict, args, only: Set[str]) -> int:
     lock: Optional[RepairLock] = None
     try:
         if args.apply and is_work_branch(root):
-            return rep.finish(2, "refused", "作業役のブランチ（work/<run-id>/<item>）では --apply しません。"
-                                            "conductor が統合ブランチで実行します（G-2）")
+            return rep.finish(2, "refused", "作業役のブランチ（work/<run-id>/<item>。0.5.x の run の名残）では --apply しません。"
+                                            "既定のブランチの作業ツリーで実行します")
         broken = scan_broken_input(root, cfg)
         if not h.is_git_repo(root):
             rep.info("INFO rdfix: git の管理下にないディレクトリです。git の情報を要する検査（CHK-12 の台帳の変更履歴・"
@@ -1199,8 +1204,9 @@ def run_full(root: Path, cfg: dict, args, only: Set[str]) -> int:
                 errors = _err_items(insp.uncovered())
             else:
                 manual, errors = _manual_items(root, insp), []
-            rc = 1 if fixes or manual or errors else 0
-            result = "plan" if fixes else ("manual" if manual else "pass")
+            pending = insp.counts(insp.fixes) or insp.counts(insp.manual) or insp.counts(insp.uncovered())
+            rc = 1 if pending else 0
+            result = ("plan" if insp.counts(insp.fixes) else "manual") if pending else "pass"
             return rep.finish(rc, result, fixes=fixes, manual=manual, errors=errors)
         return _apply_full(root, cfg, args, only, rep, insp, state)
     except BaseException as exc:  # NFR-REL-002 AC-247: summary + undo instead of a traceback
@@ -1252,16 +1258,16 @@ def _apply_full(root: Path, cfg: dict, args, only: Set[str], rep: FullReport, in
         return _cancel(rep, state["tx"], f"修復の後の再検査で、修復前になかったエラーが {len(new)} 件現れました", state, rounds,
                        new_errors=_err_items(new))
     fixes = _dedupe(_items(applied, "FIX"))
-    if insp.fixes:  # AC-249: not converged within PARAM-026 rounds; the repairs made so far are kept
+    if insp.counts(insp.fixes):  # AC-249: not converged within PARAM-026 rounds; the repairs made so far are kept
         return rep.finish(1, "not-converged",
                           f"{max_rounds} 回の検査と修復の繰り返しで収束しませんでした（PARAM-026）。"
-                          "残った項目は `python scripts/rdfix.py --full` で確かめ、conductor が原因を調べます",
+                          "残った項目は `python scripts/rdfix.py --full` で確かめ、原因を調べます",
                           fixes=fixes, manual=_manual_items(root, Inspection(insp.fixer, insp.manual, [])),
                           errors=_err_items(insp.uncovered()), unconverged=_items(insp.fixes, "FIX"), rounds=rounds)
     manual = _manual_items(root, insp)
-    if manual:
+    if insp.counts(insp.manual) or insp.counts(insp.uncovered()):
         return rep.finish(1, "manual", fixes=fixes, manual=manual, rounds=rounds)
-    return rep.finish(0, "repaired" if applied else "pass", fixes=fixes, rounds=rounds)
+    return rep.finish(0, "repaired" if applied else "pass", fixes=fixes, manual=manual, rounds=rounds)
 
 
 def _cancel(rep: FullReport, tx: Transaction, reason: str, state: dict, rounds: int,
@@ -1295,8 +1301,8 @@ def main(argv=None) -> int:
     if args.full:
         return run_full(root, cfg, args, only)
     if args.apply and is_work_branch(root):
-        print("ERROR rdfix: 作業役のブランチ（work/<run-id>/<item>）では --apply しません。"
-              "conductor が統合ブランチで実行します（G-2）")
+        print("ERROR rdfix: 作業役のブランチ（work/<run-id>/<item>。0.5.x の run の名残）では --apply しません。"
+              "既定のブランチの作業ツリーで実行します")
         return 2
     fx = Fixer(root, cfg, args.adopt, only)
     actions = fx.plan()

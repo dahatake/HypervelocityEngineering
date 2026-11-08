@@ -8,7 +8,7 @@
 |---|---|
 | The browser doesn't open | Paste the URL shown in the terminal (`http://127.0.0.1:…`) into the browser by hand. |
 | `python` is not found | Install Python 3.9 or later, or try `py EABK-Studio/studio.py`. |
-| "EABK data layer not found" | If Studio showed guidance at launch and exited, the target folder has none of `docs/requirements-definition.md`, `docs/catalog.md`, or `tests/system/ledger.json`. Specify the correct folder with `--repo`. If you have only installed EABK and have not yet created requirements, first create them with `/build`. |
+| "EABK data layer not found" | If Studio showed guidance at launch and exited, the target folder has none of `docs/requirements-definition.md`, `docs/catalog.md`, or `tests/system/ledger.json`. Specify the correct folder with `--repo`. If you have only installed EABK and have not yet created requirements, first create them by making a request in Copilot chat (this creates `docs/requirements-definition.md`). |
 | I can't tell which files are being read | Run `python EABK-Studio/studio.py --repo <repository> --check`. It shows which management data files were found / not found, the counts of requirements, acceptance criteria, catalog rows, ledger cases, and run history entries that could be parsed, and warnings, then exits (it does not launch). The exit code is 0 if the data layer exists and 1 if not. If you have moved file locations, check `management_files` in `scripts/ebak.config.json`. |
 | Nothing shows on screen (count is 0) | If the `--check` count is 0, the column names in a table's header do not match the format in [08-data-reference.en.md](08-data-reference.en.md) (e.g., the feature table lacks the `要求ID` and `実装ファイル` columns). Align with EABK's [management data format](../03-requirements-format.en.md). |
 | `preview-conflict` in Consistency maintenance | The catalog was updated by another means after Studio launched. Restart Studio and preview again. |
@@ -24,7 +24,7 @@
 
 | Term | Meaning |
 |---|---|
-| Data layer | The records EABK manages (requirements definition, catalog, System Test ledger, ID ledger, run history) |
+| Data layer | The records EABK manages (requirements definition, catalog, System Test ledger, ID ledger; in a repository updated from 0.5.x, a remaining run history is also shown read-only) |
 | Goal (G-001) | What the business wants to do. Every requirement belongs to some goal |
 | Requirement (FR / NFR) | FR is a functional requirement; NFR is a non-functional requirement such as performance or safety |
 | Acceptance criterion (AC) | The condition under which a requirement can be said to be satisfied. Verification levels are system / integration / unit / manual |

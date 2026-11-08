@@ -2,48 +2,84 @@
 
 # 5. スクリプトリファレンス
 
-すべてのスクリプトは、Python 3.9 以上の標準ライブラリだけで動きます。リポジトリのどこから実行しても、git のルートを基準に動作します。詳しい使い方は `--help` で表示できます。出力は短く、LLM がそのまま読める形式です（1 行に 1 指摘、最後に 1 行の要約）。
+すべてのスクリプトは、Python 3.9 以上の標準ライブラリだけで動きます。リポジトリのどこから実行しても、git のルートを基準に動作します。オプションの正確な一覧は `python scripts/<名前>.py --help` で表示できます。出力は短く、LLM がそのまま読める形式です（1 行に 1 指摘、最後に 1 行の要約）。
 
-## verify（L1 決定的検査）
+| スクリプト | 役目 | 書き込むもの |
+|---|---|---|
+| `scripts/ebaklib.py` | 共通ライブラリ（直接は実行しない） | — |
+| `scripts/verify.py`（`.ps1`・`.sh`） | 1 コマンドの決定的な検査（完了の判定） | `/work` のログとキャッシュだけ |
+| `scripts/rdcheck.py` | 要求定義書のパーサーと検査・検索 | なし（読み取り専用） |
+| `scripts/rdfix.py` | データ層の不整合の自動修正 | カタログ・ID 台帳・台帳・`.gitignore`（`--apply` のときだけ。要求定義書は変更しない） |
+| `scripts/entities.py` | エンティティ台帳と企業データカタログとの照合 | なし（読み取り専用） |
+| `scripts/extpoints.py` | プロジェクト固有の検査の拡張点（rdcheck・rdfix から使う） | — |
+| `scripts/next-id.py` | ID の採番 | `docs/id-registry.md` と採番の記録 |
+| `scripts/ledger.py` | System Test の台帳の唯一の書き手 | `tests/system/ledger.json` |
+| `scripts/summarize.py` | 長いログの要約 | なし |
+| `scripts/adopt.py` | 既存アプリの導入 | `docs/baseline/`・`tests/system/golden/`・`work/import/` |
+| `tools/install.py` | 導入・更新・削除 | 導入先のリポジトリ |
+
+## ebaklib.py（共通ライブラリ）
+
+ほかのスクリプトが import するライブラリです。要求定義書・カタログ・ID 台帳・System Test の台帳の解析、`scripts/ebak.config.json` の読み込み、git の操作、`/work` の場所の決定をまとめています。toolkit の版 `TOOLKIT_VERSION`（0.6.0）もここにあります。利用者が直接実行することはありません。
+
+## verify.py（決定的な検査。完了の判定）
 
 ```bash
-python scripts/verify.py                  # 管理データの検査（CHK-01〜28。CHK-28 は外部連携カタログ。ないときは何も報告しない）＋ verify.commands
-python scripts/verify.py --docs-only      # 管理データの検査だけ（rd-author・test-designer のゲート）
-python scripts/verify.py --quick          # "slow": true のコマンドをスキップする（implementer のゲート）
-python scripts/verify.py --run current    # 実行中の run の queue.json との整合性（CHK-21）も検査する
-python scripts/verify.py --strict         # 最終工程・統合時用。重要な警告をエラーとして扱う
-python scripts/verify.py --strict-ledger  # system AC と台帳の対応（CHK-10/11）の不足をエラーにする（工程 4 以降は自動）
-python scripts/verify.py --show-warnings  # 警告も表示する
-python scripts/verify.py --no-cache       # キャッシュを使わずに必ず実行する
-./scripts/verify.sh   /  .\scripts\verify.ps1   # 同じもの（Python を探して verify.py を呼ぶラッパー）
+python scripts/verify.py                          # 管理データの検査 ＋ verify.commands（ビルド・テストなど）
+python scripts/verify.py --docs-only              # 管理データの検査だけ（要求定義書・カタログ・台帳）
+python scripts/verify.py --quick                  # "slow": true のコマンドを飛ばす
+python scripts/verify.py --profile full           # 検査プロファイルを指定する（lite | full。設定より優先）
+python scripts/verify.py --show-warnings          # 警告も表示する
+python scripts/verify.py --no-cache               # キャッシュを使わずに必ず実行する
+python scripts/verify.py --base main              # 差分の検査の基準（既定は base_branch との merge-base）
+python scripts/verify.py --strict                 # 重要な警告をエラーとして扱う（リリース前など）
+./scripts/verify.sh   /  .\scripts\verify.ps1     # 同じもの（Python を探して verify.py に引数を渡すラッパー）
 ```
 
-exit 0 なら合格です。ログの全文は `/work` に保存されます。
+exit 0 なら合格です。`AGENTS.md` の規則では、完了の前にこれを exit 0 にします。CI の `ebak-verify` は `scripts/verify.sh --show-warnings` を実行します。ログの全文は `/work/logs` に保存され、画面には要約だけが出ます。プロジェクトのビルド・テストのコマンドは `scripts/ebak.config.json` の `verify.commands` に書きます（[4. カスタマイズ](04-customization.md)）。
 
-**キャッシュ:** 作業ツリーが clean（commit していない変更も、追跡していないファイルもない）のときの PASS は、`/work/.ebak/verify-cache.json` に記録されます。キーは、HEAD・引数・`scripts/ebak.config.json`・run の状態（工程、`--run` のときは queue.json）です。同じ commit に同じ verify を実行すると、キャッシュから即座に `PASS (cached …)` を返します。たとえば implementer のゲートの直後に hook G-4 が実行する verify がこれに当たります。FAIL は記録しません。無効にするには、`--no-cache` か、環境変数 `EBAK_VERIFY_NO_CACHE=1` を使います。
+**検査プロファイル:** `scripts/ebak.config.json` の `checks.profile` が `lite`（既定）か `full` かで、報告する CHK が変わります。
+
+| プロファイル | 報告する検査 | 使いどころ |
+|---|---|---|
+| `lite`（既定） | `checks.lite_checks` の CHK だけ（既定は `CHK-01, CHK-02, CHK-03, CHK-05, CHK-09, CHK-12, CHK-17, CHK-19, CHK-24`。構造と追跡性）。ほかの CHK は出力にも終了コードにも影響しません | 毎回の変更と CI |
+| `full` | CHK-00〜34 のすべて（曖昧語の CHK-13、数値の直書きの CHK-14、禁止同義語の CHK-15 などの書式の警告を含む） | 節目の監査（rd-auditor は `--profile full --show-warnings` を使う）、利用者が見たいとき |
+
+書式の警告まで見るときは `python scripts/verify.py --docs-only --profile full --show-warnings` です。
+
+**キャッシュ:** 作業ツリーが clean（commit していない変更も、追跡していないファイルもない）のときの PASS は、`/work/.ebak/verify-cache.json` に記録されます。キーは HEAD・引数・`scripts/ebak.config.json` です。同じ commit に同じ verify を実行すると、キャッシュから即座に `PASS (cached …)` を返します。FAIL は記録しません。無効にするには `--no-cache` か、環境変数 `EBAK_VERIFY_NO_CACHE=1` を使います。
 
 ## rdcheck.py（要求定義書のパーサー）
 
 ```bash
-python scripts/rdcheck.py check [--base REF|none] [--run RUN_ID|current] [--strict] [--json]
+python scripts/rdcheck.py check [--base REF|none] [--profile lite|full] [--strict] [--errors-only] [--json]
 python scripts/rdcheck.py show FR-012 AC-031 Q-007     # 指定した要求・AC・質問の節だけを表示する（全文を読まずに済む）
 python scripts/rdcheck.py list --state 承認済み --priority MUST
+python scripts/rdcheck.py list --state 承認待ち         # 承認待ちの要求
 python scripts/rdcheck.py list --level system          # System Test の対象になる AC
-python scripts/rdcheck.py list --area 受付              # 領域で絞る（--by-area で領域ごとにまとめる。廃止は件数に含めない）
-python scripts/rdcheck.py index FR-012 [--kind 検証] [--json]   # 種類（上位・出典・参照・実装・検証・使用）つきの関係。保存せず都度生成。ID を渡すと逆引き
-python scripts/rdcheck.py stats                        # 監査のメトリクス（JSON。similar_pairs = 似た要求・AC の組、ledger_shared_acs = 同じ AC の重複ケース）
-python scripts/rdcheck.py similar "入力を中断して再開できる"   # 新規に作る前に、似た既存の要求・AC を類似度の高い順に表示（--kind FR|AC|CASE|CAT、--top N、--min 0.2）
-python scripts/rdcheck.py similar FR-012               # 既存の項目に似た項目
-python scripts/rdcheck.py similar --pairs [--min 0.35] [--kind CASE] [--json] # 似た要求・AC・System Test のケース・カタログの行の組（統合の候補。同じ要求の中の AC どうし、同じ要求に紐づくケースどうしは除く）。統合は `/dedupe` で行う
-python scripts/rdcheck.py digest AC-031                # AC のダイジェスト
-python scripts/rdcheck.py trace FR-012 [--json]        # 要求の上流（G・出典）・横（用語・状態・PARAM）・下流（AC・台帳のケース・カタログ・コード）をたどる
-python scripts/rdcheck.py trace G-002 申請 PARAM-004 下書き保存   # 目的・エンティティ・PARAM・共通部品から、関係する要求を逆にたどる（影響分析）
-python scripts/rdcheck.py trace INT-001                # 外部連携を参照する要求と受入基準を一覧する
+python scripts/rdcheck.py list --area 受付              # 領域で絞る（--by-area で領域ごとにまとめる。廃止は含めない）
+python scripts/rdcheck.py index FR-012 [--kind 検証] [--json]   # 種類（上位・出典・参照・実装・検証・使用）つきの関係。保存せず都度生成
+python scripts/rdcheck.py hierarchy                    # 種類→区分→領域→項目の階層（都度生成）
+python scripts/rdcheck.py stats                        # 監査のメトリクス（JSON）
+python scripts/rdcheck.py similar "入力を中断して再開できる"   # 新規に作る前に、似た既存の要求・AC を探す（--kind FR|AC|CASE|CAT、--top N）
+python scripts/rdcheck.py similar --pairs [--min 0.35] # 似た項目の組（統合の候補）
+python scripts/rdcheck.py digest AC-031                # AC のダイジェスト（PARAM を展開した本文）
+python scripts/rdcheck.py trace FR-012 [--json]        # 要求の上流（G・出典）・横（用語・状態・PARAM）・下流（AC・台帳のケース・カタログ・コード）
+python scripts/rdcheck.py trace G-002 申請 PARAM-004   # 目的・エンティティ・PARAM から関係する要求を逆にたどる（影響分析）
+python scripts/rdcheck.py trace INT-001                # 外部連携を参照する要求と受入基準
 ```
 
-`--base` の既定値は main との分岐点（merge-base）です。差分の検査（CHK-12/13）に使います。
+`check` の出力は 1 行に 1 指摘（`<ERROR|WARN> <CHK-ID> <場所> <内容>`）と、最後の要約行です。
+
+```text
+rdcheck: errors=0 warnings=2 base=… run=… profile=lite
+```
+
+`--profile` は `scripts/ebak.config.json` の `checks.profile` より優先します。exit 0 = エラーなし、1 = エラーが 1 件以上です。`--base` の既定値は `base_branch`（既定 `main`）との分岐点（merge-base）で、差分の検査に使います。`none` で比較しません。プロファイルは `rdcheck.py check`・`verify.py`・`rdfix.py` に同じように効きます。
 
 ## rdfix.py（データ層の不整合の自動修正）
+
+要求定義書を正本として、カタログ・ID 台帳・System Test の台帳・`.gitignore`（と、0.5.x から更新した導入先に残る `docs/run-history.md` の重複行）をそれに合わせます。**要求定義書と外部連携カタログ（`docs/integrations.md`）は変更しません。** 報告する指摘と合否は、`verify.py` と同じ検査プロファイル（`checks.profile`）に従います。そのため `rdfix.py --full` は、同じプロファイルの `verify.py --docs-only` が合格するときに合格します（カタログの同期などの機械的な修復は、どのプロファイルでも同じように行います）。
 
 ```bash
 python scripts/rdfix.py                           # 修正の計画を表示する（書き込まない）。直せるものがあれば exit 1
@@ -51,10 +87,7 @@ python scripts/rdfix.py --apply                   # 修正を書き込み、rdch
 python scripts/rdfix.py --only catalog,ledger     # 対象を絞る: registry, catalog, ledger, gitignore, history
 python scripts/rdfix.py --adopt --apply           # ID 台帳にない ID も取り込む（手で振った ID でないと確かめたとき）
 python scripts/rdfix.py --json
-python scripts/ledger.py repair [--apply]         # 台帳の部分だけ（rdfix が内部で使う）
 ```
-
-要求定義書を正本として、カタログ・ID 台帳・System Test の台帳・実行履歴・`.gitignore` をそれに合わせます。要求定義書は変更しません。出力は `FIX <CHK> <場所> <内容>`（自動で直す）と `MANUAL <CHK> <場所> <内容>（担当: <役割>）`（判断が要る）の行と、最後の `rdfix: fix=N manual=M mode=…` の 1 行です。exit 0 は「自動で直すものが残っていない」です。直す範囲は [6.3](06-quality-gates.md#63-データ層の不整合の自動修正rdfix) にあります。
 
 データ層の検査（`verify.py --docs-only` と同じ rdcheck）と修復をまとめて行うときは `--full` を付けます。
 
@@ -62,184 +95,160 @@ python scripts/ledger.py repair [--apply]         # 台帳の部分だけ（rdfi
 python scripts/rdfix.py --full                    # 確認だけ（書き込まない・排他を待たない）
 python scripts/rdfix.py --full --apply            # 検査→自動修復→再検査（収束するまで最大 3 回 = PARAM-026）
 python scripts/rdfix.py --full --apply --json     # 同じ結果を JSON で（手動対応は chk・file・line・owner・action の欄）
+python scripts/rdfix.py --full --apply --lock-wait 60   # 排他の待ち秒を変える（既定 30 秒 = PARAM-027）
 ```
 
-終了コードは 0 = 合格・修復済み、1 = 手動対応が残る・修復の計画がある・収束しない、2 = 実行しなかった・取り消した（作業役のブランチ、排他の待ち時間切れ、取り消し、想定外のエラー）です。`MANUAL` の行には検査項目 ID・`ファイル:行`・担当の役割・次の行動が付きます。適用は同じリポジトリで一度に 1 つだけ実行し（`work/.ebak/rdfix.lock`。後から起動した適用は最大 30 秒 = PARAM-027 待つ。`--lock-wait` で変更）、書き込みは一時ファイルの置き換えで行います。要求定義書・外部連携カタログが変わったとき、書き込みに失敗したとき、修復前になかったエラーが現れたとき、想定外のエラーのときは、すべての変更を取り消して修復前の内容に戻し、exit 2 で終わります。
+**出力:** `FIX <CHK> <場所> <内容>`（自動で直す）と `MANUAL <CHK> <場所> <内容>（担当: <作業の種類>）次の行動: …`（判断が要る）の行と、最後の `rdfix: fix=N manual=M mode=…` の 1 行です。「担当」は役割名ではなく、直す作業の種類です。
 
-入口は 3 つで、いずれも同じ `rdfix.py --full [--apply]` を呼びます。(1) GitHub Actions の `ebak-data-layer.yml`（不合格のとき `--full --apply`）、(2) インストーラ `tools/install.py`（導入・更新の後に既定で `--full --apply` を 1 回。`--no-repair` は `--full` だけで書き込まない、`--skip-verify` は検査も修復もしない、`--dry-run`・`--check`・`--uninstall`・`--purge` は修復しない。修復の取り消し・手動対応が残っても toolkit は残り、終了コードはデータ層の結果で変わらない）、(3) 利用者・conductor の手動実行。作業役のブランチ（`work/<run-id>/<item>`）での `--apply` は書き込まずに exit 2 です。どの入口でも要求定義書と外部連携カタログは変更せず、修復は commit しません（Actions だけは合格した修復を commit します）。
+| 担当 | 直すもの |
+|---|---|
+| `要求定義書` | 要求定義書の本文（AC の本文、ID の再利用・手で振った ID など）。skill `requirement-definition` の手順で直します |
+| `System Test の台帳` | 台帳のケース。`ledger.py update`・`block`・`digests --update` で直します |
+| `コードとカタログ` | カタログの実装ファイル・テスト・共通部品 |
+| `リポジトリ` | `.gitignore`・ブランチなど、リポジトリ全体の設定 |
 
-## entities.py（エンティティ台帳と企業データカタログとの整合）
+出力の例:
+
+```text
+MANUAL CHK-11 tests/system/ledger.json AC-001 の本文が…（担当: System Test の台帳）次の行動: …
+```
+
+**終了コード:**
+
+| 値 | 意味 |
+|---|---|
+| 0 = 合格・修復済み | 自動で直すものが残っていない |
+| 1 = 対応が残る | 手動対応が残る・修復の計画がある（`--apply` なし）・収束しない |
+| 2 = 実行しなかった・取り消した | 0.5.x の名残の作業役のブランチ（`work/<run-id>/<item>`）での `--apply`、排他の待ち時間切れ、すべての変更の取り消し、想定外のエラー |
+
+**安全性（`--full --apply`）:** 同じリポジトリで一度に 1 つだけ実行します（`work/.ebak/rdfix.lock`。後から起動したものは `--lock-wait` の秒数まで待ち、終了したプロセスが残したロックは引き継ぎます）。書き込みは一時ファイルの置き換えで行います。要求定義書・外部連携カタログが変わったとき、書き込みに失敗したとき、修復前になかったエラーが現れたとき、想定外のエラーのときは、すべての変更を取り消して修復前の内容に戻し、exit 2 で終わります。0.5.x の作業役のブランチでは `--apply` を拒否するので、既定のブランチで実行します。
+
+**入口は 3 つ** で、いずれも同じ `rdfix.py --full [--apply]` を呼びます。
+
+1. GitHub Actions の `ebak-data-layer.yml`: 不合格のとき `rdfix.py --full --apply`。合格した修復だけを commit し、直せないものは Issue にします。
+2. インストーラ `tools/install.py`: 導入・更新の後に既定で `rdfix.py --full --apply` を 1 回実行します。`--no-repair` は `rdfix.py --full`（検査と計画だけで、書き込まない）、`--skip-verify` は検査も修復もしない、`--dry-run`・`--check`・`--uninstall`・`--purge` は修復しません。修復の取り消し・手動対応が残っても toolkit は残り、インストーラの終了コードはデータ層の結果で変わりません。
+3. 利用者・Copilot の手動実行。
+
+どの入口でも要求定義書と外部連携カタログは変更せず、手元の実行は修復を commit しません。
+
+`python scripts/ledger.py repair [--apply]` は、台帳の部分だけの修復です（rdfix が内部で使います）。
+
+## entities.py（エンティティ台帳と企業データカタログとの照合）
 
 ```bash
-python scripts/entities.py list  [--repo DIR] [--json]          # エンティティ台帳（名前・説明・管理テーブル・ユースケース・使い方・列）と関係・クラスター・DDL/スキーマの補完（FR-1025/1026/1030）
+python scripts/entities.py list  [--repo DIR] [--json]            # エンティティ台帳（名前・説明・管理テーブル・使い方・列・関係）
 python scripts/entities.py check [--repo DIR] [--json] [--strict] # 企業データカタログとの照合（一致／EABK のみ／企業カタログのみ／名称の揺れ候補）
-python scripts/entities.py todo  [--repo DIR] [--json]          # 覆われていないエンティティの ToDo（質問票の行の形式）
+python scripts/entities.py todo  [--repo DIR] [--json]            # 覆われていないエンティティの ToDo（質問票の行の形式）
 ```
 
-台帳は、用語表・状態表・各要求の「対象エンティティ」から導出します（専用のファイルや表は作りません）。説明・管理テーブル・使い方が管理データにないものは「説明未記載」「テーブル未記載」「使い方未記載」と表示し、推測しません。企業データカタログの参照元は `scripts/ebak.config.json` の `enterprise_data_catalog` で任意に指定します（[4 章](04-customization.md)）。未設定でも動き、「企業データカタログ: 未設定（照合していない）」と報告します。参照元は読み取り専用で、本文を保存・転記せず（名前と `出典:行` だけを出力）、URL は http・https のみ、認証情報の埋め込みは取得せず「照合不能」にします。`todo` は質問票の行（ID は採番前）を出力するだけで管理データを書き換えません。rd-author が `next-id.py` で採番して質問票へ転記します。理由は「企業カタログ未確認」「企業カタログになし」「名称の確認」で、同じエンティティ・同じ理由の未回答の質問が質問票にあれば出力しません。exit 0（`check --strict` は差分・照合不能で 1）。
+台帳は、用語表・状態表・各要求の「対象エンティティ」から導出します（専用のファイルは作りません）。管理データにない説明・テーブル・使い方は「説明未記載」などと表示し、推測しません。企業データカタログの参照元は `scripts/ebak.config.json` の `enterprise_data_catalog` で任意に指定します（[4. カスタマイズ](04-customization.md)）。未設定でも動き、「企業データカタログ: 未設定（照合していない）」と報告します。参照元は読み取り専用で、本文を保存・転記しません（名前と `出典:行` だけを出力）。`todo` は質問票の行（ID は採番前）を出力するだけで、管理データを書き換えません。質問票へ転記するときは `next-id.py Q` で採番します。exit 0（`check --strict` は差分・照合不能で 1）。
 
-## next-id.py（ID の採番。G-3）
+## extpoints.py（プロジェクト固有の検査の拡張点）
+
+toolkit の `scripts/*.py` を編集せずに、プロジェクト独自の検査を rdcheck・rdfix に足すための仕組みです。直接は実行しません。登録の方法は 2 つで、どちらも `tools/install.py` の更新で消えません。
+
+1. `scripts/ebak.config.json` の `"extensions": {"checks": [{"module": "m", "function": "f", "target": "rdcheck"}]}`（`target` は `rdcheck`・`rdfix`・`both`。既定 `both`）
+2. `scripts/ext/*.py` に置く（自動で読み込みます。公開関数がそれぞれ検査になります。`CHECKS = [fn, ...]` で絞れます）
+
+検査は `fn(root, cfg)` で、指摘のリスト（空なら合格）を返します。指摘は文字列、`{level, chk, loc, msg}` の dict、4 要素のタプルのどれでもかまいません。level が `ERROR`（既定）なら不合格、`WARN` なら警告です。読み込めないモジュール・ない関数・例外は握りつぶさず、拡張の名前つきの ERROR として報告します。詳しくは [4. カスタマイズ](04-customization.md) にあります。
+
+## next-id.py（ID の採番）
 
 ```bash
 python scripts/next-id.py FR                    # FR-013
 python scripts/next-id.py NFR-SEC               # NFR-SEC-004
 python scripts/next-id.py AC --count 3          # AC-041 AC-042 AC-043
+python scripts/next-id.py FR --note "下書き保存"  # ID 台帳にメモを残す
 python scripts/next-id.py Q | PARAM | G | SRC | E2E | IT
-python scripts/next-id.py INT                   # INT-001（外部連携カタログ docs/integrations.md の ID）
 python scripts/next-id.py INT                   # INT-001（外部連携カタログ docs/integrations.md の ID。[11 章](11-integration-catalog.md)）
 python scripts/next-id.py --peek FR             # 採番せずに次の ID を表示する
 python scripts/next-id.py --sync                # ID 台帳の状態を本文に合わせる（使用中・廃止・削除済み）
 python scripts/next-id.py --sync --adopt        # 台帳にない既存の ID を取り込む（インストール直後）
-python scripts/next-id.py --sync --finalize     # 使わなかった採番済みの ID を欠番にする（工程 6）
+python scripts/next-id.py --sync --finalize     # 使わなかった採番済みの ID を欠番にする
 ```
 
-次の番号は、max(要求定義書, ID 台帳, main 上の同じファイル, System Test の台帳, worktree 共通の採番記録) + 1 で決まります。
+ID はこのスクリプトでだけ採番します（`AGENTS.md` の規則）。次の番号は、max(要求定義書, ID 台帳, `base_branch` 上の同じファイル, System Test の台帳, 作業ツリーで共有する採番の記録) + 1 で決まります。採番した ID は `docs/id-registry.md` と `<git-common-dir>/ebak-id-alloc.json` に記録されるので、同じ PC の別の作業ツリーと同じ ID を出すことはありません。別の PC で同時に採番して重複したときは CHK-01 が検出します（[2. ふだんの進め方](02-daily-workflow.md)）。
 
-## ledger.py（System Test の台帳。G-2）
+## ledger.py（System Test の台帳）
+
+`tests/system/ledger.json` の唯一の書き手です。ケースは削除せず、止めるときは `block` します。`command`・`ac_ids` の変更には `--reason` が必須で、履歴に残ります。pass / fail は、実行したコマンドの終了コードからだけ記録します。`--by` で履歴に残す実行者（自分の名前、`ci` など）を指定できます。
 
 ```bash
 python scripts/ledger.py summary [-v]
-python scripts/ledger.py --by test-designer add --req FR-012 --ac AC-031 --title "…" --layer e2e --command "…" [--canary]
-python scripts/ledger.py --by test-designer update E2E-001 --command "…" --reason "…"   # 理由は必須
-python scripts/ledger.py --by test-designer block E2E-001 --reason "…"                 # 削除の代わりに使う
-python scripts/ledger.py set E2E-001 blocked --reason "…"
-python scripts/ledger.py digests [--update]
-python scripts/ledger.py repair [--apply]          # 要求定義書に合わせて台帳を直す（rdfix.py から使う）
-python scripts/ledger.py preflight [--cases ID,..] [--all]   # pytest を collect-only で確認（構文・import・-k/node id の誤りで 0 件）。test-designer の終了前と工程 4 の完了前に exit 0 にする
-python scripts/ledger.py cost [--top N] [--check]            # ケース数・テストファイル数・統合できる数・遅いコマンド・予算（system_test.budget。--check は超過で exit 1）
-python scripts/ledger.py consolidate [--apply] [--reason ..]  # 同じテストファイル・層・要求のケースを 1 つに統合（既定は計画だけ。AC は和集合、元のケースは blocked）
-python scripts/ledger.py --by conductor run --select changed|failed|all [--canary-first] [--stop-on-canary-fail] [--max-minutes N]
-python scripts/ledger.py run --cases E2E-001,IT-002 --no-record   # 作業役の worktree で、台帳を更新せずに実行だけする
+python scripts/ledger.py add --req FR-012 --ac AC-031 --title "…" --layer e2e --command "…" [--canary] [--serial]
+                                                    # 同じ AC の有効なケースがあれば拒否（update で広げる。例外は --new-case-reason "理由"）
+python scripts/ledger.py update E2E-001 --command "…" --reason "…"     # --title・--ac・--req・--canary も変更できる。理由は必須
+python scripts/ledger.py block E2E-001 --reason "…"                   # 削除の代わりに使う
+python scripts/ledger.py set E2E-001 pass|fail|blocked|not_run [--evidence PATH] [--reason "…"]
+python scripts/ledger.py digests [--update]                           # AC のダイジェスト（PARAM を展開した本文）
+python scripts/ledger.py repair [--apply]                             # 要求定義書に合わせて台帳を直す（rdfix.py から使う）
+python scripts/ledger.py preflight [--cases ID,..] [--all]            # pytest を collect-only で確認（構文・import の誤り、0 件の選択）
+python scripts/ledger.py cost [--top N] [--check]                     # ケース数・テストファイル数・統合できる数・遅いコマンド・予算（--check は超過で exit 1）
+python scripts/ledger.py consolidate [--apply] [--reason "…"]         # 同じテストファイル・層・要求のケースを 1 つに統合（既定は計画だけ）
+python scripts/ledger.py run --select changed|failed|all [--base REF] [--canary-first] [--stop-on-canary-fail] [--max-minutes N] [--jobs N|auto]
+python scripts/ledger.py run --cases E2E-001,IT-002 [--no-record]     # 指定したケースだけ。--no-record は台帳を書き換えない
 ```
 
-`--select changed` は git diff の追加・変更行に現れる要求 ID・AC ID に対応するケースを優先して選び、ケースごとに `select <ケース ID>: <理由>` を出力します。共通コードの変更・diff を解析できない・変更行に ID がない場合は従来どおり広げ、理由に「広げた」と出します（広げた集合は従来の選択を必ず含みます）。
-
-`run` の出力は、元の Prompt が定める報告形式（`<id> <requirement_ids> <pass|fail> <秒> <証跡>` と `結果: …`）です。結果の詳細は `work/runs/<run-id>/results.json` にあります。
-
-`--cases` なしの `run` は、この run の `results.json` に「同じ commit・作業ツリーがきれい（`work/` と台帳以外に差分なし）で、タイムアウト（exit 124）以外の理由で fail した」記録があるケースを再実行せず、`skip <ケース ID>: …` と出力して fail のまま数えます（exit 1。末尾の `repeat_fail_skipped=N`）。コードを直して commit すれば再び実行されます。強制するときは `--rerun-failed` を付けます。1 ケース 2〜5 分の E2E を、直さないまま何度も走らせる時間を省くための挙動です。同様に、同じ commit・きれいな作業ツリーで、この run がすでに pass し台帳も pass のケースは再実行しません（末尾の `reused_pass=N`。強制は `--rerun-passed`）。
-
-## select-tests.py（影響範囲のテスト選択）
-
-```bash
-python scripts/select-tests.py [--base REF] [--req FR-012] [--json]
-```
-
-変更したファイルに書かれている要求 ID・AC ID と、`--req` で指定した ID から、実行すべき System Test のケース（`CASE`）と、単体・結合テストのファイル（`TEST`）を選びます。canary と、not_run・fail のケースは常に含めます。
-
-## next-impl.py・build-request.py（次の実装候補と、時間だけで作る /build の依頼）
-
-```bash
-python scripts/next-impl.py [--json]        # 次に実装すべき要求の順位表・除外一覧・scope 用の ID 一覧（読み取り専用）
-python scripts/build-request.py 60分        # 60分 / 24時間 / 90m / 1.5h → /build に貼れる依頼を出力
-```
-
-`next-impl.py` は、承認済みで未着手・実装登録済み（試験未登録・試験未合格）の要求を、依存先を先に、次に優先度（MUST、SHOULD、MAY）、他の候補から依存される数、実装登録済みを先、要求 ID の順で並べます。除外した要求は理由（未承認・BLOCKED・依存先未完了・完了済み・実行中）つきで示します。依存は「関連する既存資産」に書いた他の要求 ID です。`build-request.py` は、許容時間を 1 要求あたり 60 分（PARAM-012）で割った件数（最小 1）だけ先頭から `scope` に入れ、`max_hours` に許容時間を入れた `<request>`・`<answers>`・`<references>`・`<run_options>` を出力します。生成のみで、run は開始しません。候補がないときは依頼を出力せず、除外の理由を示します。
+`--select changed` は、git diff の追加・変更行に現れる要求 ID・AC ID に対応するケースを優先して選び、ケースごとに `select <ケース ID>: <理由>` を出力します。共通コードの変更などで絞れないときは広げ、理由に「広げた」と出します。`run` の出力は `<id> <requirement_ids> <pass|fail> <秒> <証跡>` の行と `結果: …` の行です。結果の詳細は `/work` の下に保存されます（`--results PATH` で場所を指定できます）。同じ commit・きれいな作業ツリーですでに pass または fail したケースは再実行を省きます（強制は `--rerun-passed`・`--rerun-failed`）。
 
 ## summarize.py（ログの要約）
 
 ```bash
-python scripts/summarize.py work/runs/<run-id>/logs/verify-…-unit.log [--max-lines 15]
+python scripts/summarize.py work/logs/verify-…-unit.log [--max-lines 15] [--tail 5]
 npm test 2>&1 | python scripts/summarize.py -
 ```
 
 テストランナーの集計行、最初の数件の（重複しない）エラー行、末尾の数行だけを出力します。
 
-## run-state.py（conductor の状態管理）
-
-```bash
-python scripts/run-state.py start --options "max_hours: 2.5\ngit_push: しない"   # 実行中の run があれば RESUME
-python scripts/run-state.py status
-python scripts/run-state.py stage 4 [--done]
-python scripts/run-state.py progress "工程 2: 直接矛盾 0。Q-012 を BLOCKED"
-python scripts/run-state.py queue add --id I-01 --req FR-012,FR-013 --ac AC-031 --boundary 申請 --shared 下書き保存 --depends I-00   # 要求 ID は 1〜5 個
-python scripts/run-state.py queue ready --parallel 5
-python scripts/run-state.py queue set I-01 --status doing --branch work/<run-id>/I-01 --attempts +1   # 通常は integrate.py が行う
-python scripts/run-state.py time                  # 時間予算の 85% を超えたら exit 3
-python scripts/run-state.py complete-check        # 完了条件の判定
-python scripts/run-state.py lane decide --changed 2 [--flags security,conflict,shared,unresolved,goal_unmapped]   # fast / full の判定（fast は独立監査・reviewer・全量の多数決を省く）
-python scripts/run-state.py lane confirm   # 計画後に queue の数で再判定（full から fast には戻さない）
-python scripts/run-state.py human answers --note "Q-003: B"   # 利用者の Prompt を 1 回として記録（answers / resume / instruction）
-python scripts/run-state.py finish --result "全件完了" --credits "…"   # docs/run-history.md に 1 行追記
-python scripts/run-state.py land [--wait 1800]    # 全件完了の run を main へ取り込む（共通ロックで 1 本ずつ。0 取り込み済み・1 verify 失敗（取り消し済み）・2 競合・3 主の作業ツリーが main でない／未コミットの変更あり）
-```
-
-新しい run の最初の依頼は `start` が `request` として記録します。`human` は、利用者の Prompt で run を再開したときに conductor が 1 回だけ実行します。記録した回数は KPI の「人の介入」になります。
-
-`queue set --status` は、項目が doing になった時刻・doing でいた時間（`work_sec`）・終わった時刻を、`stage` は工程ごとの開始・完了の時刻を記録します（kpi.py の流れの指標に使います）。
-
-## integrate.py（worktree のプールと統合。実装ループ）
-
-```bash
-python scripts/integrate.py prepare I-01                       # プールの worktree を割り当て、work/<run-id>/I-01 を作り、doing にする（主の性能基準証跡は commit・sha256 が一致するときだけ配置）
-python scripts/integrate.py merge I-01 --summary "…"           # 統合: merge → verify --quick → System Test → 台帳の commit → 解放 → done
-python scripts/integrate.py merge I-01 --full                  # verify の slow なコマンドも実行する（5 項目ごとに自動）
-python scripts/integrate.py abandon I-01 [--blocked] [--reason "…"]   # todo（または blocked）に戻し、worktree を解放する
-python scripts/integrate.py pool [--prune]                     # プールの一覧。--prune で使っていない worktree を削除する（工程 6）
-```
-
-- worktree は `work/worktrees/<run-id>-w<N>` のプールとして run の間再利用されます。ignore されたビルドの生成物（node_modules・bin/obj・.venv など）が残るので、2 回目以降のビルドが増分になります。`prepare` は、前の試行のブランチがあればそれを使い、統合ブランチを取り込んでから渡します。
-- `merge` は、統合ブランチの上で、1 回の呼び出しで直列の統合をすべて行い、数行だけを出力します。System Test は、merge 直前の commit からの差分に関係するケースと canary だけを実行します。まだ統合していない要求のケースは、通らないことが分かっているので除きます。
-- 競合（exit 2）、verify・System Test の失敗（exit 1）のときは、統合を取り消して（`git reset --hard`）項目を todo に戻します。統合ブランチは常に緑に保たれます。
-- 統合はロック（`work/.ebak/integrate.lock`）で 1 本ずつに制限されます。
-
-## 無活動時間の扱い（hook の心拍）
-
-スリープやホストアプリの停止で空いた時間は、hook が心拍（`work/runs/<run-id>/.heartbeat`）で検出し、`meta.json` の `idle_sec` に積みます。`limits.idle_gap_minutes`（既定 45、0 で無効）以上の空きが対象で、`max_hours` の経過時間から差し引きます。
-
-## kpi.py（KPI の集計）
-
-```bash
-python scripts/kpi.py run                          # 実行中（なければ最新）の run の KPI を Markdown で表示
-python scripts/kpi.py run --run 202610080900 --format json
-python scripts/kpi.py run --format html --out work/runs/<run-id>/kpi.html
-python scripts/kpi.py history                      # docs/run-history.md 全体の集計
-```
-
-North Star は「人の介入 1 回あたりの検証済み要求」です。**検証済み要求**は、実装した要求のうち、承認済みで、カタログの行があり、BLOCKED の AC がなく、system の AC がすべて台帳で `pass` のものです。検証済みにならなかった要求は、理由（「カタログの行がない」など）を表示します。指標と目標は [08-roadmap.md の 8.2](08-roadmap.md#82-kpi) にあります。
-
-流れ（速さ）の指標として、工程ごとの時間、実装ループの実効の並列度（項目の作業時間の合計 ÷ ループの経過時間）、項目 1 件あたりの作業時間、統合の直列時間とその割合、実際に使ったモデル（hook が記録する `work/runs/<run-id>/models.jsonl`）も出力します。遅い run では、まずこの表で、並列度が低いのか（作業役の待ち）、統合の直列時間が長いのか（verify・System Test の重さ）を切り分けます。
-
 ## adopt.py（既存アプリの導入）
 
-```text
-python scripts/adopt.py scan [--since-days 365]                  # 棚卸し → docs/baseline/inventory.{json,md}
-python scripts/adopt.py request [--clusters 6] [--implement]      # /build の依頼文 → work/import/
-python scripts/adopt.py anchor SRC-003 src/a.py:10-48           # 出典の証跡を固定 → docs/baseline/evidence.json
-python scripts/adopt.py check [--strict] [--json]               # DRIFT・回収率・逆生成の要求の検査（exit 1 = 誤り）
-python scripts/adopt.py golden add NAME -- CMD ARG...           # 特性化テスト（golden master）
+```bash
+python scripts/adopt.py scan [--since-days 365] [--json]          # 棚卸し → docs/baseline/inventory.{json,md}
+python scripts/adopt.py request [--clusters 6] [--cluster NAME] [--implement] [--stdout]
+                                                                  # Copilot のチャットに貼る依頼文 → work/import/adopt-<日時>.md
+python scripts/adopt.py anchor SRC-003 src/a.py:10-48 [--note "…"] # 出典の証跡を固定 → docs/baseline/evidence.json
+python scripts/adopt.py check [--strict] [--json]                 # 証跡のずれ・回収率・逆生成の要求の検査（exit 1 = 誤り）
+python scripts/adopt.py golden add NAME -- CMD ARG...             # 特性化テスト（golden master）
 python scripts/adopt.py golden record|check|list [NAME] [--update]
-```n
-詳細と根拠は [10. 既存のアプリを導入する](10-adopting-existing-apps.md)。要求定義書は編集せず、ID も振りません。
-
-## clean-work.py（/work のクリーンアップ）
-
-```bash
-python scripts/clean-work.py [--days 14] [--dry-run]
 ```
 
-全件完了 run を main に統合し、統合後 verify と清掃前版 run-report の確定まで成功した場合だけ、run 所有の pool worktree、作業ブランチ、統合ブランチ、一時資産、および統合ブランチをチェックアウトしている run 専用 worktree（`run-worktree`。未コミット変更があれば保持。`work/runs/<id>` は主へ退避）を清掃します。`--dry-run` は候補・保護理由・予定操作を表示します。`--days` は互換性のため受け付けますが、失敗・中止・未達 run は自動期限なく保持されます。削除直前に run 記録、Git 登録、正規化した実体パス、dirty/lock/保護状態を再検査します。部分失敗は診断を report に残して非 0 となり、再実行時は削除済みを成功済みとして残存候補だけを扱います。
+`request` は、`<request>`・`<references>` と `<constraints>` の節を持つ依頼文を出力します。既定の `<constraints>` は「承認: 厳格（逆生成の要求は承認待ちのまま）」「実装: しない（コードを変更しない）」で、`--implement` を付けると「実装: 承認済みの要求すべて」になります。出力をそのまま既定のエージェントのチャットに貼ります。`adopt.py` は要求定義書を編集せず、ID も振りません。詳細は [10. 既存のアプリを導入する](10-adopting-existing-apps.md) にあります。
 
-## watch.py（run の監視。残留プロセスと項目の時間超過）
+## tools/install.py（導入・更新・削除）
+
+ふつうは `tools/install.ps1`・`tools/install.sh`（このリポジトリを取得して実行する 1 コマンド）から使います。手元の clone からは次のとおりです。
 
 ```bash
-python scripts/watch.py scan
-python scripts/watch.py reap [--under PATH]
-python scripts/watch.py stuck [--item-minutes N]
+python tools/install.py --target <導入先> [--dry-run] [--force] [--no-ci]
+python tools/install.py --target <導入先> --check        # 更新が必要かを確かめる（必要なら exit 1）
+python tools/install.py --target <導入先> --no-repair    # 導入後は rdfix.py --full（検査と計画だけ。書き込まない）
+python tools/install.py --target <導入先> --skip-verify  # 導入後の検査も修復もしない
+python tools/install.py --target <導入先> --uninstall    # 変更していない toolkit のファイルとブロックを削除（管理データと設定は残す）
+python tools/install.py --target <導入先> --purge        # --uninstall ＋ 管理データ・設定・/work・追記も削除
+python tools/install.py --version
 ```
 
-- `scan`: 残留が疑われるプロセス（node・ブラウザーなど）を `SUSPECT pid=… 理由=孤児|古い` で表示するだけで、何も終了しません。なければ「疑わしいプロセス: なし」。
-- `reap`: 疑わしいプロセスのうち、リポジトリのパスを含み、起動から 10 分を超え、親が存在しない（孤児）か 120 分を超えたものを終了します（`KILL`・`FAIL`・保護して残したものは `KEEP`）。`reap --under PATH` は、コマンドラインに PATH を含むものだけに絞ります。PATH が空またはファイルシステムのルートのときは何も終了せず exit 2 です。
-- `stuck`: 現在の run の queue で `doing` が `--item-minutes`（既定 60）分を超えた項目を `STUCK <項目> <経過分>` で表示します。current run がなければ何も出さず exit 0 です。
+| オプション | 動作 |
+|---|---|
+| `--target DIR` | 導入先のリポジトリ（既定: カレントディレクトリ） |
+| `--source DIR` | toolkit のソース（既定: このスクリプトのリポジトリ） |
+| `--dry-run` | 書き込まずに、行う操作だけを表示する |
+| `--check` | 更新が必要かを確かめる（必要なら exit 1） |
+| `--force` | ローカルで変更した toolkit のファイルも上書き・削除する（`.ebak-backup-*` を残す） |
+| `--no-ci` | `.github/workflows/ebak-verify.yml` を入れない |
+| `--no-repair` | 導入後の自動修復をせず、`rdfix.py --full` で検査と修復の計画だけを表示する。PowerShell のラッパーでは `-NoRepair` |
+| `--skip-verify` | 導入後のデータ層の検査も修復も行わない |
+| `--uninstall` / `--purge` | 削除（上の例を参照） |
+| `--allow-non-git` | git リポジトリでない場所にも導入する |
+| `--version` | toolkit の版を表示して終了する |
 
-終了コード: 0 = 正常（`scan`・`reap` は常に 0。ただし `reap` の引数拒否は 2）、1 = `stuck` で超過した項目がある、2 = 引数・安全上の拒否。conductor は枠を埋める前後に `stuck` と `reap` を実行します。
+行うこと（何度実行しても同じ結果）: 配布物（rd-auditor、skills、`ebak-verify.yml`・`ebak-data-layer.yml`、`scripts/*`、EABK-Studio）を入れ、変更していなければ更新します。管理データのひな形（要求定義書・カタログ・外部連携カタログ・ID 台帳・台帳）は、ないときだけ作ります。`scripts/ebak.config.json` は新しいキーを足し、利用者の値を残します。`.gitignore` に `/work/`、`.gitattributes` に union merge の行、`AGENTS.md` と `.github/copilot-instructions.md` に規則のブロックを足し、`.github/ebak-toolkit.json` に版とハッシュを記録します。最後に `rdfix.py --full --apply` を 1 回実行します（要求定義書は変更せず、修復は commit しません）。
 
-## hooks/gate.py（hook の本体）
-
-利用者が直接実行することはありません。`.github/hooks/quality-gates.json` から、`session-start`・`user-prompt`・`pre-tool`・`subagent-start`・`subagent-stop`・`agent-stop` の各イベントで呼び出されます。判定の記録は `work/.ebak/gate.log` にあります。
+旧版（0.5.x など）からの更新では、利用者が変更していない旧ファイル（conductor などのエージェント、`/build` の skill、hook のファイル `.github/hooks/quality-gates.json`・`.github/hooks/prompt-prefix.json`・`scripts/hooks/gate.py`、撤去したスクリプト）を削除し（`REMOVE`）、変更したものは残します（`KEEP-LOCAL`。`--force` で削除）。変更した hook のファイルを残したときは `WARN-HOOK  <パス>` を表示します。そのファイルは削除された `gate.py` を呼び、hook がエラーになると Copilot がすべてのツールを拒否するので、ファイルを削除してから Copilot のセッションを開き直します。設定のキー `gates`・`limits`・`credits`・`worktree_share`・`prompt_prefix` と旧既定の verify コマンド `toolkit-unit` は削除します（`PRUNE`）。導入先の `.github/ebak-prompt-prefix.md` は残しますが、もう読みません。要求定義書・台帳・カタログは変えません。0.5.x の run が残した worktree と `work/*` ブランチは自動では消さないので、`git worktree list`・`git branch --list "work/*"` で確かめて手で削除します。
 
 ## EABK-Studio（データ層のビューアー）
 
-インストールすると対象リポジトリの `EABK-Studio/` に入ります。データ層（要求定義書・カタログ・台帳）を 2D/3D の図・表・検索で見るローカル Web アプリです（日本語・英語）。
+インストールすると、導入先の `EABK-Studio/` に入ります。データ層（要求定義書・カタログ・台帳）を図・表・検索で見る、ローカルの読み取り専用の Web アプリです（日本語・英語）。
 
 ```text
 python EABK-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--role pm|architect|swe] [--check]
@@ -251,9 +260,8 @@ python EABK-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--role pm|a
 | `--port N` | 待ち受けポート（既定 8765。使用中なら次の番号を最大 20 まで試す） |
 | `--no-open` | ブラウザーを自動で開かない |
 | `--role pm\|architect\|swe` | 最初に開く画面（ダッシュボード／2D マップ／表） |
-| `--check` | 管理データのファイルの有無と、解析できた件数（要求・受入基準・カタログ行・台帳のケース・実行履歴）・警告を表示して終了。データ層があれば exit 0、なければ exit 1。サーバーは起動しない |
+| `--check` | 管理データのファイルの有無と、解析できた件数・警告を表示して終了。データ層があれば exit 0、なければ exit 1 |
 
-- データ層のない `--repo` を指定すると、サーバーを起動せずに案内を表示して exit 1 で終わります。
 - ラッパー: `EABK-Studio/start.ps1 [-Repo DIR] [-Port N] [-Role …] [-Check] [-NoOpen]`、`EABK-Studio/start.sh [DIR] [PORT] [studio.py のオプション…]`。
-- ソースコードは読まず、127.0.0.1 だけで待ち受けます。読み取り専用で、書き込むのは「整合性保守」で確認して実行した `docs/catalog.md` の題名・決定状態だけです。
-- 役割別のガイド（Product Manager・Architect・Software Engineer）と、各画面が読むデータの一覧は [studio/README.md](studio/README.md) にあります。詳細は `EABK-Studio/README.md` です。
+- ソースコードは読まず、127.0.0.1 だけで待ち受けます。書き込むのは「整合性保守」で確認して実行した `docs/catalog.md` の題名・決定状態だけです。
+- 役割別のガイドは [studio/README.md](studio/README.md) にあります。

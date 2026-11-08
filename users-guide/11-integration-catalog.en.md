@@ -2,7 +2,7 @@
 
 # 11. Integration catalog (`docs/integrations.md`)
 
-This is a data-layer file that records, one item per integration, the app's integrations with external apps and data through APIs, files, DBs, events, and so on (FR-1035 to FR-1037). It is **optional**. Only apps with external integrations create it. If the file does not exist, checks, Studio, and cleanup work as before, and no error or warning is raised.
+This is a data-layer file that records, one item per integration, the app's integrations with external apps and data through APIs, files, DBs, events, and so on (FR-1035 to FR-1037). It is **optional**. Only apps with external integrations create it. If the file does not exist, checks and Studio work as before, and no error or warning is raised.
 
 ## 11.1 What you receive at installation
 
@@ -39,7 +39,7 @@ Place an index table (ID, name, counterpart, direction, status, related requirem
 
 ## 11.3 Procedure for adding, changing, and retiring
 
-Adding, changing, and retiring are done **only by rd-author**, and changes are recorded in the change history of the requirements definition (do not rewrite them by hand).
+Adding, changing, and retiring are done within the same change that alters the integration (anyone may edit; the procedure is the skill `requirement-definition`), and changes are recorded in the change history of the requirements definition.
 
 1. **Add**: Assign `INT-xxx` with `python scripts/next-id.py INT` (with `--peek`, it is not recorded). Write the heading `#### INT-xxx <name>` and the fields, add one row to the index table, and write requirement IDs in "Related requirements". From the requirement's side, associate it by referencing `INT-xxx` in the body or acceptance criteria. For aspects whose value is undecided, use `TBD（Q-xxx）` and raise a Q in the question sheet.
 2. **Change**: Fix the field values. Advance the status in the order under consideration → in operation → retired. It can be made "in operation" only when all related requirements are approved (otherwise a warning).
@@ -63,4 +63,4 @@ Violations are reported with ID and location, and it ends with exit 1. If there 
 
 ## 11.5 When writing requirements for external integrations (16-aspect checklist)
 
-For requests that include external integrations, rd-author and rd-auditor scan the 16 aspects in `.github/skills/requirement-definition/integration-requirements.md` (the questions to confirm, what to write in the requirement, examples of acceptance criteria, and design matters not to write in the requirement). Aspects whose value is undecided are routed to the question sheet (TBD Q-ID), and aspects touching personal information, authentication and authorization, or external exposure are excluded from blanket approval. Requirement templates (the basic form and examples of acceptance criteria with structured fields and verification levels) are in the same document.
+For requests that include external integrations, the person writing the requirements (usually Copilot) and rd-auditor at milestone audits scan the 16 aspects in `.github/skills/requirement-definition/integration-requirements.md` (the questions to confirm, what to write in the requirement, examples of acceptance criteria, and design matters not to write in the requirement). Aspects whose value is undecided are routed to the question sheet (TBD Q-ID), and aspects touching personal information, authentication and authorization, or external exposure are not approved in bulk; the user is asked to approve each of them individually in chat. Requirement templates (the basic form and examples of acceptance criteria with structured fields and verification levels) are in the same document.

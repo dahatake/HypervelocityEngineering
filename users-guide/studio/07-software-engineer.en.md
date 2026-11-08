@@ -61,7 +61,7 @@ Click `💻 Software Engineer` at the top right of the screen to open the tables
 
 | Decision | Screen to base it on | Next action |
 |---|---|---|
-| Which requirement to implement next | `Tables` → `Requirements` (approved, MUST, impl is none/unlisted), presence of BLOCKED | Specify the requirement ID in the `scope` of the `/build` request |
+| Which requirement to implement next | `Tables` → `Requirements` (approved, MUST, impl is none/unlisted), presence of BLOCKED | Write the requirement ID to implement in your request to Copilot (for example "implement FR-031") |
 | Which files to change | Implementation files and shared components in the detail panel, area in source mapping | Run the tests of the affected requirements |
 | Which tests to run | `command`, layer, and status in `Tables` → `Test cases` | Run and record with `python scripts/ledger.py` |
 | Whether it can be called implemented | Consistency (5 layers) and the test `status` | Fill in the missing layers |
@@ -72,7 +72,7 @@ Click `💻 Software Engineer` at the top right of the screen to open the tables
 
 - "Has implementation" means whether a path is written in the catalog. The existence and contents of the file are not read. If you suspect a mismatch, run `python scripts/verify.py`.
 - A test case's `status` is the result last recorded in the ledger. Studio does not run tests.
-- Studio is read-only (except for the catalog's titles and decision states in consistency maintenance). Request both implementation and requirements via `/build`.
+- Studio is read-only (except for the catalog's titles and decision states in consistency maintenance). Request both implementation and requirements in Copilot chat.
 - The contents of code and the details of test results (logs) are not displayed. The location of evidence is in the evidence column of `Test cases`.
 
 See [06-architect.en.md](06-architect.en.md) for how to read the design, and [08-data-reference.en.md](08-data-reference.en.md) for the basis of each screen.

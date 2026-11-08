@@ -10,10 +10,10 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 
 | 要求 ID | 題名 | 決定状態 | 実装ファイル | テスト | 使っている共通部品 |
 |---|---|---|---|---|---|
-| FR-1009 | 正常完了 run の統合後清掃 | 承認済み（依頼 2026-10-10） | `scripts/clean-work.py`、[`.github/agents/conductor.agent.md`](docs/../.github/agents/conductor.agent.md) | `tests/toolkit/test_clean_work.py`、`tests/toolkit/test_run_state.py`、`tests/system/e2e/test_run_owned_cleanup.py`、`tests/system/test_run_cleanup_system.py` | run 作業資産清掃、worktree pool 管理、conductor 終了契約 |
-| FR-1010 | 清掃の診断と再開 | 承認済み（依頼 2026-10-10） | `scripts/clean-work.py`、`scripts/hooks/gate.py`、[`.github/agents/conductor.agent.md`](docs/../.github/agents/conductor.agent.md)、`users-guide/02-during-and-after-run.md`、`users-guide/05-scripts-reference.md`、`users-guide/07-troubleshooting.md` | `tests/toolkit/test_clean_work.py`、`tests/toolkit/test_gate_parallel_agents.py`、`tests/system/e2e/test_run_owned_cleanup.py`、`tests/system/test_run_cleanup_system.py` | run 状態・完了記録、hook ゲート、run 作業資産清掃、conductor 終了契約、run 運用ガイド |
-| NFR-OPS-005 | 所有権と保護状態にもとづく安全な削除 | 承認済み（依頼 2026-10-10） | `scripts/clean-work.py` | `tests/toolkit/test_clean_work.py`、`tests/toolkit/test_run_state.py`、`tests/system/e2e/test_run_owned_cleanup.py`、`tests/system/test_run_cleanup_system.py` | run 作業資産清掃、run 状態・完了記録、worktree pool 管理 |
-| NFR-COMPAT-001 | Windows・報告・配布文書の一貫性 | 承認済み（依頼 2026-10-10） | `scripts/clean-work.py`、`tools/install.py`、[`.github/agents/conductor.agent.md`](docs/../.github/agents/conductor.agent.md)、`users-guide/02-during-and-after-run.md`、`users-guide/05-scripts-reference.md`、`users-guide/07-troubleshooting.md` | `tests/toolkit/test_clean_work.py`、`tests/system/e2e/test_run_owned_cleanup.py`、`tests/system/test_run_cleanup_system.py` | run 作業資産清掃、run 状態・完了記録、worktree pool 管理、conductor 終了契約、run 運用ガイド、配布同期対象 |
+| FR-1009 | 正常完了 run の統合後清掃 | 廃止 | 未実装 | 未実装 | なし |
+| FR-1010 | 清掃の診断と再開 | 廃止 | なし | 未実装 | なし |
+| NFR-OPS-005 | 所有権と保護状態にもとづく安全な削除 | 廃止 | なし | 未実装 | なし |
+| NFR-COMPAT-001 | Windows・報告・配布文書の一貫性 | 廃止 | なし | 未実装 | なし |
 | FR-1017 | データ層の妥当性検査の自動実行 | 承認済み（依頼 2026-10-14） | [`.github/workflows/ebak-data-layer.yml`](docs/../.github/workflows/ebak-data-layer.yml) | `tests/system/test_data_layer_workflow_system.py` | データ層検査、配布同期対象 |
 | FR-1018 | 不整合の自動修復と修復の反映 | 承認済み（依頼 2026-10-14） | [`.github/workflows/ebak-data-layer.yml`](docs/../.github/workflows/ebak-data-layer.yml) | `tests/system/test_data_layer_workflow_system.py` | データ層修復、データ層検査 |
 | FR-1019 | 直せない不整合の Issue 化 | 承認済み（依頼 2026-10-14） | [`.github/workflows/ebak-data-layer.yml`](docs/../.github/workflows/ebak-data-layer.yml) | `tests/system/test_data_layer_workflow_system.py` | データ層修復 |
@@ -27,7 +27,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | NFR-REL-004 | 壊れた入力と git でないディレクトリでの確認・修復 | 承認済み（包括承認 2026-10-16・approval_policy） | `scripts/rdfix.py`、`scripts/ebaklib.py` | `tests/toolkit/test_rdfix_robust.py`、`tests/integration/test_data_layer_repair.py` | データ層修復 |
 | NFR-PERF-005 | データ層の確認・修復の速さ | 承認済み（依頼 2026-10-16） | `scripts/rdfix.py`、`scripts/ebaklib.py` | `tests/toolkit/test_rdfix_robust.py`、`tests/integration/test_data_layer_repair.py` | データ層修復、データ層検査 |
 | NFR-COMPAT-004 | 既存のデータ層の検査・修復の挙動の維持 | 承認済み（包括承認 2026-10-16・approval_policy） | `scripts/rdfix.py`、[`.github/workflows/ebak-data-layer.yml`](docs/../.github/workflows/ebak-data-layer.yml) | `tests/toolkit/test_repair_entrypoints.py`、`tests/integration/test_repair_entrypoints_it.py`、`tests/toolkit/test_rdfix.py`、`tests/system/test_data_layer_workflow_system.py` | データ層修復 |
-| NFR-OPS-007 | データ層の確認・修復の配布と利用者向け文書 | 承認済み（包括承認 2026-10-16・approval_policy） | `tools/install.py`、`scripts/ebaklib.py`、`README.md`、`CHANGELOG.md`、`users-guide/04-customization.md`、`users-guide/05-scripts-reference.md`、`users-guide/06-quality-gates.md`、`users-guide/07-troubleshooting.md`、[`.github/agents/conductor.agent.md`](docs/../.github/agents/conductor.agent.md) | `tests/toolkit/test_repair_entrypoints.py`、`tests/integration/test_repair_entrypoints_it.py`、`tests/toolkit/test_version.py` | 配布同期対象 |
+| NFR-OPS-007 | データ層の確認・修復の配布と利用者向け文書 | 承認済み（包括承認 2026-10-16・approval_policy） | tools/install.py, scripts/ebaklib.py, README.md, CHANGELOG.md, users-guide/04-customization.md, users-guide/05-scripts-reference.md, users-guide/06-quality-gates.md, users-guide/07-troubleshooting.md | `tests/toolkit/test_repair_entrypoints.py`、`tests/integration/test_repair_entrypoints_it.py`、`tests/toolkit/test_version.py` | 配布同期対象 |
 | NFR-COR-001 | 再現性 | 廃止 | 未実装 | 未実装 | なし |
 | NFR-COR-002 | エラーの明確性 | 廃止 | 未実装 | 未実装 | なし |
 | NFR-COR-003 | 境界値 | 廃止 | 未実装 | 未実装 | なし |
@@ -39,11 +39,11 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1011 | 2D マップのノード選択と強調 | 承認済み | `EABK-Studio/web/js/map2d.js` | `tests/system/e2e/test_studio_map_placement_system.py`, `EABK-Studio/tests/test_studio.py` | ストア |
 | FR-1012 | 実装配置図（画面・API・データの 3 層） | 承認済み | `EABK-Studio/web/js/diagrams.js`, `EABK-Studio/web/js/i18n.js` | `tests/system/e2e/test_studio_map_placement_system.py`, `EABK-Studio/tests/test_studio.py` | ストア、UI 部品、デザイン基盤 |
 | FR-1013 | データの ER 図表示 | 承認済み | `EABK-Studio/web/js/insights.js`, `EABK-Studio/web/js/diagrams.js`, `EABK-Studio/web/js/i18n.js` | `EABK-Studio/tests/test_studio.py` | 管理データモデル、ストア、UI 部品、デザイン基盤 |
-| NFR-PERF-003 | EABK toolkit の子プロセス・ブラウザー起動と依存再導入の削減 | 承認済み | `scripts/ebaklib.py`、`scripts/rdcheck.py`、`scripts/rdfix.py`、`scripts/ledger.py`、`scripts/integrate.py` | `tests/toolkit/test_git_perf.py`、`tests/toolkit/test_speed.py`、`tests/toolkit/test_select_changed.py`、`tests/toolkit/test_perf_baseline_sync.py`、`tests/toolkit/test_time_limits.py` | git ls-files 並行取得、System Test の選択、worktree pool 管理 |
+| NFR-PERF-003 | EABK toolkit の子プロセス・ブラウザー起動と依存再導入の削減 | 承認済み | scripts/ebaklib.py, scripts/rdcheck.py, scripts/rdfix.py, scripts/ledger.py | tests/toolkit/test_git_perf.py, tests/toolkit/test_speed.py, tests/toolkit/test_select_changed.py | git ls-files 並行取得、System Test の選択 |
 | NFR-COMPAT-002 | 性能改善による挙動の不変 | 承認済み | `scripts/ebaklib.py`、`scripts/rdcheck.py`、`scripts/rdfix.py` | `tests/toolkit/test_git_perf.py` | git ls-files 並行取得 |
 | FR-1014 | 要求の実装状態ビュー（実装の登録と試験 pass の区別） | 承認済み | `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/implstatus.js`, `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/i18n.js`, `users-guide/studio/08-data-reference.md` | `tests/system/e2e/test_impl_status_system.py`, `EABK-Studio/tests/test_studio.py` | 管理データモデル、ストア、UI 部品、デザイン基盤 |
-| FR-1015 | 次に実装すべき要求の分析コマンド | 承認済み | `scripts/next-impl.py`、`tools/install.py`、`users-guide/05-scripts-reference.md` | `tests/toolkit/test_next_impl.py` | 次実装候補の分析、run 状態・完了記録、配布同期対象 |
-| FR-1016 | 許容時間を指定するだけの実装依頼（/build 入口）の生成 | 承認済み | `scripts/build-request.py`、[`.github/skills/build/SKILL.md`](docs/../.github/skills/build/SKILL.md)、`tools/install.py`、`users-guide/05-scripts-reference.md` | `tests/toolkit/test_next_impl.py`、`tests/system/e2e/test_build_request_system.py` | 次実装候補の分析、run 状態・完了記録、配布同期対象 |
+| FR-1015 | 次に実装すべき要求の分析コマンド | 廃止 | なし | 未実装 | なし |
+| FR-1016 | 許容時間を指定するだけの実装依頼（/build 入口）の生成 | 廃止 | なし | 未実装 | なし |
 | FR-1020 | エンティティ台帳の導出（既存の構造化欄が正本） | 承認済み | `scripts/entities.py`、`scripts/rdcheck.py`、`tools/install.py`、`users-guide/05-scripts-reference.md` | `tests/toolkit/test_entities.py` | エンティティ台帳・企業カタログ照合 |
 | FR-1021 | エンティティ × ユースケース の対応表（Studio） | 承認済み | `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/entities.js`, `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/js/ui.js`, `EABK-Studio/web/app.css`, `EABK-Studio/README.md`, `users-guide/studio/02-screens.md` | `tests/system/e2e/test_entities_studio_system.py`, `EABK-Studio/tests/test_studio.py` | エンティティ台帳・企業カタログ照合、管理データモデル、ストア、UI 部品、デザイン基盤 |
 | FR-1022 | エンティティ詳細（要求・テーブル・コンポーネント） | 承認済み | `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/entities.js`, `EABK-Studio/web/js/drawer.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/app.css` | `tests/system/e2e/test_entities_studio_system.py`, `EABK-Studio/tests/test_studio.py` | エンティティ台帳・企業カタログ照合、管理データモデル、ストア、UI 部品、デザイン基盤 |
@@ -68,7 +68,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1036 | 外部連携カタログの ID 採番と整合検査 | 承認済み | `scripts/next-id.py`、`scripts/rdcheck.py`、`scripts/ebaklib.py`、`.github/skills/requirement-definition/integration-checklist.md` | `tests/toolkit/test_integrations.py`、`tests/integration/test_external_integrations.py` | 外部連携カタログ解析・検査 |
 | FR-1037 | 外部連携カタログの配布と管理手順の文書化 | 承認済み | `tools/install.py`、`tools/templates/docs/integrations.md`、`.github/skills/requirement-definition/integration-checklist.md`、`scripts/ebaklib.py`、`users-guide/03-requirements-format.md`、`users-guide/05-scripts-reference.md`、`users-guide/11-integration-catalog.md`、`README.md`、`CHANGELOG.md` | `tests/toolkit/test_integrations.py`、`tests/integration/test_external_integrations.py`、`tests/system/test_integration_catalog_install_system.py`、`tests/toolkit/test_version.py` | 配布同期対象、外部連携カタログ解析・検査 |
 | FR-1038 | 外部連携の要求チェックリストと要求のテンプレート | 承認済み | `.github/skills/requirement-definition/integration-requirements.md`、`tools/install.py`、`users-guide/11-integration-catalog.md` | `tests/toolkit/test_integration_requirements.py`、`tests/integration/test_external_integrations.py` | 配布同期対象 |
-| FR-1039 | rd-author の手順への外部連携チェックの組込み | 承認済み | `.github/skills/requirement-definition/SKILL.md`、`.github/skills/rd-audit/SKILL.md`、`.github/skills/requirement-definition/integration-requirements.md`、`tools/install.py` | `tests/toolkit/test_integration_requirements.py`、`tests/integration/test_external_integrations.py` | 配布同期対象 |
+| FR-1039 | 要求定義の手順への外部連携チェックの組込み | 承認済み | `.github/skills/requirement-definition/SKILL.md`、`.github/skills/rd-audit/SKILL.md`、`.github/skills/requirement-definition/integration-requirements.md`、`tools/install.py` | `tests/toolkit/test_integration_requirements.py`、`tests/integration/test_external_integrations.py` | 配布同期対象 |
 | FR-1053 | マップの表示モード「RPG 風」 | 廃止（依頼 2026-11-01） | なし | `tests/system/e2e/test_studio_rpg_system.py` | なし |
 | FR-1054 | RPG 風の音楽・効果音・キャラクターの生成 | 廃止（依頼 2026-11-01） | なし | `tests/system/e2e/test_studio_rpg_system.py` | なし |
 | FR-1055 | RPG 風のファミコン風の操作 | 廃止（依頼 2026-11-01） | なし | `tests/system/e2e/test_studio_rpg_system.py` | なし |
@@ -84,23 +84,23 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1058 | 管理データのメタデータ定義と検査 | 承認済み | `scripts/metadata.json`、`scripts/ebaklib.py`、`scripts/rdcheck.py`、`EABK-Studio/eabk_model.py`、`tools/install.py` | `tests/toolkit/test_hierarchy.py`、`tests/system/test_data_hierarchy_system.py` | メタデータ定義と階層・関係索引 |
 | FR-1059 | 関係の索引（種類つきの関連付け） | 承認済み | `scripts/metadata.json`、`scripts/ebaklib.py`、`scripts/rdcheck.py`、`EABK-Studio/eabk_model.py`、`tools/install.py` | `tests/toolkit/test_hierarchy.py`、`tests/system/test_data_hierarchy_system.py` | メタデータ定義と階層・関係索引 |
 | FR-1060 | 領域の初期分類（AI提案） | 承認済み | 未実装 | 未実装 | - |
-| FR-1078 | 要求・受入基準・System Test のケースの数の最適化（似た既存の項目の再利用と重複の統合） | 承認済み | `scripts/rdcheck.py`、`scripts/ledger.py`、`.github/agents/rd-author.agent.md`、`.github/agents/test-designer.agent.md`、`.github/agents/conductor.agent.md`、`.github/skills/requirement-definition/SKILL.md`、`.github/skills/rd-audit/SKILL.md` | `tests/integration/test_reuse_optimization_it.py` | データ層検査、配布同期対象 |
+| FR-1078 | 要求・受入基準・System Test のケースの数の最適化（似た既存の項目の再利用と重複の統合） | 承認済み | scripts/rdcheck.py, scripts/ledger.py, .github/skills/requirement-definition/SKILL.md, .github/skills/rd-audit/SKILL.md | `tests/integration/test_reuse_optimization_it.py` | データ層検査、配布同期対象 |
 | FR-1062 | 各データの上位層の定義（種類→区分→領域→項目） | 承認済み | `EABK-Studio/eabk_model.py`、`EABK-Studio/web/js/hier.js`、`scripts/rdcheck.py`、`tools/install.py` | `EABK-Studio/tests/test_tier_hierarchy.py`、`tests/system/test_data_tiers_system.py` | 階層の導出、階層の共通 JS 部品 |
 | FR-1063 | Studio の全画面での上位層の表示 | 承認済み | `EABK-Studio/web/js/tierlist.js`、`EABK-Studio/web/js/tables.js`、`EABK-Studio/web/js/integrations.js`、`EABK-Studio/web/js/entities.js`、`EABK-Studio/web/js/implstatus.js`、`EABK-Studio/web/js/dashboard.js`、`EABK-Studio/web/js/diagrams.js`、`EABK-Studio/web/js/source.js`、`EABK-Studio/web/js/insights.js`、`EABK-Studio/web/js/maptiers.js`、`EABK-Studio/web/js/map2d.js`、`EABK-Studio/web/js/map3d.js`、`EABK-Studio/web/app.css` | `EABK-Studio/tests/test_tier_lists_ui.py`、`tests/system/e2e/test_studio_tiers_system.py`、`EABK-Studio/tests/test_map_tiers_ui.py`、`EABK-Studio/tests/test_tier_reflow_a11y_ui.py` | 階層の共通 JS 部品、一覧の階層ブリッジ、マップの上位層パネル |
 | NFR-UX-014 | 管理データの情報デザイン（段階的開示と一覧性） | 承認済み | `scripts/metadata.json`、`scripts/ebaklib.py`、`scripts/rdcheck.py`、`EABK-Studio/eabk_model.py`、`tools/install.py` | `tests/toolkit/test_hierarchy.py`、`tests/system/test_data_hierarchy_system.py` | メタデータ定義と階層・関係索引 |
 | FR-1050 | 表・連携の ID の全面リンク化と未解決 ID の明示 | 承認済み | 未実装 | tests/system/e2e/test_studio_info_design_system.py | - |
 | FR-1051 | 「表」画面の種別のグループ化と名称の統一 | 承認済み | 未実装 | tests/system/e2e/test_studio_info_design_system.py | - |
 | FR-1052 | 文脈の明示と、図・一覧の行のキーボード操作 | 承認済み | 未実装 | tests/system/e2e/test_studio_info_design_system.py | - |
-| FR-1064 | 監視コマンド watch.py（scan・reap・stuck） | 承認済み | `scripts/watch.py` | `tests/toolkit/test_watch.py`、`tests/integration/test_watch_cli.py` | run 監視 |
-| FR-1065 | run の運用への組込み（統合時の回収・状態の警告・手順書の規則） | 承認済み | `scripts/integrate.py`、`scripts/run-state.py`、`tools/install.py`、`.github/agents/conductor.agent.md`、`.github/skills/implement-fr/SKILL.md`、`users-guide/05-scripts-reference.md` | `tests/toolkit/test_integrate_reap.py`、`tests/system/test_watch_status_system.py`、`tests/toolkit/test_watch_docs.py` | run 監視、worktree pool 管理、run 状態・完了記録 |
-| NFR-OPS-008 | 監視コマンドの安全性・配布・文書・単体テスト | 承認済み | `scripts/watch.py`、`tools/install.py`、`users-guide/05-scripts-reference.md` | `tests/toolkit/test_watch.py`、`tests/toolkit/test_watch_docs.py` | run 監視 |
-| FR-1074 | start-claim と start の排他・結びつけ（持ち主の取り違え防止） | 承認済み（包括承認 2026-10-22・approval_policy） | scripts/run-state.py, scripts/ebaklib.py | `tests/toolkit/test_start_claim.py`、`tests/toolkit/test_parallel_hook.py` | run 状態・完了記録 |
-| FR-1075 | 所有者なし run の救済の厳格化 | 承認済み（包括承認 2026-10-22・approval_policy） | scripts/hooks/gate.py | `tests/toolkit/test_multi_run.py`、`tests/toolkit/test_start_claim.py`、`tests/integration/test_hook_rescue_template_it.py` | hook ゲート |
-| FR-1076 | 主ツリーで run を置いたときの別 session のゲート対象外 | 承認済み（包括承認 2026-10-22・approval_policy） | users-guide/06-quality-gates.md | `tests/toolkit/test_parallel_hook.py` | hook ゲート |
-| FR-1077 | /build template 状態の session ごとの分離 | 承認済み（包括承認 2026-10-22・approval_policy） | scripts/hooks/gate.py | `tests/toolkit/test_parallel_hook.py`、`tests/integration/test_hook_rescue_template_it.py` | hook ゲート |
-| FR-1081 | 定型文の自動付与（Prompt ごとの内部の指示と既定文の配布） | 承認済み（依頼 2026-11-03） | `scripts/hooks/gate.py`、`scripts/ebaklib.py`、`scripts/ebak.config.json`、`tools/install.py`、`tools/templates/.github/ebak-prompt-prefix.md`、`.github/ebak-prompt-prefix.md` | `tests/toolkit/test_prompt_prefix.py`、`tests/system/test_prompt_prefix_system.py` | hook ゲート、配布同期対象 |
-| NFR-OPS-009 | 並列開始の統合試験 | 承認済み（包括承認 2026-10-22・approval_policy） | `scripts/hooks/gate.py`、`scripts/run-state.py` | `tests/integration/test_parallel_start_it.py`、`tests/toolkit/test_parallel_hook.py` | hook ゲート、run 状態・完了記録 |
-| NFR-OPS-010 | 排他の安全性・配布・文書 | 承認済み（包括承認 2026-10-22・approval_policy） | users-guide/07-troubleshooting.md | `tests/toolkit/test_parallel_hook.py`、`tests/toolkit/test_start_claim.py`、`tests/toolkit/test_install.py` | 配布同期対象 |
+| FR-1064 | 監視コマンド watch.py（scan・reap・stuck） | 廃止 | なし | 未実装 | なし |
+| FR-1065 | run の運用への組込み（統合時の回収・状態の警告・手順書の規則） | 廃止 | なし | 未実装 | なし |
+| NFR-OPS-008 | 監視コマンドの安全性・配布・文書・単体テスト | 廃止 | なし | 未実装 | なし |
+| FR-1074 | start-claim と start の排他・結びつけ（持ち主の取り違え防止） | 廃止 | なし | 未実装 | なし |
+| FR-1075 | 所有者なし run の救済の厳格化 | 廃止 | なし | 未実装 | なし |
+| FR-1076 | 主ツリーで run を置いたときの別 session のゲート対象外 | 廃止 | なし | 未実装 | なし |
+| FR-1077 | /build template 状態の session ごとの分離 | 廃止 | なし | 未実装 | なし |
+| FR-1081 | 定型文の自動付与（Prompt ごとの内部の指示と既定文の配布） | 廃止 | なし | 未実装 | 配布同期対象 |
+| NFR-OPS-009 | 並列開始の統合試験 | 廃止 | なし | 未実装 | なし |
+| NFR-OPS-010 | 排他の安全性・配布・文書 | 廃止 | なし | tests/toolkit/test_install.py | なし |
 | FR-1066 | ヘッダー常設の表示モード切替（2D・3D・Graph） | 承認済み | `EABK-Studio/web/js/dim.js`、`EABK-Studio/web/js/app.js`、`EABK-Studio/web/js/diagrams.js`、`EABK-Studio/web/js/entities.js`、`EABK-Studio/web/js/i18n.js`、`EABK-Studio/web/index.html`、`EABK-Studio/web/app.css` | `EABK-Studio/tests/test_header_dim_ui.py`、`tests/system/e2e/test_studio_header_dim_3d_part1_system.py` | 2D・3D 切替、意味的ズーム |
 | FR-1067 | 表示モード切替をまたぐ意味的ズームの引継ぎ | 承認済み | `EABK-Studio/web/js/entities.js`、`EABK-Studio/web/js/semzoom.js`、`EABK-Studio/web/js/dim.js` | `EABK-Studio/tests/test_header_dim_ui.py`、`tests/system/e2e/test_studio_header_dim_3d_part1_system.py` | 2D・3D 切替、意味的ズーム |
 | FR-1068 | 3D の種別ごとのオブジェクトと凡例 | 承認済み | `EABK-Studio/web/js/shapes3d.js`、`EABK-Studio/web/js/map3d.js`、`EABK-Studio/web/js/dgm3d.js`、`EABK-Studio/web/js/i18n.js`、`EABK-Studio/web/app.css` | `EABK-Studio/tests/test_obj3d_ui.py`、`EABK-Studio/tests/test_dgm3d_shapes.py`、`tests/system/e2e/test_studio_header_dim_3d_part1_system.py` | 3D 種別かたち・演出スタイル、Three.js 同梱モジュール、デザイン基盤 |
@@ -115,6 +115,8 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | NFR-UX-018 | 動的な可視化の性能・外部依存なし・安全な更新 | 承認済み | `EABK-Studio/web/js/viz.js` | `EABK-Studio/tests/test_dynamic_viz_ui.py`、`tests/system/e2e/test_studio_dynamic_viz_system.py` | 動的可視化の小部品 |
 | FR-1082 | データ層の検査へのプロジェクト固有の拡張の登録と実行の確認 | 承認済み | `scripts/extpoints.py`、`scripts/rdcheck.py`、`scripts/rdfix.py`、`scripts/verify.py`、`scripts/ebak.config.json`、`tools/install.py`、`users-guide/04-customization.md`、`users-guide/04-customization.en.md` | `tests/integration/test_extension_points_it.py`、`tests/system/test_extension_points_system.py` | データ層検査、データ層修復、配布同期対象 |
 | FR-1083 | toolkit 更新時の利用側の配線の脱落警告 | 承認済み | `tools/install.py`、`users-guide/04-customization.md`、`users-guide/04-customization.en.md` | `tests/integration/test_extension_points_it.py` | 配布同期対象 |
+| FR-1084 | EABK Lite の検査プロファイル（lite／full） | 承認済み | 未実装 | 未実装 | - |
+| FR-1085 | オーケストレーションを持たない配布と旧版からの移行 | 承認済み | 未実装 | 未実装 | - |
 
 
 ## API・イベント
@@ -131,19 +133,11 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 
 | 部品名 | ファイル | 用途 | 使っている要求 ID |
 |---|---|---|---|
-| run 作業資産清掃 | `scripts/clean-work.py` | 正常完了・main 統合後ゲート、所有権、保護状態にもとづく計画・清掃・診断・冪等再試行 | FR-1009、FR-1010、NFR-OPS-005、NFR-COMPAT-001 |
-| run 監視 | `scripts/watch.py` | 残留プロセスの scan・reap（名前とリポジトリのパスで限定）と queue の doing 時間超過 stuck の検出 | FR-1064、FR-1065、NFR-OPS-008 |
-| run 状態・完了記録 | `scripts/run-state.py` | run の完了条件、finish、run-history と current-run の状態管理（start-claim の消費と持ち主の記録を含む） | FR-1010、FR-1015、FR-1016、FR-1065、FR-1074、NFR-COMPAT-001、NFR-OPS-005、NFR-OPS-009 |
-| hook ゲート | `scripts/hooks/gate.py` | hook の G-1・G-5 などのゲート、start-claim の記録、所有者なし run の救済、template 状態の保存、agent-stop での取り込み待ちの再差し戻し抑制（blocker 指紋） | FR-1010、FR-1075、FR-1076、FR-1077、FR-1081、NFR-OPS-009 |
 | 3D カメラのプリセット | `EABK-Studio/web/js/camera3d.js` | 9 種のプリセット表 `CAMERA_PRESETS`（落ち着き→派手。Shot Size×Camera Angle×Camera Movement×Motion Character の 4 要素・語彙・別名表。1 か所）、操作部品 `createCameraRig`（`camera-presets`・`camera-detail`・`data-camera-auto`・`data-reduced-motion`・`window.__eabk3d.camera()`）、動きの軽減で Static、手動操作・Esc・停止ボタンで自動動作を止める、性能不足（PARAM-047 未満）で Static へ縮退（保存値は書かない）、コマンド検索の `cameraCommands()`。WebGL 版（map3d.js）と Canvas 版（sz3d.js）が共用 | FR-1070、FR-1071、NFR-UX-015 |
 | 3D 種別かたち・演出スタイル | `EABK-Studio/web/js/shapes3d.js` | 3D のノード種別 → かたち（three.js 標準ジオメトリの組合せ）の対応表 `SHAPE_OF`（1 か所。凡例・3D の描画・テストが参照）、InstancedMesh による描画、凡例（`legend-3d`）、演出スタイルの切替（`style-toggle`。保存は localStorage `eabk-studio.style3d` にスタイル名のみ）。未知の種別は `default`（その他） | FR-1068、FR-1069 |
-| worktree pool 管理 | `scripts/integrate.py` | pool worktree の列挙、強制削除、Git worktree 登録の prune、性能基準証跡の配置（commit・hash 照合） | FR-1009、FR-1065、NFR-OPS-005、NFR-COMPAT-001、NFR-PERF-003 |
-| conductor 終了契約 | [`.github/agents/conductor.agent.md`](docs/../.github/agents/conductor.agent.md) | run 開始時・工程 6・main 統合・run-report・清掃の実行順序 | FR-1009、FR-1010、NFR-COMPAT-001 |
-| run 運用ガイド | `users-guide/02-during-and-after-run.md`、`users-guide/05-scripts-reference.md`、`users-guide/07-troubleshooting.md` | 利用者向けの統合、清掃、診断、再開、トラブルシューティング契約 | FR-1010、NFR-COMPAT-001 |
-| 配布同期対象 | `tools/install.py` | conductor、清掃・状態・統合スクリプトをインストール対象へ同期する管理対象。外部連携カタログの雛形（TEMPLATES。なければ作成）と検査・チェックリスト（MANAGED）も配る | FR-1015、FR-1016、FR-1017、FR-1037、FR-1038、FR-1039、FR-1045、FR-1078、FR-1081、FR-1082、FR-1083、NFR-COMPAT-001、NFR-OPS-006、NFR-OPS-007、NFR-OPS-010、NFR-SEC-004 |
+| 配布同期対象 | `tools/install.py` | EABK Lite の配布物（規則・データ層のスクリプト・rd-auditor・定型文の hook・Studio）をインストール対象へ同期し、0.5.x のオーケストレーションのファイルと設定のキーを撤去する管理対象。外部連携カタログの雛形（TEMPLATES。なければ作成）と検査・チェックリスト（MANAGED）も配る | FR-1017、FR-1037、FR-1038、FR-1039、FR-1045、FR-1078、FR-1081、FR-1082、FR-1083、NFR-OPS-006、NFR-OPS-007、NFR-SEC-004 |
 | git ls-files 並行取得 | `scripts/ebaklib.py` | `tracked_files` で tracked・untracked 一覧を ThreadPoolExecutor で並行取得し、rdcheck/rdfix は同一引数の呼び出しを 1 回にする | NFR-PERF-003、NFR-COMPAT-002 |
 | System Test の選択 | `scripts/ledger.py` | `select_cases` が `--select changed` で git diff の追加・変更行の要求 ID・AC ID を優先してケースを選び、ケースごとに理由を出力する。共通コード・解析不能・ID なしは広げる（従来の選択を含む） | NFR-PERF-003 |
-| 次実装候補の分析 | `scripts/next-impl.py` | 承認済み・未完了の要求を優先度・依存・実装状態で順位付けし、除外の理由と scope 用 ID 一覧を出す（読み取り専用） | FR-1015、FR-1016 |
 | 外部連携カタログ解析・検査 | `scripts/ebaklib.py`、`scripts/rdcheck.py`、`scripts/next-id.py` | `docs/integrations.md` の解析（`parse_integrations`）、CHK-28 の検査（必須欄・16 観点の欄・値の形式・TBD・方向・状態・要求との対応・認証情報の値らしい文字列）、`trace INT-xxx`、`next-id.py INT` の採番と ID 台帳の同期 | FR-1035、FR-1036、FR-1037 |
 | データ層検査 | `scripts/verify.py` | `--docs-only` でデータ層の妥当性を検査する | FR-1017、FR-1018、FR-1044、FR-1046、FR-1078、FR-1082、NFR-PERF-005 |
 | データ層修復 | `scripts/rdfix.py` | 要求定義書を変更せずデータ層の不整合を自動修復し、残りを手動対応として示す | FR-1018、FR-1019、FR-1044、FR-1045、FR-1046、FR-1082、NFR-COMPAT-004、NFR-PERF-005、NFR-REL-002、NFR-REL-003、NFR-REL-004 |

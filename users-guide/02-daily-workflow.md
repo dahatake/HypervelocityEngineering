@@ -1,120 +1,139 @@
-**日本語** | [English](02-during-and-after-run.en.md)
+**日本語** | [English](02-daily-workflow.en.md)
 
-# 2. 実行中と終了後
+# 2. ふだんの進め方
 
-## 2.1 進捗を確認する
-
-conductor の作業ツリー（VS Code の New Worktree や GitHub Copilot app の新しい作業ツリーなら、そのセッションの worktree）で次のコマンドを実行します。どれも読み取り専用で、実行中の run には影響しません。GitHub Copilot app の worktree は、既定では `<リポジトリの親>/copilot-worktrees/<リポジトリ名>/<ブランチ名>` にあります（`git worktree list` で確認できます）。
-
-```bash
-python scripts/run-state.py status          # run-id、経過時間と時間予算、統合ブランチ、工程、queue の件数、progress の末尾
-python scripts/run-state.py queue show      # 項目ごとの状態・試行回数・ブランチ
-python scripts/ledger.py summary -v         # System Test の pass / fail / blocked / not_run
-git log --oneline --graph -20               # [RD] [ST] [FR-xxx] の commit と統合
-```
-
-hook が拒否・差し戻した操作は `work/.ebak/gate.log` に記録されます。
-
-## 2.2 停止したときの再開
-
-状態は `/work` のファイルと git に永続化されているので、どの時点で止まっても続きから再開できます。
-
-| 状況 | 対処 |
-|---|---|
-| Autopilot がターンを終えたが、完了条件を満たしていない | 同じセッションで「続けて」と送信します。agentStop の hook が、完了条件を満たすまで自動で継続させます（上限 40 回） |
-| PC の再起動・Agent Host の停止 | 新しいセッションで、同じ Prompt をもう一度送信します。conductor は `RESUME <run-id>` として、`/work` の状態ファイルと git から続きを再開します |
-| GitHub Copilot app の再起動・セッションの中断 | サイドバーから**同じセッション**を開き、「続けて」と送信します。新しい作業ツリーのセッションを新しく作ると別の worktree になり、`/work` の状態がないため新しい run として始まってしまいます。ローカル リポジトリで実行していた場合は、新しいセッションでも再開できます |
-| 途中でやめたい | セッションを停止します。そこまでに統合した項目は、統合ブランチに commit 済みです。`work/current-run.txt` を削除すると、次の依頼は新しい run として始まります |
-
-conductor が自分で停止する条件:
-
-| 条件 | 動作 |
-|---|---|
-| queue のすべての項目が done または blocked | 工程 6 に進んで終了する |
-| `max_hours` の 85% を超えた | 新しい項目には着手せず、工程 6 に進む |
-| 同じ項目がゲートで 3 回続けて失敗した | 上位モデルで 1 回だけ再挑戦し、それでも失敗したら blocked にして原因を記録する |
-| canary が失敗し、3 回修正しても直らない | 実装ループを止めて、工程 6 に進む |
-| 直前の統合で、統合ブランチの verify が失敗に変わった | その統合を取り消し、項目を todo に戻す |
-
-終了の判定は、モデルの「完了した」という自己申告ではなく、`python scripts/run-state.py complete-check` が exit 0 を返すことで行います。exit 0 の条件は、queue に todo・doing がない、工程 6 が終わっている、run-report.md がある、の 3 つです。結果が「全件完了」の run は、さらに `python scripts/run-state.py land` で main へ取り込み済みになるまで、agentStop の hook が終了を差し戻します（複数の run が同時に完了しても、取り込みは共通ロックで 1 本ずつ行われます。競合・verify 失敗のときは自動で取り消し、conductor が解消して再実行します）。「blocked あり」の run は、完了条件を満たしても取り込まれず、全件成功とはみなされません。
-
-## 2.3 終了後に読むもの
-
-`work/runs/<run-id>/run-report.md` には次の内容があります。
-
-- 1 行目: 結果（全件完了／blocked あり／時間予算で中止／canary 失敗で中止）、経過時間、AI クレジット
-- 実装した要求 ID、BLOCKED の要求 ID とその理由
-- **包括承認した項目**（影響の大きい順）… 意図と違えば、次の `<answers>` で取り消します
-- **未回答の質問票**（重要度の高い順）… 次の `<answers>` にそのまま書ける形式です
-- 品質メトリクス: verify、AC の pass 率、監査の指摘（CRITICAL・HIGH の件数）
-- **KPI**: North Star「人の介入 1 回あたりの検証済み要求」、1 回目のゲート通過率、トレーサビリティ網羅率など。HTML 版は `work/runs/<run-id>/kpi.html` です。過去の run を通した集計は `python scripts/kpi.py history` で表示できます
-- マージ方法: 統合ブランチ名と、マージのコマンド
-
-`/work` は 14 日で削除されますが、要点は次の永続的な場所に転記されています。要求・カタログ・試験の状態は、[EABK Studio](studio/README.md)（`python EABK-Studio/studio.py`）で図と表として確認できます。
-
-| 情報 | 場所 |
-|---|---|
-| run の要約と KPI（1 run 1 行） | `docs/run-history.md` |
-| 包括承認・回答を反映した決定 | 要求定義書の「決定記録」 |
-| 未回答の質問票・承認依頼 | 要求定義書の「仮定・未解決事項」 |
-| 未解決の監査指摘 | 要求定義書の「監査指摘」 |
-| System Test の最新の状態 | `tests/system/ledger.json` |
-
-## 2.4 マージする
-
-### 複数の run を並行して動かす
-
-主の VS Code・主の作業ツリーのまま、複数の `/build` を始めてかまいません。各 run は `<リポジトリ>-run-<run-id>` の専用 worktree（統合ブランチ `run/<run-id>`）で動き、別の VS Code を開く必要はありません。完了した run は、終わった順に `run-state.py land` で main へ取り込まれます（共通ロックで 1 本ずつ）。取り込みは git の一時 worktree で merge と verify を行ってから main を進めるので、主の作業ツリーが未コミットの変更を持っていても、別のブランチにいても動きます（未コミットの変更が取り込む変更と同じファイルに重なるときだけ、解消まで `LAND-WAIT` で待ちます）。先に取り込まれた run と競合したときは、base を run の worktree に取り込み直して再試行し（`tests/system/ledger.json` は case の id 単位で自動統合）、解消できないファイルがあるときだけ `LAND-CONFLICT` で止まります。
-
-自動マージが成功した run は、統合ブランチと worktree が清掃されます。
-
-結果が「全件完了」で最終の verify が通った run は、conductor が統合ブランチ `run/<run-id>` をローカルの main へ `--no-ff` でマージし、統合ブランチを削除します（main への push はしません）。マージが競合したり verify が失敗したりした場合、および「blocked あり」「時間予算で中止」「canary 失敗で中止」の run は、取り込まずにブランチを残します。その場合や VS Code の New Worktree・GitHub Copilot app の新しい作業ツリー（そのセッションのブランチ）では、次のように手動で取り込みます。
-
-```bash
-git switch main
-git merge --no-ff run/202610080900          # ローカルでマージする
-# または
-git push origin run/202610080900 && gh pr create --base main --head run/202610080900   # PR でマージする（CI の ebak-verify が再検証）
-```
-
-`git_push: 作業ブランチへ push する` を指定していれば、conductor は取り込みの前に統合ブランチを push します（バックアップ。PR は作りません）。
-
-GitHub Copilot app の新しい作業ツリーで実行した run は、セッションのブランチが統合ブランチです（`run-state.py status` の `integration:`）。conductor は main へマージしないので、アプリのプル要求の作成機能で PR を作るか、上のコマンドの `run/<run-id>` をセッションのブランチ名に置き換えて取り込みます。取り込みが終わるまで、セッションをアーカイブ・削除しないでください（worktree と `/work` の報告が消えることがあります）。
-
-自動マージの前に確認したい場合は、`git diff main...<統合ブランチ>` を取り込み前に見ることはできないため、事後に `git revert -m 1 <マージ commit>` で戻します。
-
-手動でマージする場合は、その前に少なくとも次の 3 点を確認します。
-
-1. `run-report.md` の結果と「包括承認した項目」
-2. `git diff main...<統合ブランチ> -- docs/requirements-definition.md`（要求の変更点）
-3. `python scripts/verify.py --strict` が PASS になること
-
-## 2.5 次の依頼
-
-回答と新しい要望を 1 つの Prompt にまとめて送信できます。
+EABK Lite の 1 回の変更は、次の 5 段階で進みます。どれも、いつもの Copilot と git と CI だけで行います。
 
 ```text
-<request>
-（新しい要望。なければ空）
-</request>
-<answers>
-Q-003: B
-残りはすべて推奨どおり
-</answers>
+1. 依頼する            いつもの Copilot（既定のエージェント）にチャットで依頼する（1 章）
+2. 同じ変更で更新する   Copilot が要求定義書・カタログ・テスト・コードを同じ変更で直す
+3. 手元で検査する       python scripts/verify.py が exit 0
+4. push / PR           CI の ebak-verify と ebak-data-layer が同じ検査をする
+5. 節目に監査する       リリース前などに rd-auditor で要求の意味を監査する
+（いつでも）           状況は EABK Studio で見る
 ```
 
-## 2.5b 似た項目を統合する（/dedupe）
+> 0.5.x から移行した方へ: run・工程・統合ブランチ・`run-report.md`・自動の main への取り込みはありません。変更はふつうのブランチと PR で取り込みます。0.5.x の run が残した worktree と `work/*` ブランチは自動では消えません。`git worktree list` と `git branch --list "work/*"` で確かめて、手で削除します（[9. 版の管理](09-versioning.md)）。
 
-要求・受入基準・System Test のケース・カタログの行に重複が溜まったときは、`/dedupe`（Agent は conductor。範囲を絞るなら続けて書く）で単独に統合できます。候補は `python scripts/rdcheck.py similar --pairs`（`--kind FR|AC|CASE|CAT`）で確認できます。rd-author が残す要求を変更してもう一方を廃止し、test-designer が対応するケースを `ledger.py` 経由で統合・停止し、`verify.py --docs-only` が exit 0 になるまで直します。新機能は実装しません。
+## 2.1 依頼する
 
-## 2.6 /work のクリーンアップ
-
-清掃は保持期間ではなく、正常完了の証拠で許可されます。結果が「全件完了」で、完了条件、最終 verify、対象テスト、main への統合、main 上の統合後 verify が順に成功し、清掃前版 `run-report.md` が確定した run だけを清掃します。それ以外（blocked、中止、失敗、未達、report 不足）は再開できるよう自動期限なく保持します。
-
-清掃前版 report には main の統合 commit、各ゲートの構造化結果、清掃候補、保護・保持する資産と理由が含まれます。清掃後は候補別の削除・保持・失敗と run 最終状態だけを追記します。途中で失敗すると以後の削除を止めて非 0 で終了し、残存候補だけを再検査して安全に再試行できます。
+ブランチを作り、チャットで依頼します。書き方は [1. 依頼の書き方](01-writing-requests.md) にあります。
 
 ```bash
-python scripts/clean-work.py --dry-run   # 候補・保護理由・実行予定を確認（変更なし）
+git switch -c feature/draft-save
 ```
 
-統合ブランチ `run/<run-id>` をチェックアウトしている run 専用の worktree（主の作業ツリー以外。例 `<repo>-run-<run-id>`）も、未コミット変更がなければ最後に自動で削除します（統合ブランチは先に detach してから削除）。`work/` は worktree ごとにあるため、`work/runs/<run-id>` を主の `work/runs/<run-id>` へ退避してから削除し、候補別結果は主側の `run-report.md` に追記します。未コミット変更があれば worktree と統合ブランチを保持します。
+## 2.2 同じ変更で更新されたかを確かめる
+
+Copilot の報告を読んだら、管理データが同じ変更に入っているかを差分で確かめます。
+
+```bash
+git status --short
+git diff -- docs/requirements-definition.md   # 要求・AC・決定記録・質問票の変更
+git diff -- docs/catalog.md docs/id-registry.md tests/system/ledger.json
+```
+
+| 変更の種類 | 同じ変更に入っているべきもの |
+|---|---|
+| 機能の追加 | 新しい要求と AC（ID は `next-id.py` で採番）、ID 台帳の行、カタログの行、要求 ID・AC ID を書いたテスト、必要なら台帳のケース |
+| 機能の変更 | 変えた要求・AC の本文、影響するテスト、台帳のケースの更新（`--reason` つき） |
+| 機能の削除 | 要求を「廃止」に、コード・テスト・カタログの行の削除、台帳のケースの停止（`ledger.py block --reason`） |
+| 振る舞いを変えない変更（リファクタリング・文言の修正など） | 名前を変えた・消したファイルのカタログの行だけ |
+
+足りないときは、同じチャットで「FR-031 のカタログの行がない。AGENTS.md の規則どおりに直して」のように頼みます。承認待ちと質問票への回答もこのチャットで返します（[1.3](01-writing-requests.md#13-承認はチャットで行う)）。
+
+## 2.3 手元で検査する
+
+```bash
+python scripts/verify.py          # 管理データの検査 ＋ verify.commands（ビルド・テスト）
+```
+
+exit 0 なら合格です。通常は Copilot が完了の前に実行していますが、push の前に自分でも実行します。不合格のときは次の順で直します。
+
+| 出力 | 対処 |
+|---|---|
+| `ERROR CHK-07`・`CHK-08`・`CHK-17` などカタログ・台帳・ID 台帳の不整合 | `python scripts/rdfix.py --apply` で自動修正します（要求定義書は変更しません）。残った `MANUAL` の行は、行に書かれた「担当」と「次の行動」に従って直します |
+| `ERROR CHK-01`（ID の重複・台帳にない ID） | [2.7](#27-複数の人複数の-pc-で使う) の手順で採番し直します |
+| `ERROR CHK-12`（AC の本文が変わったのに台帳のダイジェストが古い） | テストが新しい AC を検証していることを確かめてから、`python scripts/ledger.py digests --update` |
+| ビルド・テストのコマンドの失敗 | ログの全文は `/work` にあります。`python scripts/summarize.py <ログ>` で要点だけを読めます |
+
+既定の検査プロファイルは `lite` で、構造と追跡性の検査（`CHK-01, 02, 03, 05, 09, 12, 17, 19, 24`）だけを報告します。曖昧な語・数値の直書き・禁止された同義語などの書式の警告まで見たいときは、次のように `full` を指定します。
+
+```bash
+python scripts/verify.py --docs-only --profile full --show-warnings
+```
+
+検査項目の一覧は [6. 品質ゲートと検査項目](06-quality-gates.md)、オプションは [5. スクリプトリファレンス](05-scripts-reference.md) にあります。
+
+## 2.4 push と PR（CI）
+
+```bash
+git add -A && git commit -m "FR-031 下書き保存"
+git push -u origin feature/draft-save
+gh pr create --base main
+```
+
+push と PR で、2 つのワークフローが動きます。
+
+| ワークフロー | いつ動くか | すること |
+|---|---|---|
+| `ebak-verify`（`.github/workflows/ebak-verify.yml`） | push・PR | `scripts/verify.sh --show-warnings` を実行します。手元の `verify.py` と同じ検査です |
+| `ebak-data-layer`（`.github/workflows/ebak-data-layer.yml`） | PR・push・手動・毎週 | データ層を検査し、不合格なら `rdfix.py --full --apply` で自動修復します。修復が合格したら、その修正を commit します（同じリポジトリの PR はそのブランチへ、push のときは修正用のブランチを作って PR に）。自動で直せないものは Issue にします。要求定義書は変更しません |
+
+マージの前に、少なくとも次を確かめます。
+
+1. `ebak-verify` と `ebak-data-layer` が成功している
+2. `git diff main...HEAD -- docs/requirements-definition.md` の要求の変更が、依頼の意図と合っている
+3. 「AI提案／承認待ち」のまま実装された要求がない（`python scripts/rdcheck.py list --state 承認待ち` の要求に、対応するコードがない）
+
+`ebak-data-layer` を止めたいときは、ワークフローのファイルを削除するか、GitHub の Actions 画面で Disable にします（[4. カスタマイズ](04-customization.md)）。
+
+## 2.5 節目に監査する（rd-auditor）
+
+毎回の変更で決定的な検査（verify・CI）は行われますが、要求どうしの**意味の**矛盾や、目的（G-ID）とのずれは機械では見つけにくいため、節目に独立した監査役に頼みます。リリースの前、大きな変更をマージする前、要求がまとまって増えたときが目安です。
+
+Agent を **rd-auditor** にして、チャットで頼みます。
+
+| 頼み方 | 範囲 |
+|---|---|
+| 「差分を監査して」 | `base_branch`（既定 `main`）との差分で変わった要求と、同じエンティティ・状態・PARAM・用語に関わる要求。既定は 1 回 |
+| 「全量を 3 回で監査して」 | 要求定義書のすべて。同じ判定を独立に 3 回行い、多数決で確度を付けます |
+| 「FR-012 と FR-031 を監査して」 | 指定した要求 |
+
+rd-auditor は git で管理するファイルを変更しません。結果は `work/audit/<YYYYMMDD-HHMM>/` に、各回の出力（`run<n>.md`）と集計（`report.md`）として書かれ、チャットには件数の要約だけが返ります。サブエージェントを使える環境では、各回を並行に行います。
+
+指摘をどう扱うかは利用者が判断し、直すときは別の依頼・別の変更として既定のエージェントに頼みます（例: 「work/audit/20261108-1000/report.md の確度高の指摘 2 件を直して」）。
+
+## 2.6 状況を見る（EABK Studio）
+
+要求・受入基準・カタログ・System Test の台帳の状態は、EABK Studio で図と表として見られます。任意のツールで、なくても作業は進みます。
+
+```bash
+python EABK-Studio/studio.py          # ブラウザーで開く（127.0.0.1 だけで待ち受け、読み取り専用）
+python EABK-Studio/studio.py --check  # 読み込める件数だけを表示して終了
+```
+
+画面ごとの使い方は [EABK Studio のガイド](studio/README.md) にあります。
+
+## 2.7 複数の人・複数の PC で使う
+
+規則はリポジトリ（`AGENTS.md`）に、ID の採番は `next-id.py` に、検査は CI にあります。そのため、誰がどの PC のどの Copilot で依頼しても、個人のプロンプトやメモリに依らず同じ規則と検査が効きます。
+
+| 仕組み | 効果 |
+|---|---|
+| `next-id.py` | 要求定義書・ID 台帳・`base_branch` 上の同じファイル・台帳のうち最大の番号の次を採番します。同じ PC の別の作業ツリーとも採番の記録を共有します |
+| `.gitattributes` の `docs/id-registry.md merge=union` | 別々のブランチで ID 台帳に追記した行が、マージで競合せずに両方残ります |
+| CI の `ebak-verify` | 手元で検査を忘れても、PR で同じ検査が動きます |
+
+別の PC・別のブランチで同時に採番すると、同じ ID が 2 つの要求に使われることがあります。マージした後（または main を取り込んだ後）に `verify.py` が `ERROR CHK-01` で検出するので、後からマージする側で次のように直します。
+
+1. `git switch <自分のブランチ>` で main を取り込み、`python scripts/verify.py --docs-only` で重複した ID を確かめる
+2. `python scripts/next-id.py FR`（種別は重複したもの）で新しい ID を採番する
+3. 自分の側の要求・AC・テストの名前とコメント・カタログの行の ID を新しい ID に置き換える。台帳のケースは `python scripts/ledger.py update <ケース ID> --req <新 ID> --reason "ID の重複を採番し直し"` で直す
+4. `python scripts/next-id.py --sync` で ID 台帳を本文に合わせ、`python scripts/verify.py` を exit 0 にする
+
+Copilot に「CHK-01 の重複を、自分のブランチ側の ID を next-id.py で採番し直して直して」と頼んでもかまいません。
+
+## 2.8 /work の扱い
+
+`/work` は git の管理対象外の作業場所です（ログ、検査の結果、監査の結果 `work/audit/`、`adopt.py` の依頼文 `work/import/` など）。自動では削除されません。不要になったものは手で削除してかまいません。

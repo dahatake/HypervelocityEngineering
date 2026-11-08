@@ -2,78 +2,99 @@
 
 # 7. Troubleshooting
 
-## 7.1 Rejections and send-backs
+## 7.1 verify or CI fails
 
-| Symptom (message) | Cause | Action |
+| Symptom | What to do |
+|---|---|
+| `python scripts/verify.py` exits 1 | Fix the `ERROR CHK-xx <location> <message>` lines from the top. How to fix each CHK is in [6.3](06-quality-gates.en.md#63-checks-performed-by-verify). Full logs are in `/work/logs/` |
+| A `HINT rdfix: …` line appears | There are inconsistencies that can be fixed automatically. Check the plan with `python scripts/rdfix.py --full`, then fix with `python scripts/rdfix.py --full --apply` ([7.2](#72-data-layer-mismatches-rdfix)) |
+| It passes locally but only CI ebak-verify fails | CI may lack your app's toolchain. Add setup steps (such as `actions/setup-node`) before the verify step in `.github/workflows/ebak-verify.yml`. Also check that you are not overriding `checks.profile` with `--profile` in your local command |
+| `PASS (cached …)` appears and you worry the result is stale | The cache is used only when the working tree is clean and HEAD, arguments, and configuration are the same. After changing the build environment (SDK, dependencies), re-run with `--no-cache` |
+| `FAIL config` | `verify.commands` has an element without `run` or an invalid element. Fix it to the format in [4.6](04-customization.en.md#46-build-static-analysis-and-test-commands-verifycommands) |
+| Many warnings with `--profile full` | full also reports format warnings (CHK-13 ambiguous words, CHK-14 hard-coded numbers, CHK-15 prohibited synonyms, and so on). Warnings do not affect the exit code. Fix them gradually, in step with milestone audits |
+| Many CHK-01 and CHK-20 errors right after installing | Your existing requirements definition is not in the toolkit format. Run `python scripts/next-id.py --sync --adopt`, then ask Copilot to "align the existing requirements definition with the toolkit format without changing its meaning" (for existing apps, see [10](10-adopting-existing-apps.en.md)) |
+| CHK-19 detects IDs inside test data or reference material | Add that path (glob) to `checks.id_scan_exclude` in `scripts/ebak.config.json`. The list replaces the default instead of being merged, so copy the default (`DEFAULT_CONFIG` in `scripts/ebaklib.py`) before adding to it |
+| CHK-08 cannot find a path in the catalog | Paths are relative to the repository root and comma-separated, like `src/a.ts, src/b.ts`. If you renamed or deleted a file, `python scripts/rdfix.py --apply` fixes the reference |
+| CHK-10 or CHK-11 appears (AC and ledger out of sync) | An AC was added or changed but the System Test ledger did not follow. Add or review cases and run `python scripts/ledger.py digests --update`. Update the ledger only with `ledger.py` |
+| CHK-12 appears | A ledger case was deleted, changed without a reason, or asserts in `tests/system` decreased. Revert, and make the change with `ledger.py update --reason "…"` so the reason is recorded |
+
+## 7.2 Data-layer mismatches (rdfix)
+
+When the catalog, ID registry, ledger, or run history disagree, for example after a merge (CHK-07, CHK-01, CHK-11, CHK-23), check with `python scripts/rdfix.py --full` and fix with `python scripts/rdfix.py --full --apply`. The requirements definition (要求定義書) is never changed.
+
+| Exit code | Meaning | What to do next |
 |---|---|---|
-| `[G-1] 要求定義書を編集できるのは rd-author だけです` | Someone other than rd-author tried to edit the requirements definition during a run | This is expected behavior. The conductor re-requests it from rd-author. If you want to fix it by hand, edit it after the run ends (with no `work/current-run.txt`) |
-| `[G-5] conductor が編集できるのは /work/ と docs/run-history.md だけです` appears while a worker is working | The harness does not emit the `subagentStart` event, so the worker cannot be identified (Phase 1 check item 3) | Check whether `work/.ebak/gate.log` has `START <worker>`. If not, set `gates.enforce_conductor_edit_scope` in `scripts/ebak.config.json` to `false` (G-1 and G-2 are also judged by worktree and branch, so the main protections remain) |
-| `[G-2] 作業役は台帳を更新しません` | The implementer ran `ledger.py run` without `--no-record` | Use `ledger.py run --cases <ID> --no-record`. The conductor updates the ledger after integration |
-| `[G-5] run_options の git_push が「しない」なので push しません` | Push is not permitted | If needed, specify `git_push: push to the work branch` in the next request |
-| `[G-5] run_options の external_write が「しない」なので、外部のツールでの変更（<ツール名>）はしません` | During a run, an attempt was made to change an external system with a tool from an MCP server, plugin, or extension (sending mail, creating a ticket, creating a resource, and so on) | This is expected behavior. Reading (searching, fetching) can continue. If changes are needed, specify `external_write: yes` in the next request. If a tool whose name contains a verb but that acts only locally is rejected, add a regular expression for the tool name to `gates.external_tool_allow` in `scripts/ebak.config.json` ([4.3](04-customization.en.md#43-tuning-the-gates-gates)) |
-| Work IQ (internal information), Microsoft Learn, or Azure MCP servers are not used | The MCP server or plugin is not configured in the environment where the run executes (VS Code, Copilot CLI, GitHub Copilot app), or it is disabled in the VS Code tool picker. `tools:` was added to the agent's frontmatter, restricting the tools | Check that the server is enabled in the VS Code MCP list (`MCP: List Servers`), Copilot CLI's `/mcp`, or **Customize** → **Installed** in the GitHub Copilot app. Sign in beforehand for those that require it. If you wrote `tools:` in the agent's frontmatter, add `<server name>/*` ([4.4](04-customization.en.md#44-using-mcp-servers-plugins-and-extensions)) |
-| `[G-5] 実行中は git のブランチ名を変更しません` | In a GitHub Copilot app session, the agent tried to rename the session's branch (`rename_branch`) | This is expected behavior. The integration branch name was recorded when the run started, so just continue. If you want to change the branch name, do it before the run starts or after it ends. If it was changed from the UI, `python scripts/run-state.py status` re-records the current branch as the integration branch (`WARN 統合ブランチ … を記録し直しました`) |
-| `[G-6] ログ・証跡・実行結果などの一時ファイルは /work/runs/<run-id>/ に書きます` | A test report or similar was about to be written directly under the repository root | Set the test tool's output directory under `work/` (for example, Playwright's `outputDir`) |
-| `[G-4] 終了前の検証が失敗しています` | The worker's verify failed | The worker fixes it automatically. If it is not fixed after 3 attempts, it is returned to the conductor with `GATE G-4`, and that item is not integrated |
-| A worker's write is rejected with `[G-5] 作業ディレクトリ外への書き込みは禁止`, and another run ended as `blocked` | A subagent's `sessionId` is its agentId, not the parent's (`subagentStart` carries `sessionId` = parent, `agentId`, and `parentAgentId`). The old gate treated the agentId as the owner of an "unowned new run" and hijacked it, and after binding it could not identify sibling runs | Update to the latest gate.py (only an agentId that matches the parent-child record `work/.ebak/active-agents.json` from `subagentStart` is treated as the parent session, and writes to a run owned by another session are rejected by G-5. IDs with no record, IDs after `subagentStop`, and the second level of nesting (where the parent is an agentId) are not allowed). A run that has already been finished by G-5 is not resumed or marked done; if necessary, re-request it in a new run. Do not try to get the write through by resending; check `START`/`DENY` in `gate.log` |
-| In parallel runs, `[G-1] 要求定義書を編集できるのは rd-author だけです` appears even though the request went to rd-author | With concurrent runs, the `subagentStart` record (`work/.ebak/active-agents.json`) was written to a different run's `work/.ebak/`, and rd-author was not visible to the target run | Update to the latest gate.py (records now carry `session`, and a worker started by the same session is treated as valid even in another run's record. Records from other sessions and records without `session` are not valid). Do not change or bypass the gate |
-| In parallel runs, `[G-5]` or `[G-1]` appears for your own run. DENY entries for your writes remain in another run's `gate.log` | When another session made its first tool call at the same time, it took an as-yet-unowned new run first (R-2), and the rightful owner was no longer bound to its own run (the `session_id` in `meta.json` became another session) | Update to the latest gate.py and run-state.py. The hook records the session that ran `run-state.py start`, and start saves it to `session_id`, so mix-ups no longer occur (a claim is tied to the identifier of the start command, and start consumes only a claim that matches its own identifier. Appending, consuming, and recording `session_id` are done under the `work/.ebak/start-claims.lock` exclusion. Rescuing an ownerless run happens only when there is one candidate, the session can be identified, and there is no unconsumed claim from another session). For a run that has already been mixed up, do not fix `session_id` back to the owner; re-request it in a new run |
-| When a run is placed in the primary working tree, edits by another chat unrelated to the run are rejected by `[G-5]` | The old gate applied the run's gates to sessions other than the owner as well | Update to the latest gate.py. The run's gates (edit scope, ban on changing hooks, ban on commits to main, deploy, external_write) are not applied to a session different from the owner (with an identifier). G-1 to G-3, G-6, and the ban on force push always remain ([6.1.1](06-quality-gates.en.md#611-separate-sessions-when-a-run-is-placed-in-the-primary-tree-fr-1076)). The owner's chat and ownerless runs are gated as before |
-| A tool in a chat that is not showing `/build template` is rejected with `TEMPLATE` / the restriction is lifted early by another chat's prompt | The old gate shared the template state in a single file | Update to the latest gate.py. The state is per session (`work/.ebak/template-request-<session>.json`) and is cleared only by your own session's next prompt |
-| `[G-5] start-claim を記録できませんでした` / `start-claim・meta の排他を 10 秒以内に得られず、run を始めませんでした` | Another start or hook holds `work/.ebak/start-claims.lock` | The claim and meta were not written. Wait a moment and run it again. Even if the holding process terminated abnormally, the OS releases the lock (a leftover lock file does not block anything), so the next call proceeds as is. The contents of work/.ebak/start-claims.lock are the holder's PID (for diagnostics); you do not need to delete it by hand |
-| `git -C <worktree> commit` or `cd <worktree>; git commit` into a run's worktree is rejected with `実行中は main に直接 commit・merge しません` | The old gate judged only by the branch at the hook's cwd | Update to the latest gate.py. It judges by the branch of the tree that `git -C <path>` or `cd <path>` points to (if the commit would actually go to main, it is still rejected as before) |
-| Hooks do not run at all | Session Target is something other than Copilot, hooks are disabled, or Python is missing | Select the Copilot harness in Session Target. Check whether hooks are enabled with `/hooks` (VS Code) or in the `copilot` settings. Check `python --version`. You can tell by whether `work/.ebak/gate.log` gets created |
-| A hook failure warning appears in the GitHub Copilot app (such as `DriveNotFoundException` on Windows) | PowerShell or Python could not be started inside the local sandbox. Python is in a location the sandbox cannot read | For transient cases, restarting the session with `/restart-session` may fix it. If it persists, add Python's install location to **Additional read-only** in the project's sandbox settings. Even while the gates are not effective, verify checks the same rules at integration time |
+| 0 = pass / repaired | Nothing left to fix automatically | Review the diff and commit it (rdfix does not commit) |
+| 1 = manual items left / repairs planned | There are `MANUAL` lines, you ran without `--apply` and only got the plan, or it did not converge | Follow the `MANUAL …（担当: …）次の行動: …` lines. "担当" is the kind of work: `要求定義書` (requirements definition), `System Test の台帳` (System Test ledger), `コードとカタログ` (code and catalog), or `リポジトリ` (repository) |
+| 2 = not run / cancelled | One of the causes below. Every change has been undone | Remove the cause and run the same command again |
 
-Files that became CRLF because of Windows core.autocrlf are compared by `tools/install.py` after normalizing CRLF/LF, so a difference in line endings alone does not result in `KEEP-LOCAL`. Genuine local changes (content differences) are still kept as `KEEP-LOCAL` as before (do not use `--force`).
+Main causes of exit 2:
 
-To temporarily stop hooks in order to isolate a cause, set `gates.enabled` in `scripts/ebak.config.json` to `false` (verify's checks remain). Be sure to restore it when you are done.
-
-## 7.2 A run stops or does not finish
-
-| Symptom | Action |
+| Message / situation | What to do |
 |---|---|
-| Autopilot ended its turn midway | Send "continue" in the same session. In a new session, sending the same prompt resumes with `RESUME` (in a new working tree in the GitHub Copilot app, a new session gets a different worktree, so always send it in the same session) |
-| In the GitHub Copilot app, what should have been a resume became a new run (`START`) | A new working-tree session was created, so the previous worktree's `/work` is not visible. | Stop the new session's run by deleting `work/current-run.txt`, open the previous session from the sidebar, and send "continue". You can check the previous worktree with `git worktree list` |
-| It stopped because the GitHub Copilot app was closed or the PC went to sleep | A local session runs on your PC | Restart the app and send "continue" in the same session. Disable PC sleep during a long run. If you want to step away from the PC, consider a cloud sandbox ([README](../README.en.md#run-in-the-github-copilot-app)) |
-| It does not finish (repeating the same failure) | Use `python scripts/run-state.py status` and `progress.md` to check which item has failed how many times. When 85% of `max_hours` is reached, it automatically moves on to the final stage. If you are in a hurry, set that item to `python scripts/run-state.py queue set <ID> --status blocked` |
-| It keeps being sent back with "the completion conditions are not met" | Check the reason printed by `python scripts/run-state.py complete-check`. You need to finish stage 6, run `run-state.py stage 6 --done`, and create `run-report.md`. Send-backs stop at 40 times or at 125% of the time budget |
-| Orphan processes (node, browsers, and so on) remain and slow things down | Check with `python scripts/watch.py scan` and reap them with `python scripts/watch.py reap` (with `--under <PATH>` if needed). For details, see [watch.py](05-scripts-reference.en.md#watchpy-run-monitoring-leftover-processes-and-items-over-time) |
-| An item stays `doing` for over 60 minutes (`STUCK`) | Check with `python scripts/watch.py stuck`. The conductor has it return a result, or puts it back to todo with `integrate.py abandon <item>` |
-| `clean-work.py` reports `KEEP` for a run | One of the following is unmet: all items complete, integrated into main, post-integration verify, pre-cleanup report, or proof of ownership. Fix the retention reason shown. Failed, aborted, and unfinished runs are retained with no automatic expiry |
-| `clean-work.py` stops with a non-zero exit | Deleting a candidate failed because of dirty state, a path collision, a Windows file lock, a change in Git registration, or similar. If the run-dedicated worktree has uncommitted changes, `run-worktree` and the integration branch are retained (commit or discard, then rerun). Check the per-candidate results in `run-report.md`, remove the cause (for example, close files in use), and rerun the same command. Candidates already deleted are treated as successful, and only the remaining candidates are rechecked |
-| A previous run remains, and a new request becomes RESUME | Finish the previous run, or delete `work/current-run.txt`, before making the request |
-| `LAND-WAIT` (the landing is made to wait) | The primary working tree has base (main) checked out, and its uncommitted changes overlap the same files as the changes to be landed. Commit or stash the changes, and the same `run-state.py land` can land them |
-| `LAND-CONFLICT` (with a list of conflicting files) | There are files that automatic sync (re-importing base) cannot resolve. Run `git merge main` in the run's worktree and resolve the conflicts, and after `verify.py --quick` passes, rerun `run-state.py land` (a conflict only in `tests/system/ledger.json` is resolved automatically) |
-| `UNBOUND-RUN` in `gate.log` | The hook could not bind the session to any run (there is a session ID, but no ownerless run was found). Check that you are running commands with the run's worktree as the cwd, and check `session_id` in `work/runs/<run-id>/meta.json` |
+| `作業役のブランチ（work/<run-id>/<item>。0.5.x の run の名残）では --apply しません` (no `--apply` on a worker branch left over from 0.5.x runs) | Switch to the default branch or your own working branch and run it there. Do not use branch names of the form `work/<name>/<name>` |
+| Lock-wait timeout (`work/.ebak/rdfix.lock`) | Another `--apply` is running. Wait for it to finish and run again (the wait is `--lock-wait` seconds, 30 by default). A lock left by a dead process is taken over automatically |
+| Write failure, a change in the requirements definition or `docs/integrations.md`, or a new error | Every change was undone. Check that no editor holds the files open. For files that could not be restored, the pre-repair content is saved in `work/.ebak/rdfix-undo-*/` |
 
-## 7.3 verify fails
+## 7.3 IDs collide across people or PCs
 
-| Symptom | Action |
+If `next-id.py` runs on two branches at the same time, the same ID can be allocated twice. After merging, the ID registry keeps both rows through `merge=union`, and CHK-01 (duplicate ID) detects it.
+
+1. On the branch merged later, allocate a new ID for the colliding requirement or AC with `python scripts/next-id.py <kind>`, and rewrite the references in the requirements definition, tests, and catalog. Do not number by hand.
+2. Tidy the duplicate registry rows with `python scripts/rdfix.py --full --apply`, and bring `python scripts/verify.py` to exit 0.
+3. Prevention: merge the base branch (`main`) before allocating. `next-id.py` also looks at the IDs on the base branch to decide the next number.
+
+## 7.4 Install and update
+
+| Symptom | What to do |
 |---|---|
-| `PASS (cached …)` appears, but you worry the result is stale | The cache is used only when the working tree is clean and HEAD, arguments, settings, and run state are the same. After changing the build environment (SDK, dependency caches, and so on), rerun with `--no-cache` |
-| `INTEGRATE: fail <item> …` appears | `integrate.py merge` cancelled the integration because verify or System Test failed, and put the item back to todo. The conductor returns it to the implementer with the output summary attached. The integration branch stays in its pre-integration state |
-| Many CHK-20 and CHK-01 appear right after installation | The existing requirements definition is not in the toolkit's format. Run `python scripts/next-id.py --sync --adopt`, then request: "Align the existing requirements definition with the toolkit's format. Do not change the meaning" |
-| CHK-10/11 appear after stage 4 | ACs were added or changed, but System Test has not followed. The conductor assigns the work to test-designer |
-| CHK-19 detects IDs in test data or documents | Add that path to `checks.id_scan_exclude` |
-| CHK-08 cannot find a catalog path | Paths are relative to the repository root, written comma-separated like `src/a.ts, src/b.ts`. If a file was renamed or deleted, `python scripts/rdfix.py --apply` fixes the reference |
-| After a merge, the catalog, ID registry, ledger, and run history disagree (CHK-07, CHK-01, CHK-11, CHK-23) | Check with `python scripts/rdfix.py --full` and fix with `python scripts/rdfix.py --full --apply` (exit code 0 = pass or repaired, 1 = manual action remains, 2 = not executed or cancelled. It also runs by default at installation and can be stopped with `--no-repair`. If two are applied at the same time, the later one waits up to 30 seconds and exits with 2 if that is exceeded. It does not change the requirements definition). Lines marked `MANUAL` are fixed by the role shown as owner ([6.3](06-quality-gates.en.md#63-automatic-repair-of-data-layer-inconsistencies-rdfix)) |
-| It fails only in CI | CI may lack the app's toolchain. Add a setup step to `.github/workflows/ebak-verify.yml` |
+| `KEEP-LOCAL <file>` appears on update | Toolkit files you modified locally are not overwritten. To take in the new version, check with `--dry-run`, then merge the diff by hand or use `--force` (which keeps `.ebak-backup-*`). Differences only in line endings from Windows `core.autocrlf` do not cause `KEEP-LOCAL` |
+| `PRUNE scripts/ebak.config.json (gates, limits, …)` appears on update | The configuration keys dropped in 0.6.0 (`gates`, `limits`, `credits`, `worktree_share`, `prompt_prefix`, and the old default verify command `toolkit-unit`) were removed. Nothing to do ([4.8](04-customization.en.md#48-removed-configuration-keys-when-updating-from-05x)) |
+| `WARN-HOOK  <path>` appears on update | A locally modified hook file from an older version (`.github/hooks/quality-gates.json` or `prompt-prefix.json`) was kept (`KEEP-LOCAL`). It calls the deleted `scripts/hooks/gate.py`. When a hook errors, Copilot denies every tool call, so delete the file and reopen the Copilot session |
+| `WARN-WIRING <file>:<line>` appears | A custom check you added directly to `scripts/*.py` will be dropped by the update. Register it again in `extensions.checks` or `scripts/ext/` ([4.7](04-customization.en.md#47-project-specific-checks-extensionschecks--scriptsext)) |
+| You want to stop the data-layer repair after installing | `--no-repair` checks and plans only (writes nothing); `--skip-verify` neither checks nor repairs. The PowerShell wrapper uses `-NoRepair`. The installer's exit code does not depend on the data-layer result |
 
-## 7.4 Windows-specific issues
+### Updating from 0.5.x to 0.6.0 (EABK Lite)
 
-| Symptom | Action |
+- **Removed files**: Old files you did not modify (the conductor, rd-author, test-designer, implementer, and reviewer agents, skills such as build, scripts such as `run-state.py` and `integrate.py`, and the hook files `.github/hooks/quality-gates.json`, `.github/hooks/prompt-prefix.json`, and `scripts/hooks/gate.py`) are deleted with `REMOVE`. Files you modified locally are kept with `KEEP-LOCAL`. Delete them by hand if you do not need them, or delete them with `--force`.
+- **A leftover hook file**: It remains only if you modified it locally, and the installer prints `WARN-HOOK  <path>`. The `gate.py` it calls is deleted, so the hook errors and Copilot denies every tool. Delete the file and reopen the Copilot session.
+- **Configuration keys**: `gates`, `limits`, `credits`, `worktree_share`, and `prompt_prefix` are removed with `PRUNE`.
+- **Preamble**: An existing `.github/ebak-prompt-prefix.md` is left alone but no longer read. Delete it if you do not need it.
+- **Worktrees and work branches**: Worktrees and `work/*` branches left by 0.5.x runs are not deleted automatically. Check them with `git worktree list` and `git branch --list "work/*"`, and delete the ones you no longer need with `git worktree remove <path>` and `git branch -D <branch>`. Delete old run folders under `/work` too if you do not need them.
+- **Management data**: The requirements definition, catalog, ledger, and ID registry are not changed. If `docs/run-history.md` remains, it is treated as a read-only record (EABK Studio shows it if it can read it).
+
+## 7.5 Hooks and the preamble from older versions
+
+EABK Lite has no hooks and no automatic preamble. The following symptoms appear after updating from an older version.
+
+| Symptom | What to do |
 |---|---|
-| `python` opens the Microsoft Store | Install a real Python and disable the python entry under "App execution aliases" |
-| Japanese text is garbled | The scripts output in UTF-8. In PowerShell, set `$OutputEncoding = [Console]::OutputEncoding = [Text.Encoding]::UTF8` |
+| Every tool call is denied, or a warning says a hook failed | A hook file from an older version (`.github/hooks/*.json`) remains and calls the deleted `scripts/hooks/gate.py`. Delete the file and reopen the Copilot session (the `WARN-HOOK` line printed on update shows the path) |
+| The preamble is no longer added | By design. `.github/ebak-prompt-prefix.md` and the `prompt_prefix` setting are no longer used. If you want a standing preamble, put it in your own Copilot instructions |
+
+## 7.6 EABK Studio
+
+| Symptom | What to do |
+|---|---|
+| It exits with code 1 without starting | The folder given in `--repo` has no data layer (requirements definition and so on). Check which files were read and the counts with `python EABK-Studio/studio.py --check --repo <path>` |
+| The port is in use | If the default 8765 is in use, it listens on the next number. To pin it, pass `--port N` |
+| The screen shows old content | When data-layer files change, Studio reloads them within a few seconds. If reloading the browser does not help, restart Studio |
+
+For anything else, see [Studio troubleshooting](studio/04-troubleshooting.en.md).
+
+## 7.7 Windows-specific issues
+
+| Symptom | What to do |
+|---|---|
+| `python` opens the Microsoft Store | Install a real Python and turn off the python "App execution alias" |
+| Japanese text is garbled | The scripts output UTF-8. In PowerShell, set `$OutputEncoding = [Console]::OutputEncoding = [Text.Encoding]::UTF8` |
 | `verify.ps1` cannot be run | Use `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1`, or run `python scripts/verify.py` directly |
 
-## 7.5 Log locations
+## 7.8 Where the logs are
 
 | What you want to see | Location |
 |---|---|
-| Operations the hook rejected or sent back | `work/.ebak/gate.log` |
-| Run progress and decisions | `work/runs/<run-id>/progress.md` |
-| Full text of verify and test logs | `work/runs/<run-id>/logs/` |
-| Raw audit data | `work/runs/<run-id>/audit/` |
-| Results and KPIs of past runs | `docs/run-history.md` |
+| Full logs of verify and tests | `work/logs/` |
+| rdfix lock and files that could not be restored | `work/.ebak/rdfix.lock`, `work/.ebak/rdfix-undo-*/` |
+| Audit results | `work/audit/<date-time>/report.md` (each run in `run<n>.md`) |
+| CI results | The GitHub Actions screen (ebak-verify, ebak-data-layer) and Issues labeled `eabk-data-layer` |

@@ -45,7 +45,7 @@ Click `🏗️ Architect` at the top right of the screen to open the 2D map. Lau
 8. **Check for missing layers** (3 minutes). Open `#/consistency` and see, for each requirement, whether all five of requirement, AC, test, catalog, and implementation files are present. Then, in `#/structure`, read the "current state, ideal, difference, applied rule, judgment reason, and basis" of the 7 data layers. The kinds of difference are: valid, missing, orphaned, reference mismatch, duplicate, and surplus.
 
    ![Structure](images/structure.png)
-9. **Jump to the basis location** (1 minute). Use the `Basis` (file:line) on a judgment row, or `↗ VS Code` in the detail panel, to open the relevant line in the requirements definition or catalog. Request design fixes from rd-author via `/build`.
+9. **Jump to the basis location** (1 minute). Use the `Basis` (file:line) on a judgment row, or `↗ VS Code` in the detail panel, to open the relevant line in the requirements definition or catalog. Request design fixes in Copilot chat (requirements, catalog, and code are fixed in the same change).
 
 ## S6.3 Recommended links
 
@@ -73,7 +73,7 @@ Click `🏗️ Architect` at the top right of the screen to open the 2D map. Lau
 | Where responsibilities belong | Placement heatmap, component diagram | If one responsibility is scattered, request extraction into a shared component |
 | Boundaries and the source of truth for data | Context diagram, table of external integrations (method, direction, source of truth) | Request that integrations with an empty source of truth be filled in the requirements definition |
 | Validity of the state model | State transition diagram (states with no terminal state, isolated states) | Request a fix to the state table |
-| Design gaps | Consistency (one layer missing), structure (missing, orphaned, reference mismatch) | Split requests between rd-author (requirements, catalog) and implementer (implementation) |
+| Design gaps | Consistency (one layer missing), structure (missing, orphaned, reference mismatch) | Ask Copilot separately for fixes to requirements and catalog versus fixes to the implementation |
 | Safety of adoption | Placement (runtime), [S8.9 and S8.10 in Studio 8](08-data-reference.en.md) | Explain the scope of reading, writing, and sending to the security team |
 
 ## S6.5 Notes when reading

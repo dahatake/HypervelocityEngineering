@@ -9,32 +9,33 @@
 ```text
 python tools/install.py --target <既存のリポジトリ>     # toolkit を入れる（既存のファイルは壊さない）
 python scripts/adopt.py scan                              # ① 棚卸し（事実だけ。LLM なし）→ docs/baseline/inventory.md
-python scripts/adopt.py request                           # ② /build の依頼文を作る → work/import/adopt-<日時>.md
+python scripts/adopt.py request                           # ② Copilot への依頼文を作る → work/import/adopt-<日時>.md
 ```
 
-③ 依頼文を、Agent を conductor にして `/build` の後に貼り付けます（要求の仮説づくりと、現状の挙動の固定。コードは変えません）。
-④ 報告の「承認待ち（逆生成）」の要求に、`<answers>` で `FR-0xx: 承認` などと回答します。
-⑤ 以後は通常の `/build`（変更・追加）です。変えた挙動は `golden check` が検出します。次のまとまりを回収するときは、②から繰り返します。
+③ 依頼文（`<request>`・`<references>`・`<constraints>` の節）を、いつもの Copilot のチャット（既定のエージェント）にそのまま貼り付けます。Copilot が skill `adopt-existing` に従い、逆生成の要求の仮説を書き、`adopt.py anchor` で証跡を固定し、`adopt.py golden` で現状の挙動を固定します（`<constraints>` の既定は「実装: しない」「承認: 厳格」なので、コードは変えません）。
+④ Copilot がチャットの報告に並べた「承認待ち（逆生成）」の要求に、同じチャットで `FR-0xx: 承認` などと答えます（「現状どおり承認 / 修正が必要 / 廃止」のどれか）。
+⑤ 節目に、Agent を rd-auditor にして「差分を監査して」と頼み、逆生成の整合（要求にない振る舞い・コードにない記述）を確かめます。結果は `work/audit/<日時>/report.md` です。指摘を反映するかは利用者が決め、別の変更で行います。
+⑥ 以後は、ふだんどおり Copilot に変更・追加を頼みます。変えた挙動は `golden check` が検出します。次のまとまりを回収するときは、②から繰り返します。
 
 | コマンド | 役割 | 書く場所 |
 |---|---|---|
 | `adopt.py scan [--since-days N]` | ファイル・役割・言語・ルート・テーブル・テスト・設計書・churn を集め、機能のまとまりを hotspot 順に並べる | `docs/baseline/inventory.{json,md}` |
-| `adopt.py request [--clusters N] [--cluster 名前] [--implement]` | 未回収のまとまりを選び、`/build` の依頼文にする（既定は `scope: なし`・`approval_policy: 厳格`） | `work/import/` |
+| `adopt.py request [--clusters N] [--cluster 名前] [--implement]` | 未回収のまとまりを選び、チャットに貼る依頼文にする。`<constraints>` の既定は「実装: しない」「承認: 厳格」（`--implement` で「実装: 承認済みの要求すべて」）。`--stdout` で画面に出す | `work/import/` |
 | `adopt.py anchor SRC-xxx ファイル:開始-終了` | 要求の出典（SRC）に、コードの範囲のハッシュを固定する（空白だけの変更は無視） | `docs/baseline/evidence.json` |
 | `adopt.py check [--strict] [--json]` | 証跡のずれ（DRIFT）・回収率・出典のない逆生成の要求・包括承認の誤り・golden の状態を確認 | なし（exit 1 = 誤り） |
 | `adopt.py golden add／record／check／list` | 現状の挙動（終了コード・標準出力・標準エラー）を記録して再生する特性化テスト | `tests/system/golden/` |
 
-手順の詳細（rd-author・test-designer・rd-auditor・implementer の役割）は skill `adopt-existing` にあります。
+手順の詳細（Copilot が 1 回の依頼の中で進めること、rd-auditor が確かめること）は skill `adopt-existing` にあります。
 
 ## 10.2 3 つの層（信頼度が違うものを混ぜない）
 
 | 層 | 中身 | 作り手 | 信頼度 | 決定状態 |
 |---|---|---|---|---|
 | 1 事実 | 棚卸し（ファイル・ルート・テーブル・テスト・churn） | `scan`（決定的） | 高（コードの写し） | 要求ではない |
-| 2 仮説 | 逆生成の要求・AC・質問票 | rd-author | 中（意図は推測） | 常に「承認待ち」・出自「逆生成」。**包括承認しない** |
-| 3 固定 | 現状の挙動の golden master と既存テストの再利用 | test-designer | 高（実測）。ただし「正しい」ではなく「今こうである」 | 承認待ちの要求にも付けられる |
+| 2 仮説 | 逆生成の要求・AC・質問票 | Copilot（skill `requirement-definition`） | 中（意図は推測） | 常に「承認待ち」・出自「逆生成」。**包括承認しない** |
+| 3 固定 | 現状の挙動の golden master と既存テストの再利用 | Copilot（`adopt.py golden`・`ledger.py`） | 高（実測）。ただし「正しい」ではなく「今こうである」 | 承認待ちの要求にも付けられる |
 
-利用者が承認した要求だけが、通常の run の対象（変更の根拠）になります。
+利用者が承認した要求だけが、通常の依頼の対象（変更の根拠）になります。
 
 ## 10.3 調査と、この toolkit への適合の検証
 
@@ -46,7 +47,7 @@ python scripts/adopt.py request                           # ② /build の依頼
 |---|---|---|---|
 | リバースエンジニアリングの分類（Chikofsky & Cross, 1990, *IEEE Software*） | 既存システムから、より抽象的な表現（設計・要求）を復元する「再文書化」と「設計の回復」を、改造（リエンジニアリング）と分けて扱う | **採用**（層 1・2） | 復元と改造を分ければ、承認前に実装を変えずに済む。EABK の「要求が正本」と同じ向き |
 | 特性化テスト（Feathers, *Working Effectively with Legacy Code*, 2004）／承認テスト（golden master） | 正しさではなく現状の挙動を記録し、変更で意図しない差を検出する | **採用**（層 3） | 既存アプリには AC がなく、System Test を先に作れない。記録した現状を期待値にできる。Hyrum の法則（観察できる挙動は誰かが依存する）とも整合 |
-| Strangler Fig（Fowler） | 新旧を並存させ、機能のまとまり単位で段階的に置き換える | **採用**（変更の run の方針） | 1 項目ずつ worktree・統合・検証する conductor の進め方と同型。「まとまり」が `--boundary` の単位になる |
+| Strangler Fig（Fowler） | 新旧を並存させ、機能のまとまり単位で段階的に置き換える | **採用**（変更の依頼の方針） | 1 まとまりずつ変更し、そのたびに `verify.py` と CI で検証する進め方と同型。固定した「まとまり」の境界が、1 回の依頼（1 つのプルリクエスト）の単位になる |
 | ホットスポット分析（Tornhill, *Your Code as a Crime Scene*, 2015） | 変更頻度 × 複雑さの高い所に、欠陥と変更が集まる | **採用**（回収の順序） | 全量を一度に回収しない（コスト・誤りの増加）ので、価値の高い所から。`scan` が churn × √行数 で並べる |
 | 意思決定の記録（Nygard, ADR, 2011） | 決定を短い文書で残す | **既存の機構で足りる** | 決定記録（§9）・質問票・出典台帳が同じ役割 |
 | LLM による要求・仕様の逆生成（2024〜2025 年の研究で報告） | コードから文章の要求・説明を生成できる。一方、存在しない要求の生成（幻覚）と欠落が課題で、自動の指標では信頼できず、人の確認と、元のコードへの根拠づけが要る。生成物から元を再構成して比べる方法（reverse generation）が提案されている | **採用（ただし拘束つき）** | 層 2 に、出典必須・証跡の固定（`anchor`）・承認待ち固定・独立監査での逆生成の整合の確認を課した |
@@ -56,11 +57,11 @@ python scripts/adopt.py request                           # ② /build の依頼
 
 | 目的・規則 | 方式が満たす根拠 | 検証（テスト） |
 |---|---|---|
-| 要求定義書の唯一の書き手は rd-author（G-1）、ID は `next-id.py` だけ（G-3） | `adopt.py` は要求定義書を編集せず、ID も振らない。書くのは棚卸し・証跡・golden・依頼文だけ | `tests/toolkit/test_adopt.py` |
+| 要求定義書の変更は同じ変更の中で行い、ID は `next-id.py` だけで採番する（AGENTS.md の規則） | `adopt.py` は要求定義書を編集せず、ID も振らない。書くのは棚卸し・証跡・golden・依頼文だけ | `tests/toolkit/test_adopt.py` |
 | 要求と実装・テストの一貫性（出典・カタログ・台帳） | 逆生成の要求は SRC 必須。SRC には証跡の固定がないと承認できない。回収率はカタログと要求から計算 | `test_check_guards_reverse_generated_requirements` |
-| 意図の取り違えを防ぐ（人の承認） | 逆生成は包括承認を `check` が拒否。承認は利用者の `<answers>` だけ | 同上 |
-| 検証可能性（System Test は実装より前・実装者が書き換えない） | golden は `tests/system/` に置くので、implementer・reviewer は変更できない（G-2）。固定時に 2 回実行し、非決定なら記録を拒否 | `test_golden_rejects_nondeterministic` |
-| 退行の防止 | `golden check` を台帳のケースにすれば、統合のたびに canary と同じ仕組みで実行される | `test_golden_record_check_and_regression` |
+| 意図の取り違えを防ぐ（人の承認） | 逆生成は包括承認を `check` が拒否。承認は利用者がチャットで答えたときだけ | 同上 |
+| 検証可能性（現状の記録を黙って書き換えない） | golden は `tests/system/golden/` に置き、台帳のケースは `ledger.py` でだけ更新する（消す・弱めるときは `--reason`）。記録し直しは `golden record --update` だけで、差分はプルリクエストで見える。固定時に 2 回実行し、非決定なら記録を拒否 | `test_golden_rejects_nondeterministic` |
+| 退行の防止 | `golden check` を台帳のケースにすれば、`ledger.py run` や `verify.py` の検証コマンド・CI で、ほかの System Test と同じ仕組みで実行される | `test_golden_record_check_and_regression` |
 | 変更の最小コスト（Token・時間） | 棚卸しは LLM を使わない。依頼は 6 まとまり程度まで。hotspot 順 | `test_scan_inventory`・`test_request_draft_is_unapproved_and_scope_none` |
 | 仮説の陳腐化の検出 | 証跡の範囲のハッシュ（空白は無視）が変わると DRIFT | `test_anchor_drift_and_whitespace_insensitive` |
 
@@ -73,7 +74,7 @@ python scripts/adopt.py request                           # ② /build の依頼
 
 ## 10.4 設計書がある場合
 
-`scan` が設計書の候補（設計・仕様・ADR・OpenAPI・ER 図などの名前のファイル）と、文書内の ID の接頭辞（`REQ-`・`FUNC-` など）を挙げます。rd-author は設計書を**先に**読み、次のように扱います。
+`scan` が設計書の候補（設計・仕様・ADR・OpenAPI・ER 図などの名前のファイル）と、文書内の ID の接頭辞（`REQ-`・`FUNC-` など）を挙げます。Copilot は設計書を**先に**読み、次のように扱います。
 
 - 設計書の記述は出典（区分: 設計書）。コードの記述は出典（区分: コード）。**両方**を引用できる要求が最も強い仮説です。
 - 食い違いは競合か質問票。どちらかを黙って選ばない。

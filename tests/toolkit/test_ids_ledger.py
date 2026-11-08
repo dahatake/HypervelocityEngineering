@@ -74,14 +74,6 @@ def test_ledger_run_no_record_and_failure(sample):
 
 
 
-def test_select_tests(sample):
-    sample.write("tests/unit/test_resume.py", "# FR-001 AC-001\n")
-    sample.commit("unit test")
-    sample.write("src/resume.py", "# FR-001\n")
-    out = sample.py("select-tests.py", "--base", "HEAD", check=True).stdout
-    assert "REQ   AC-001 AC-002 FR-001" in out and "TEST  tests/unit/test_resume.py" in out
-
-
 def test_summarize():
     import subprocess
     import sys

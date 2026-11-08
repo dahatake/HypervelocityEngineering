@@ -1,37 +1,38 @@
 [日本語](README.md) | **English**
 
-# HypervelocityEngineering — Enterprise App Build Kit
+# HypervelocityEngineering — Enterprise App Build Kit Lite
 
-A multi-agent development toolkit for GitHub Copilot (the VS Code Agents window / Copilot CLI / GitHub Copilot app). It aims to implement applications with the **highest quality, in the shortest time, using the fewest tokens**, while keeping the requirements definition, the catalog, and the System Tests consistent.
+A toolkit that adds rules and checks to a repository developed with GitHub Copilot (VS Code, Copilot CLI, the GitHub Copilot app, or the cloud agent) to keep **the requirements definition, the catalog, and the System Tests consistent** (EABK Lite 0.6.0).
 
-- All you do is send a prompt **once** to the orchestrator agent `conductor`.
-- conductor runs requirements definition → independent audit → up-front System Test design → parallel implementation → serial integration → final audit → report for up to 24 to 48 hours, with no human intervention.
-- The rules that determine quality are not left to the judgment of an LLM; they are enforced with hooks and deterministic scripts (scripts that do not use an LLM and always return the same result for the same input). Specifically, these four:
-  - Only one agent can write the requirements definition
-  - Implementers cannot change the System Tests
-  - Verification always runs before finishing
-  - Dangerous operations are denied
-- Many of these rules work only when you start a run with `/build`. For the risks of requesting changes with a prompt other than `/build`, see [Important: Risks of sending a prompt other than `/build`](#important-risks-of-sending-a-prompt-other-than-build).
-- It also works for apps that already have source code and design documents (brownfield). First take an inventory with `python scripts/adopt.py scan`, then build up the data layer from reverse-generated requirement hypotheses (pending approval) and a freeze of current behavior ([Adopting an existing app](users-guide/10-adopting-existing-apps.en.md)).
+- You ask your usual Copilot (the default agent) **as you always do**. No special agent or command is needed.
+- Following the rules in the repository's `AGENTS.md`, every change that alters behavior updates the requirements definition, the catalog, and the tests in the same change.
+- Checks are not left to LLM judgment; they run as deterministic scripts (scripts that use no LLM and always return the same result for the same input). Locally `python scripts/verify.py`, and on push / PR the CI workflow `ebak-verify`, run the same checks.
+- Semantic contradictions (conflicts between requirements, drift from goals) are checked at milestones by asking the read-only auditor `rd-auditor`.
+- The data layer can be browsed as diagrams, tables, and search in **EABK Studio** (a local, read-only viewer).
+- It also works for applications that already have source code and design documents (brownfield). Start with an inventory: `python scripts/adopt.py scan` ([Adopting an existing app](users-guide/10-adopting-existing-apps.en.md)).
+
+### Why Lite
+
+Up to 0.5.x, development ran as long "runs" in which conductor had worker agents work in parallel in worktrees. Checking real use showed that token volume and elapsed time grew well beyond ordinary requests, and that the per-role write restrictions sometimes stopped the work. On the other hand, the mapping between the requirements definition and the tests was not maintained when people or PCs changed unless the rules lived in the repository, while the deterministic checks and the milestone audits did find real drift and contradictions. So Lite drops the orchestration and keeps only **rules in the repository, the data layer, deterministic checks (local and CI), and manual milestone audits**. Because the rules and checks live in the repository and CI, they apply the same way for many people and many PCs, without relying on personal prompts or memory.
 
 ## Getting started (reading guide by reader)
 
-If you are new, read the documents in the order below for your role. Whatever your role, we recommend trying your first run with a short time budget (`max_hours: 4` to `8`).
-
 | You are | What you do | Reading order |
 |---|---|---|
-| **Product Manager** (decides what to build and accepts the results) | Write what you want built in the request. Answer the question list. Read the report and decide whether to merge | ① [The problem it solves](#the-problem-it-solves) → ② [Quickstart](#quickstart) → ③ [Writing requests](users-guide/01-writing-requests.en.md) → ④ [During and after a run](users-guide/02-during-and-after-run.en.md) → ⑤ [Studio: Product Manager](users-guide/studio/05-product-manager.en.md) |
-| **Architect** (decides design consistency, boundaries, and quality gates) | Understand the rules and the permission mechanism. Decide the settings (verification commands, models, gates). Check the structure of the requirements definition | ① [Overview](#overview) (architecture, agents and permissions, the flow of a run) → ② [Format of managed data](users-guide/03-requirements-format.en.md) → ③ [Settings and customization](users-guide/04-customization.en.md) → ④ [Quality gates and checks](users-guide/06-quality-gates.en.md) → ⑤ [Studio: Architect](users-guide/studio/06-architect.en.md) |
-| **Software Engineer** (installs and operates the toolkit, and checks implementation and tests) | Install. Register the verification commands. Start runs, and fix things when a run stops or an operation is denied | ① [Installation](#installation) → ② [Quickstart](#quickstart) → ③ [Script reference](users-guide/05-scripts-reference.en.md) → ④ [Troubleshooting](users-guide/07-troubleshooting.en.md) → ⑤ [Studio: Software Engineer](users-guide/studio/07-software-engineer.en.md) |
+| **Product Manager** (decides what to build and accepts the results) | Ask Copilot for what you want. Answer pending requirements and the question list. Watch the status in Studio | ① [Why Lite](#why-lite) → ② [Quickstart](#quickstart) → ③ [Writing requests](users-guide/01-writing-requests.en.md) → ④ [Daily workflow](users-guide/02-daily-workflow.en.md) → ⑤ [Studio: Product Manager](users-guide/studio/05-product-manager.en.md) |
+| **Architect** (decides design consistency, boundaries, and quality criteria) | Decide the data-layer format and the check scope (check profile). Ask for audits at milestones | ① [Overview](#overview) → ② [Management data format](users-guide/03-requirements-format.en.md) → ③ [Settings and customization](users-guide/04-customization.en.md) → ④ [Checks and audits](users-guide/06-quality-gates.en.md) → ⑤ [Studio: Architect](users-guide/studio/06-architect.en.md) |
+| **Software Engineer** (installs and operates the toolkit, verifies implementation and tests) | Install it. Register verify commands. Fix verify and CI failures | ① [Installation](#installation) → ② [Quickstart](#quickstart) → ③ [Scripts reference](users-guide/05-scripts-reference.en.md) → ④ [Troubleshooting](users-guide/07-troubleshooting.en.md) → ⑤ [Studio: Software Engineer](users-guide/studio/07-software-engineer.en.md) |
 
-If you are adopting the toolkit for an existing app (one that already has source code and design documents), first read [Adopting an existing app](users-guide/10-adopting-existing-apps.en.md). If you are rolling it out to a team in stages, [Adoption roadmap and KPIs](users-guide/08-roadmap.en.md) will help.
+If you are updating from 0.5.x, read [Migrating from 0.5.x](#migrating-from-05x) first.
 
 ## Table of contents
 
+- [Why Lite](#why-lite)
 - [Getting started (reading guide by reader)](#getting-started-reading-guide-by-reader)
 - [Overview](#overview)
 - [Installation](#installation)
 - [Quickstart](#quickstart)
+- [Migrating from 0.5.x](#migrating-from-05x)
 - [EABK Studio (data-layer viewer)](#eabk-studio-data-layer-viewer)
 - [Detailed documentation](#detailed-documentation)
 - [Glossary](#glossary)
@@ -41,154 +42,102 @@ If you are adopting the toolkit for an existing app (one that already has source
 
 ### The problem it solves
 
-When you have multiple AI agents repeatedly perform requirements definition, implementation, and testing, the following problems tend to occur.
+When AI repeatedly does requirements definition, implementation, and testing, these problems tend to occur:
 
-- Requirements are rewritten midway through implementation, and content that was never approved becomes "approved."
-- Contradictions between distant requirements go unnoticed in the author's own self-review.
-- Tests get rewritten to match the implementation, which changes the meaning of the requirements (a bug in the implementation becomes the "correct answer").
-- Parallel work produces duplicate IDs or conflicting requirement meanings.
-- Audit results and logs exist only in the chat history and are lost.
+- Features are added or changed, but the requirements definition is not updated and drifts from the code.
+- It is unclear which requirement or acceptance criterion a new test verifies.
+- When several people or PCs assign IDs in parallel, duplicates and gaps appear.
+- Contradictions between distant requirements are missed in the author's own self-review.
+- Instructions live only in prompts or personal memory, so behavior changes when the person, PC, or model changes.
 
-Enterprise App Build Kit prevents these with the following four measures.
+EABK Lite prevents these with five means.
 
-| Measure | Description |
+| Means | Description |
 |---|---|
-| **Separation of roles** | Separate agents handle writing requirements, auditing, creating tests, and implementing. No agent can declare its own work product "correct." |
-| **Enforced gates** | Hooks and verify enforce each agent's write scope and the verification that must pass before work ends. |
-| **Deterministic scripts** | Checks, ID numbering, ledger updates, and log summaries are done by scripts, not by an LLM. The same input always gives the same result. |
-| **Persistent data management** | The requirements definition, catalog, ID registry, System Test ledger, and each run's state, results, logs, evidence, and audit results are created and updated as files at fixed paths. Because nothing depends on the chat history, you can trace requirements, tests, and implementation afterward. A run can also be resumed from the middle after an interruption. |
+| **Rules in the repository** | Short rules go into `AGENTS.md` and `.github/copilot-instructions.md` (see "Rules" below). Every Copilot, on any person, PC, or client, reads the same rules. |
+| **Data layer** | The requirements definition, the catalog, the integration catalog, the ID registry, and the System Test ledger are files at fixed paths managed in git. |
+| **Deterministic checks** | `scripts/verify.py` (local) and the CI workflows `ebak-verify` and `ebak-data-layer` run the same checks. ID assignment (`next-id.py`) and ledger updates (`ledger.py`) are also done by scripts. |
+| **Manual milestone audits** | Semantic contradictions are hard to find mechanically, so ask `rd-auditor` for an audit at milestones. It does not run on every request. |
+| **Visualization** | EABK Studio shows the state of requirements, the catalog, and tests as diagrams and tables. |
 
-The foundation is the fourth measure, **persistent data management**. Requirements, decisions, and quality state are kept as persistent data in `/docs` and `tests/system/ledger.json` (managed in git). Each run's state, logs, and evidence are kept as temporary data in `/work`. What needs to be retained is transcribed into `/docs` and the ledger at the end of the run ([Where data is stored](#where-data-is-stored)).
+### Rules (the block that goes into `AGENTS.md`)
 
-### Architecture
+The installer writes the following block, enclosed in `<!-- ebak-abk:begin -->` … `end`, into `AGENTS.md` and `.github/copilot-instructions.md` (the installed block is in Japanese; translated here).
 
-![Component structure of Enterprise App Build Kit](images/enterprise-app-build-kit-components.en.svg)
+```text
+## Enterprise App Build Kit Lite (consistency of the requirements definition, the catalog, and the System Tests)
 
-The user just hands one request to conductor.
+- In a change that alters behavior (adding, changing, or removing a feature), update the requirements and acceptance criteria (AC) in `docs/requirements-definition.md` in the same change. Anyone may edit it (procedure: skill `requirement-definition`).
+- Assign new IDs only with `python scripts/next-id.py <kind>`. Do not number by hand (so that IDs do not collide even when several people / PCs work in parallel).
+- Write the requirement ID and AC ID a test verifies in its name or a comment (e.g. `FR-012 AC-031`). Update the System Test ledger `tests/system/ledger.json` only with `python scripts/ledger.py`, and when removing or weakening a test, record why with `--reason`.
+- When adding, renaming, or deleting files, fix the rows in `docs/catalog.md` too (`python scripts/rdfix.py --apply` can follow them).
+- Before finishing, run `python scripts/verify.py` and make it exit 0 (CI's `ebak-verify` runs the same checks).
+- Put temporary files (logs, evidence, working notes) in `/work` (not tracked by git).
+```
 
-1. conductor assigns work to subagents (workers).
-2. Workers do their work using scripts while reading the skills' procedure documents.
-3. Hooks and verify enforce the rules. verify is also re-run in CI.
-4. The results remain as files in the data layer.
+These few lines are the only always-loaded instructions. Long procedures live in skills (`requirement-definition`, `rd-audit`, `adopt-existing`) and are loaded only when needed.
 
-The file layout is as follows.
+### Layout
 
 ```text
 .github/
-  agents/        Definitions of conductor (the orchestrator) and the five workers (*.agent.md)
-  skills/        Procedure documents. Only the workers that need them load them (saves tokens)
-                 requirement-definition / implement-fr / system-test-increment / rd-audit / adopt-existing
-                 build … the entry point for requests that users invoke with /build (manual invocation only)
-                 build-template … shows a request template with /build-template (does not start a run)
-  hooks/         quality-gates.json … enforced gates shared by all agents (G-1 to G-6)
-  workflows/     ebak-verify.yml … re-runs verify in GitHub Actions (external re-check)
-                 ebak-data-layer.yml … data-layer checks and automatic repair (see "Data layer workflow (ebak-data-layer)" below)
-scripts/         Deterministic scripts (Python 3.9 or later; standard library only)
-  verify.py / verify.ps1 / verify.sh   L1 checks (CHK-01 to 27) + build and tests
-  rdcheck.py  next-id.py  ledger.py  select-tests.py  summarize.py  clean-work.py  run-state.py
-  rdfix.py         Automatically fixes inconsistencies between data-layer files to match the requirements definition
-  integrate.py     Handles the worktree pool and integration (merge → verify → System Test → commit) in one command
-  kpi.py           KPI aggregation (North Star: verified requirements per human intervention. Also outputs flow metrics)
-  adopt.py         Adopting an existing app (inventory, freezing evidence, freezing current behavior, creating the request)
-  hooks/gate.py   The hook implementation
-  ebak.config.json Settings (verification commands, models, gates, retention period)
-EABK-Studio/     Data-layer viewer (a local web app; read-only), plus role-based guides and screen images
-  studio.py  eabk_model.py  start.ps1 / start.sh  web/  users-guide/  tests/
-docs/            Persistent documents (managed in git)
-  requirements-definition.md  catalog.md  id-registry.md  run-history.md
+  agents/        rd-auditor.agent.md … read-only auditor you choose and ask at milestones
+  skills/        requirement-definition (requirements procedure; anyone may use it) / rd-audit / adopt-existing
+  workflows/     ebak-verify.yml … runs verify on push and PR
+                 ebak-data-layer.yml … data-layer check and auto-repair ("Data layer workflow (ebak-data-layer)" below)
+scripts/         deterministic scripts (Python 3.9+, standard library only)
+  verify.py / verify.ps1 / verify.sh   data-layer checks (check profile) + build / test commands
+  rdcheck.py  rdfix.py  next-id.py  ledger.py  summarize.py  adopt.py  entities.py  extpoints.py  ebaklib.py
+  ebak.config.json settings (verify commands, check profile, base_branch)
+EABK-Studio/     data-layer viewer (local web app, read-only), role guides, and screenshots
+docs/            persistent documents (managed in git)
+  requirements-definition.md  catalog.md  integrations.md  id-registry.md
 tests/system/ledger.json      System Test ledger (persistent)
-work/            Temporary files (.gitignore'd; deleted after 14 days)
-  current-run.txt  runs/<run-id>/{meta.json, queue.json, progress.md, run-report.md, results.json, logs/, evidence/, audit/}
-  worktrees/<run-id>-w<N>/    Pool of workers' git worktrees (reused across items and deleted in step 6)
+work/            temporary files (in .gitignore). Audit results go to work/audit/<datetime>/
 ```
 
-The always-loaded instructions (`AGENTS.md`, `.github/copilot-instructions.md`) are kept to a few lines. Long procedures are placed in skills and loaded only when the responsible worker needs them.
+EABK Lite has no hooks and does not add any preamble to requests automatically. The rules reach Copilot through the blocks in `AGENTS.md` and `copilot-instructions.md`, and verify and the CI checks confirm they are followed.
 
-### Agents and permissions
+### Checks (verify and check profiles)
 
-| Agent | Responsibility | Writable scope (enforced by hooks) | Skill loaded |
-|---|---|---|---|
-| **conductor** | Planning, assigning work, integration, gate decisions, reporting. Does small tasks itself | Only `work/` and `docs/run-history.md` | build (only when the user invokes it with `/build`) |
-| **rd-author** | Creating and updating the requirements definition and catalog, the question list, and the decision log. **This is the only agent that can write requirements** | `docs/` (except run-history) | requirement-definition |
-| **rd-auditor** | Semantic audit (contradictions, consistency with goals, quality of the writing). Uses a different model family from rd-author | Only `work/` (otherwise read-only) | rd-audit |
-| **test-designer** | Creates System Tests and ledger cases from the acceptance criteria **before implementation** | `tests/system/` (the ledger via ledger.py) | system-test-increment |
-| **implementer** | Implements one work item (1 to 5 requirements) in a pool worktree, and writes unit tests, integration tests, and catalog rows | Its own worktree (cannot change the requirements definition or System Tests) | implement-fr |
-| **reviewer** | Checks the diff against the acceptance criteria. Used only for changes to shared components, contracts, or tables, security, personal information, authentication, and screens | None (read-only) | None |
+| Layer | Implementation | When it runs |
+|---|---|---|
+| Local | `python scripts/verify.py` (data-layer checks + build / test in `verify.commands`). `--docs-only` for the data layer only | Before finishing (rule in `AGENTS.md`) |
+| CI | `.github/workflows/ebak-verify.yml` (`scripts/verify.sh --show-warnings`) | Every push and PR |
+| CI | `.github/workflows/ebak-data-layer.yml` (check and auto-repair) | PR, push, manual, weekly |
+| Milestone | `rd-auditor` (semantic audit, read-only) | When you ask |
 
-When adopting an existing app (a request that uses `adopt.py`), conductor, rd-author, rd-auditor, and test-designer also load the skill `adopt-existing`.
+The check profile is set by `checks.profile` in `scripts/ebak.config.json`.
 
-No agent restricts its tools in its frontmatter. The MCP servers, plugins, extension tools, and skills that the user has configured in GitHub Copilot can be used as they are. Examples are Work IQ (internal email, meetings, chat, and documents), Microsoft Learn, the Azure MCP Server, and Copilot Studio plugins. rd-author uses these to consult primary sources, and records the facts it obtains in the requirements definition together with their sources. Operations that change external systems (send, create, update, delete, deploy) can be performed only when permitted by `external_write` and `deploy` in run_options (hook G-5). For details, see [Settings and customization 4.4](users-guide/04-customization.en.md#44-using-mcp-servers-plugins-and-extensions).
+- `lite` (default): reports only the CHKs in `checks.lite_checks`. The default is `CHK-01, CHK-02, CHK-03, CHK-05, CHK-09, CHK-12, CHK-17, CHK-19, CHK-24` (structure and traceability). Other CHKs affect neither the output nor the exit code.
+- `full`: reports all of CHK-00 to CHK-34.
+- `--profile lite|full` on `rdcheck.py check` and `verify.py` overrides the setting. The summary line looks like `rdcheck: errors=N warnings=M base=… run=… profile=lite`.
+- Format warnings (CHK-13 vague words, CHK-14 hard-coded numbers, CHK-15 forbidden synonyms) and the like appear only in full. To see them, run `python scripts/verify.py --docs-only --profile full --show-warnings` (the rd-auditor audit uses this too).
+- The profile applies the same way to `rdcheck.py check`, `verify.py`, and `rdfix.py` (including `--full`). So `rdfix.py --full` passes exactly when `verify.py --docs-only` passes with the same profile (the mechanical repairs themselves run regardless of the profile).
 
-### The flow of one run
+### Data-layer repair (rdfix)
 
-```mermaid
-flowchart TD
-  P[利用者: conductor に Prompt を 1 回] --> S0[工程0 初期化<br/>run-state.py start・clean-work・verify の基準]
-  S0 --> S1[工程1 要求定義<br/>rd-author]
-  S1 --> A1[工程2 独立監査<br/>rd-auditor 差分]
-  A1 -->|直接矛盾 最大3周| S1
-  A1 --> S3[工程3 計画<br/>queue.json 機能単位・依存・境界]
-  S3 --> S4[工程4 System Test を先に設計<br/>test-designer 全ケース not_run]
-  S4 --> L{工程5 実装ループ}
-  L -->|依存のない項目を最大5本 パイプライン| W[implementer プールの worktree]
-  W --> G[ゲート verify＋関係する System Test<br/>終了前に hook G-4 が再検査]
-  G -->|共通部品・セキュリティ・画面| RV[reviewer]
-  G --> M[integrate.py merge で直列に統合<br/>verify quick・canary・差分のケース]
-  RV --> M
-  M --> K{節目 10項目・4時間}
-  K -->|はい| A2[rd-auditor 差分 background・System Test 増分] --> L
-  K -->|いいえ| L
-  L -->|完了 or 時間予算85%| F[工程6 最終<br/>System Test 全量・監査 3体並行の多数決・転記・run-report]
-  F --> U[利用者: 報告を読み、回答 or 取り込み]
-```
+Of the inconsistencies between data-layer files that verify finds (drift in the catalog's decision state, ID registry states, rows duplicated by merges, references to renamed files, and so on), those mechanically determined by the requirements definition can be fixed through the common entry point `python scripts/rdfix.py --full` (check) and `python scripts/rdfix.py --full --apply` (check → repair → re-check). There are three entry points (the GitHub Actions workflow, the installer, and manual), and wherever it is called from, the checks, repairs, and results are the same.
 
-- **Quality foundation (steps 1 to 2)**: Before implementation starts, the number of direct contradictions in the requirements definition is brought to zero. Anything that needs a user decision is raised in the question list. The related acceptance criteria are marked BLOCKED, and the remaining work proceeds first.
-- **Test first (step 4)**: test-designer decides the expected values based only on the requirements definition, so that the implementation is never treated as the correct answer (the test oracle problem).
-- **Per-item parallel implementation (step 5)**: Only items that have no dependencies and do not touch the same shared components, tables, or boundaries run in parallel. Integration is done serially, one at a time, and verify and canary tests run each time.
-- **Final step (step 6)**: A full System Test run and a full audit by rd-auditor (a majority vote of 3 runs) are performed. The information that must be retained is transcribed into `/docs` and the ledger before reporting.
+- Exit codes: 0 = pass / repaired, 1 = manual items remain / repairs planned, 2 = not run / cancelled (lock wait timeout, write failure, running on a leftover 0.5.x worker branch `work/…/…`, and so on; everything is undone). On exit 2, run it again on the default branch.
+- Only one apply runs at a time per repository (lock).
+- The requirements definition and `docs/integrations.md` are never changed. Items needing judgment (a changed AC text, a reused ID, and so on) are shown as `MANUAL` with the kind of work (`requirements definition`, `System Test ledger`, `code and catalog`, `repository`) and the next action. Example: `MANUAL CHK-11 tests/system/ledger.json AC-001 の本文が…（担当: System Test の台帳）次の行動: …`.
 
-### Two-layer quality gates
+See [Checks and audits](users-guide/06-quality-gates.en.md) for details.
 
-| Layer | Implementation | When it fires | Examples |
-|---|---|---|---|
-| hook | `.github/hooks/quality-gates.json` → `scripts/hooks/gate.py` | **Before** a tool runs, and **before** a worker or conductor **finishes** | Denies anyone other than rd-author who tries to edit the requirements definition (G-1). Runs verify before an implementer finishes and sends the work back if it fails (G-4) |
-| verify | `scripts/verify.py` (CHK-01 to 27) | Worker gates, every integration, CI | A ledger case was deleted without a reason (CHK-12). The body of an AC changed but the ledger is still stale (CHK-11) |
+### Working with many people and PCs
 
-VS Code hooks are a preview feature, and behavior may differ by harness (Copilot CLI and the GitHub Copilot app built on top of it read the same `.github/hooks`). For that reason the same rules are also checked in verify, so that work always stops at integration even in environments where hooks do not take effect. For details, see [Quality gates and checks](users-guide/06-quality-gates.en.md).
-
-Of the inconsistencies between data-layer files that verify finds (a drifted decision state in the catalog, the state of the ID registry, lines duplicated by a merge, references to renamed files, and so on), those that are mechanically determined by the requirements definition can be fixed through the common entry point `python scripts/rdfix.py --full` (check) and `python scripts/rdfix.py --full --apply` (check → repair → re-check). There are three entry points (the GitHub Actions workflow, the installer, and manual), and whichever you call, you get the same check, the same repair, and the same result. The exit codes are 0 = passed or repaired, 1 = manual action remains or a repair plan exists, 2 = not run or canceled (a worker's branch, an exclusion wait timeout, a write failure, and so on; everything is rolled back). Only one apply can run at a time in the same repository (exclusive lock). The requirements definition is not changed, and anything that needs a judgment (a change to the body of an AC, reuse of an ID, and so on) is shown as `MANUAL` together with the responsible role ([6.3](users-guide/06-quality-gates.en.md#63-automatic-repair-of-data-layer-inconsistencies-rdfix)).
-
-### State persistence and resuming
-
-It does not depend on conversation summarization (compaction). All state lives in the following files and in git.
-
-- `work/current-run.txt`: the run-id of the run in progress
-- `work/runs/<run-id>/meta.json`: start time, run_options, current step, integration branch
-- `work/runs/<run-id>/queue.json`: the work queue (per item: requirement IDs, AC, boundary, dependencies, state, attempt count, branch)
-- `work/runs/<run-id>/progress.md`: steps, decisions, and open issues (at most 3 lines per item)
-
-When started in a new context, conductor begins with `python scripts/run-state.py start`. If a run is in progress, it prints `RESUME` and the state, and continues. When a run has stopped, send "continue" in the same session, or send the same prompt in a new session, and it resumes.
+- The rules live in the repository (`AGENTS.md`), so everyone's Copilot reads the same rules.
+- IDs are assigned with `next-id.py`, and the ID registry is merged with `merge=union` in `.gitattributes`. If IDs assigned at the same time collide, CHK-01 detects it; reassign with `next-id.py`.
+- The checks run in CI, so a push from any PC gives the same result.
 
 ### Where data is stored
 
-| Location | What goes there | git | Retention |
-|---|---|---|---|
-| `/docs` | Requirements definition, catalog, ID registry, run history | Managed | Permanent |
-| `tests/system/ledger.json` | System Test cases and their latest state | Managed | Permanent |
-| `/work` | Queue, progress, report, results, evidence, raw audit data, logs, worktrees | Not managed | 14 days |
-
-So that requirements, decisions, and quality state can be traced from `/docs` and the ledger alone even if `/work` is deleted, they are transcribed in step 6.
-
-### Design to reduce token consumption
-
-| Technique | Implementation |
-|---|---|
-| Long procedure documents are read only by the workers that need them | `.github/skills/` (long procedures are split into skills, and only the responsible worker loads them) |
-| Mechanical checks, numbering, ledger updates, and summaries are done by scripts | `scripts/*.py`. Only summaries are passed to the LLM (`summarize.py`, the short output of `verify.py`) |
-| Read only the sections you need | `rdcheck.py show FR-012 AC-031` |
-| Resume from a fresh context at each step | `run-state.py status` and progress.md |
-| Run tests only for the affected scope; run everything only at milestones and in the final step | `select-tests.py`, `ledger.py run --select changed` |
-| Majority-vote audits only in the final step | runs: 1 at milestones, runs: 3 at the end |
+| Location | Contents | git |
+|---|---|---|
+| `/docs` | Requirements definition, catalog, integration catalog (`docs/integrations.md`, optional), ID registry | Managed |
+| `tests/system/ledger.json` | System Test cases and their latest state | Managed |
+| `/work` | Logs, evidence, audit results, working notes | Not managed |
 
 ---
 
@@ -196,16 +145,16 @@ So that requirements, decisions, and quality state can be traced from `/docs` an
 
 ### Prerequisites
 
-| What you need | How to check | Notes |
+| Requirement | How to check | Notes |
 |---|---|---|
-| A git repository | `git status` | If you don't have one yet, run `git init -b main` and make the first commit |
-| Python 3.9 or later | `python --version` (`python3 --version` on macOS/Linux) | Used by the scripts and hooks. It runs on the standard library only, so no extra packages are needed. On Windows, install a real Python rather than the Microsoft Store `python` stub (`winget install Python.Python.3.12`) |
-| GitHub Copilot | VS Code (Agents window), Copilot CLI, or the GitHub Copilot app | Long runs assume the VS Code Copilot harness (Agent Host) or the GitHub Copilot app, together with Autopilot |
-| MCP servers and plugins (optional) | `MCP: List Servers` in VS Code, `/mcp` in Copilot CLI, **Customize** → **MCP** in the GitHub Copilot app | If you configure Work IQ, Microsoft Learn, Azure, and so on, the agents use them automatically. The toolkit does not distribute MCP configuration |
+| git repository | `git status` | If not yet, run `git init -b main` and make the first commit |
+| Python 3.9 or later | `python --version` (`python3 --version` on macOS/Linux) | Used by the scripts. Standard library only, no extra packages. On Windows, install a real Python, not the Microsoft Store `python` stub (`winget install Python.Python.3.12`) |
+| GitHub Copilot | VS Code, Copilot CLI, the GitHub Copilot app, or the cloud agent | Any of them. Any client that reads `AGENTS.md` and `.github/` applies the same rules |
+| MCP servers / plugins (optional) | `MCP: List Servers` in VS Code, `/mcp` in Copilot CLI, and so on | With Work IQ, Microsoft Learn, Azure, etc. configured, Copilot can use them as primary sources. The toolkit does not distribute MCP settings |
 
 ### Installation command (recommended)
 
-Run the following one-liner at the **root** of the repository you are installing into. This command downloads the toolkit to a temporary folder, runs `tools/install.py`, and then deletes the temporary folder.
+Run the following one line at the **root** of the target repository. It downloads the toolkit to a temporary folder, runs `tools/install.py`, and deletes the temporary folder.
 
 **Windows (PowerShell)**
 
@@ -213,7 +162,7 @@ Run the following one-liner at the **root** of the repository you are installing
 irm https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.ps1 | iex
 ```
 
-To pass options:
+With options:
 
 ```powershell
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.ps1))) -DryRun
@@ -223,13 +172,13 @@ To pass options:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.sh | bash
-# To pass options
+# With options
 curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.sh | bash -s -- --dry-run
 ```
 
-To use a specific version (tag, branch, or commit), set the environment variable `EBAK_REF` (for example, `EBAK_REF=v1.0.0`). To use a fork, set `EBAK_REPO=<owner>/<repo>`.
+To use a specific version (tag, branch, or commit), set the environment variable `EBAK_REF` (e.g. `EBAK_REF=v0.6.0`). To use a fork, set `EBAK_REPO=<owner>/<repo>`.
 
-**If you have already cloned the toolkit**
+**If you have cloned the toolkit**
 
 ```bash
 python tools/install.py --target /path/to/your-repo
@@ -239,27 +188,28 @@ python tools/install.py --target /path/to/your-repo
 
 | Option (install.py / install.sh) | PowerShell | Behavior |
 |---|---|---|
-| `--target <dir>` | `-Target` | Installation target (default: the current directory) |
-| `--dry-run` | `-DryRun` | Writes nothing and only shows the operations it would perform |
-| `--check` | `-Check` | Checks whether an update is needed (exit 1 if so. Lets CI detect version drift) |
-| `--force` | `-Force` | Also overwrites toolkit files you modified locally (leaves `*.ebak-backup-<datetime>`) |
+| `--target <dir>` | `-Target` | Install destination (default: current directory) |
+| `--dry-run` | `-DryRun` | Writes nothing; only shows the operations it would perform |
+| `--check` | `-Check` | Checks whether an update is needed (exit 1 if so; lets CI detect version drift) |
+| `--force` | `-Force` | Also overwrites or removes toolkit files you modified locally (keeps `*.ebak-backup-<datetime>`) |
 | `--no-ci` | `-NoCi` | Does not install `.github/workflows/ebak-verify.yml` and `ebak-data-layer.yml` |
-| `--no-repair` | `-NoRepair` | Does not automatically repair the data layer after installation; only shows the check and the repair plan (writes nothing). `--skip-verify` performs neither the check nor the repair |
-| `--uninstall` | `-Uninstall` | Removes unmodified toolkit files, blocks in `AGENTS.md` and similar files, the manifest, and folders that became empty (managed data and settings are kept). It can also be run via `uninstall.ps1` / `uninstall.sh` |
-| `--purge` | `-Purge` | In addition to `--uninstall`, also removes managed data (the requirements definition, catalog, ID registry, run history, and manual tests in `docs/`, and `tests/system/ledger.json`), `scripts/ebak.config.json`, `/work`, the lines appended to `.gitignore` and `.gitattributes`, and `*.ebak-backup-*` |
+| `--no-repair` | `-NoRepair` | Skips the post-install data-layer auto-repair and only shows the check and the repair plan (writes nothing) |
+| `--skip-verify` | — | Neither checks nor repairs the data layer after installing |
+| `--uninstall` | `-Uninstall` | Removes unmodified toolkit files, the blocks in `AGENTS.md` etc., the manifest, and emptied folders (keeps management data and settings). Also available as `uninstall.ps1` / `uninstall.sh` |
+| `--purge` | `-Purge` | In addition to `--uninstall`, removes management data (the requirements definition, catalog, integration catalog, ID registry, etc. under `docs/`, and `tests/system/ledger.json`), `scripts/ebak.config.json`, `/work`, lines appended to `.gitignore` / `.gitattributes`, and `*.ebak-backup-*` |
 
 ### Installed files
 
-| Type | Files | Handling on re-run |
+| Kind | Files | On re-run |
 |---|---|---|
-| Toolkit files | `.github/agents/*.agent.md` (6), `.github/skills/*/SKILL.md` (7; including the `/build` and `/build-template` skills), `.github/hooks/quality-gates.json`, `.github/workflows/ebak-verify.yml`, `scripts/*.py`, `verify.ps1`, `verify.sh`, `scripts/hooks/gate.py`, `EABK-Studio/` (the viewer itself and its tests), `EABK-docs/` (the same content as this repository's `users-guide/`. The EABK Studio guides are in `EABK-docs/studio/`. The target's own `users-guide/` is left untouched) | If unmodified, updated to the new version. If modified locally, **left as is** (`KEEP-LOCAL`; overwritten with `--force`) |
-| Managed data templates | `docs/requirements-definition.md`, `docs/catalog.md`, `docs/integrations.md` (the external integration catalog; optional), `docs/id-registry.md`, `docs/run-history.md`, `tests/system/ledger.json` | Created **only if they do not exist**. Existing files are not overwritten |
-| Settings | `scripts/ebak.config.json` | Created if absent. If present, only new keys are added, and values the user set are not changed |
-| Appended lines | `/work/` in `.gitignore`; `docs/id-registry.md merge=union` and `docs/run-history.md merge=union` in `.gitattributes` | Only missing lines are appended |
-| Blocks | A few lines enclosed by `<!-- ebak-abk:begin -->` to `end` in `AGENTS.md` and `.github/copilot-instructions.md` | Only the inside of the block is replaced. Text outside the block is not changed |
-| Manifest | `.github/ebak-toolkit.json` | The version and the hashes of the installed files (used to decide updates and removal) |
+| Toolkit files | `.github/agents/rd-auditor.agent.md`, `.github/skills/` (`requirement-definition`, `rd-audit`, `adopt-existing`), `.github/workflows/ebak-verify.yml` / `ebak-data-layer.yml`, `scripts/*.py`, `verify.ps1`, `verify.sh`, `EABK-Studio/` (viewer and tests), `EABK-docs/` (same content as this repository's `users-guide/`; the EABK Studio guide is `EABK-docs/studio/`; the target's own `users-guide/` is not touched) | Updated to the new version if unmodified. If modified locally, **left as is** (`KEEP-LOCAL`; `--force` overwrites) |
+| Management data templates | `docs/requirements-definition.md`, `docs/catalog.md`, `docs/integrations.md` (integration catalog, optional), `docs/id-registry.md`, `tests/system/ledger.json` | Created **only if missing**. Existing files are never overwritten |
+| Settings | `scripts/ebak.config.json` | Created if missing. If present, only new keys are added; values you set are not changed |
+| Appended lines | `/work/` in `.gitignore`; `docs/id-registry.md merge=union` and others in `.gitattributes` | Only missing lines are appended |
+| Block | The rules enclosed in `<!-- ebak-abk:begin -->` … `end` in `AGENTS.md` and `.github/copilot-instructions.md` ([Rules above](#rules-the-block-that-goes-into-agentsmd)) | Only the inside of the block is replaced. Text outside the block is not changed |
+| Manifest | `.github/ebak-toolkit.json` | The version and hashes of installed files (used to decide updates and removals) |
 
-At the end of installation or an update, the common data-layer entry point `python scripts/rdfix.py --full --apply` is run exactly once (check → automatic repair → re-check; `verify.py --docs-only` is not layered on separately). It shows the items repaired, the manual actions that remain (check item ID, location, and responsible role), and whether the re-check passed. Repairs are not committed and are left in the working tree, and the requirements definition and the external integration catalog are not changed. With `--no-repair` it becomes `python scripts/rdfix.py --full` (shows only the check and the repair plan; writes nothing), and `--skip-verify` performs neither the check nor the repair. `--dry-run`, `--check`, `--uninstall`, and `--purge` do not repair. Even if the repair is canceled (exit 2) or manual actions remain (exit 1), the toolkit files remain, and the commands for checking and repairing are shown. The installer's exit code does not change with the data-layer result.
+At the end of an install or update, the data-layer common entry point `python scripts/rdfix.py --full --apply` runs once (check → auto-repair → re-check). It shows the repaired items, the remaining manual items (check ID, location, kind of work), and whether the re-check passed. Repairs are not committed but left in the working tree, and the requirements definition and the integration catalog are never changed. With `--no-repair` (`-NoRepair` in PowerShell), it becomes `python scripts/rdfix.py --full` (shows the check and repair plan only; writes nothing), and with `--skip-verify` it neither checks nor repairs. `--dry-run`, `--check`, `--uninstall`, and `--purge` never repair. Even when the repair is cancelled (exit 2) or manual items remain (exit 1), the toolkit files stay and the check and repair commands are shown. The installer's exit code does not depend on the data-layer result.
 
 ### Post-installation setup
 
@@ -267,14 +217,14 @@ At the end of installation or an update, the common data-layer entry point `pyth
    ```bash
    git add -A && git commit -m "Add Enterprise App Build Kit"
    ```
-2. Register your build, static analysis, and test commands in `verify.commands` in `scripts/ebak.config.json` ([Settings and customization](users-guide/04-customization.en.md)). Even if you leave it empty, the implementer registers the standard commands for that technology stack in the first run.
-3. If CI needs the app's toolchain (Node.js and so on), add a setup step before the verify step in `.github/workflows/ebak-verify.yml`.
+2. Register build, static analysis, and test commands in `verify.commands` of `scripts/ebak.config.json` ([Settings and customization](users-guide/04-customization.en.md)). If you leave it empty, you can ask Copilot: "register the standard build and test commands for this stack in `verify.commands`".
+3. If CI needs the app's toolchain (Node.js, etc.), add setup steps before the verify step in `.github/workflows/ebak-verify.yml`.
 4. If you already have a requirements definition, import its IDs into the ID registry.
    ```bash
    python scripts/next-id.py --sync --adopt
    ```
-   Then run `python scripts/verify.py --docs-only --show-warnings` to check for missing structured fields (CHK-20) and so on. You can leave the fixes to rd-author in the first run (write "bring the existing requirements definition into the toolkit's format" in the request).
-5. (Optional) If you want to use tools for internal information or for your target technology, configure MCP servers and plugins in the environment where you run the run (VS Code, Copilot CLI, or the GitHub Copilot app) and sign in. Examples: Work IQ for primary sources of requirements, Microsoft Learn and the Azure MCP Server for development on Azure, and Microsoft-provided plugins for development with Copilot Studio. No agent-side configuration is needed ([Settings and customization 4.4](users-guide/04-customization.en.md#44-using-mcp-servers-plugins-and-extensions)).
+   Then run `python scripts/verify.py --docs-only` and review the findings. To also see format issues, add `--profile full --show-warnings`. To fix them, ask Copilot: "align the existing requirements definition with the format of the skill `requirement-definition`".
+5. (Optional) To use internal information or tools for your target technology, configure MCP servers / plugins in the client you use and sign in ([Settings and customization](users-guide/04-customization.en.md)).
 
 ### Updating and checking
 
@@ -286,9 +236,11 @@ curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/m
 curl -fsSL .../tools/install.sh | bash -s -- --check
 ```
 
+For what changes when updating from 0.5.x, see [Migrating from 0.5.x](#migrating-from-05x).
+
 ### Uninstalling and cleaning up
 
-As with installation, run one line at the **root** of the repository you installed into.
+As with installation, run one line at the **root** of the target repository.
 
 **Windows (PowerShell)**
 
@@ -297,7 +249,7 @@ As with installation, run one line at the **root** of the repository you install
 irm https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.ps1 | iex
 
 # Clean up (removes everything the toolkit added, including managed data, settings, /work, and appended lines)
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.ps1))) -Purge -DryRun   # check
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.ps1))) -Purge -DryRun   # preview
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.ps1))) -Purge
 ```
 
@@ -305,299 +257,176 @@ irm https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/too
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.sh | bash
-curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.sh | bash -s -- --purge --dry-run   # check
+curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.sh | bash -s -- --purge --dry-run   # preview
 curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.sh | bash -s -- --purge
 ```
 
-If you have already cloned the toolkit, use `python tools/install.py --target /path/to/your-repo --uninstall` (or `--purge`). `install.ps1 -Uninstall` and `install.sh --uninstall` do the same.
+If you have cloned the toolkit, use `python tools/install.py --target /path/to/your-repo --uninstall` (or `--purge`). `install.ps1 -Uninstall` and `install.sh --uninstall` do the same.
 
 | Target | `--uninstall` | `--purge` |
 |---|---|---|
-| Toolkit files (`.github/agents`, `skills`, `hooks`, `workflows/ebak-verify.yml`, `scripts/*.py`, and so on) and files from older versions | Removed if unmodified (kept as `KEEP-LOCAL` if modified; removed with `--force`) | Same |
-| Blocks in `AGENTS.md` and `.github/copilot-instructions.md` | Only the block is removed (the whole file is removed if nothing else is in it) | Same |
-| The manifest `.github/ebak-toolkit.json`, folders that became empty, and `__pycache__` of removed `.py` files | Removed | Removed |
-| Managed data (`docs/requirements-definition.md`, `catalog.md`, `id-registry.md`, `run-history.md`, `manual-tests.md`, `docs/requirements/`, and `tests/system/ledger.json`). Paths follow `files` in `scripts/ebak.config.json` | Kept | Removed |
+| Toolkit files (`.github/agents`, `skills`, `workflows/ebak-*.yml`, `scripts/*.py`, etc.) and files of older versions | Removed if unmodified (kept as `KEEP-LOCAL` if modified; `--force` removes) | Same |
+| Blocks in `AGENTS.md` / `.github/copilot-instructions.md` | Only the block is removed (the file is removed if nothing else remains) | Same |
+| Manifest `.github/ebak-toolkit.json`, emptied folders, `__pycache__` of removed `.py` | Removed | Removed |
+| Management data (`docs/requirements-definition.md`, `catalog.md`, `integrations.md`, `id-registry.md`, `manual-tests.md`, `docs/requirements/`, a `run-history.md` left from 0.5.x, `tests/system/ledger.json`). Paths follow `management_files` in `scripts/ebak.config.json` | Kept | Removed |
 | `scripts/ebak.config.json`, `/work`, `*.ebak-backup-*` | Kept | Removed |
-| The `/work/` line in `.gitignore` and the `merge=union` lines in `.gitattributes` | Kept | Only the appended lines are removed (the whole file is removed if it becomes empty) |
-| System Test code (everything in `tests/system/` other than the ledger), app code, and other documents in `docs/` | Kept | Kept |
+| `/work/` in `.gitignore`, `merge=union` lines in `.gitattributes` | Kept | Only the appended lines are removed (the file is removed if empty) |
+| System Test code (other than the ledger in `tests/system/`), app code, other documents in `docs/` | Kept | Kept |
 
-- If the manifest has been lost, only files with the same content as this version of the toolkit are removed (a `WARN` is shown).
-- Removal is performed on the git working tree. Check the result with `git status` before committing (you can undo it with `git restore`; `/work` is not tracked by git, so it cannot be restored).
-- Worktrees and `work/*` branches created by runs are not removed. If needed, check with `git worktree list` and `git branch --list "work/*"` and delete them.
-- It is safe to run any number of times (the second run reports `changes=0`).
+- If the manifest is lost, only files identical to this toolkit version are removed (`WARN` is shown).
+- Removal happens in the git working tree. Check with `git status` before committing (`git restore` can undo it; `/work` is not tracked by git and cannot be restored).
+- Safe to run any number of times (the second run shows `changes=0`).
 
 ### Why we use an installer instead of a plugin
 
-GitHub Copilot has a standard mechanism for distributing agents, skills, and hooks together: **plugins** (`copilot plugin install OWNER/REPO`, the Agent Plugins specification). We considered adopting it, but we do not use it to distribute this toolkit. The reasons are as follows.
+GitHub Copilot has a standard mechanism for distributing agents, skills, and hooks together: **plugins** (`copilot plugin install OWNER/REPO`, the Agent Plugins specification). This toolkit does not use it, for the following reasons.
 
 | Aspect | Plugin | What this toolkit needs |
 |---|---|---|
-| Install location | The user's home (the plugin directory). It does not go into the repository | The deterministic scripts (`scripts/`), the managed-data templates (`docs/`), the ledger, `.gitignore`, and CI must be placed **inside the target repository** and managed in git, and the same verify must also run in CI (GitHub Actions) |
-| Portability | In Agent Plugins 1.0, only skills and MCP are portable. Custom agents and hooks are per-client extensions | The same `.github/agents`, `.github/skills`, and `.github/hooks` are used by the VS Code Copilot harness, Copilot CLI, and the Copilot app |
-| Hook scope | A plugin's hooks run in all of the user's repositories and sessions | The gates should run only in repositories where the toolkit is installed |
-| Sharing in a team | Each user must install it | Anyone who clones the repository, and CI, uses the same version |
+| Install location | The user's home (the plugin directory). Not in the repository | The rules (`AGENTS.md`), deterministic scripts (`scripts/`), management data templates (`docs/`), the ledger, `.gitignore`, and CI must live **inside the target repository**, managed in git, with CI (GitHub Actions) running the same verify |
+| Portability | In Agent Plugins 1.0 only skills and MCP are portable. Custom agents and hooks are per-client extensions | VS Code, Copilot CLI, the Copilot app, and the cloud agent use the same `AGENTS.md` and `.github/` |
+| Team sharing | Each user must install it | Cloning the repository gives the whole team and CI the same version of the rules and checks |
 
-So we chose to place the customizations (`.github/`) and `scripts/` directly in the repository. These are the locations that VS Code, Copilot CLI, the Copilot app, and the cloud agent load by default. To install, update, and uninstall them with a single command, we provide `tools/install.*` and `tools/uninstall.*`.
+So the customizations (`AGENTS.md`, `.github/`) and `scripts/` are placed directly in the repository, and `tools/install.*` and `tools/uninstall.*` install, update, and uninstall them in one command.
 
 ### Installation troubleshooting
 
 | Symptom | Fix |
 |---|---|
-| `Python 3.9 以上が必要です` (Python 3.9 or later is required) | Install Python and confirm that `python --version` works |
-| `git リポジトリではありません` (not a git repository) | Run `git init -b main` first, then run again |
-| `KEEP-LOCAL` is shown | Files you modified locally were not updated. Review the diff, and if it is fine to overwrite, run again with `--force` |
-| `python` is not found when a hook runs | Hooks call `python3` (macOS/Linux) or `python` (Windows). Check your PATH |
+| `Python 3.9 以上が必要です` (Python 3.9 or later is required) | Install Python and confirm `python --version` works |
+| `git リポジトリではありません` (not a git repository) | Run `git init -b main` first |
+| `KEEP-LOCAL` is shown | Files you modified locally were not updated or removed. Review the diff and, if it is OK to overwrite or remove them, re-run with `--force` |
+| `WARN-HOOK  <path>` is shown | You had modified a hook file from an older version (`.github/hooks/*.json`) locally, so it was kept (`KEEP-LOCAL`). It calls the deleted `scripts/hooks/gate.py`. When a hook errors, Copilot denies every tool call, so delete the file and reopen the Copilot session |
 
 ---
 
 ## Quickstart
 
-The overall flow is the following three steps.
-
-1. At the root of your own repository, run the installation command once ([Installation](#installation)).
+1. At the root of your repository, run the installation command once and commit ([Installation](#installation)).
    - Windows: `irm https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.ps1 | iex`
    - macOS / Linux: `curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.sh | bash`
-2. In the VS Code Agents window, select conductor, type `/build` followed by what you want to do in the chat box, and send it ([Run in VS Code](#run-in-vs-code-recommended)). You can send it the same way in the GitHub Copilot app ([Run in the GitHub Copilot app](#run-in-the-github-copilot-app)).
-3. When it finishes, read `work/runs/<run-id>/run-report.md`. Then answer the question list or merge the integration branch ([During and after a run](users-guide/02-during-and-after-run.en.md)).
+2. Register build and test commands in `verify.commands` of `scripts/ebak.config.json`.
+3. Then develop with the "Recommended workflow" below.
 
-### Run in VS Code (recommended)
+### Recommended workflow
 
-![Screen image of sending a request to conductor with /build in the VS Code Agents window](images/quickstart-vscode-agents.png)
+1. **Ask Copilot as usual.** VS Code, Copilot CLI, the GitHub Copilot app, or the cloud agent, with the default agent (e.g. "add a feature that notifies the borrower and their manager when a loan is more than 3 days overdue").
+2. **Copilot updates everything in the same change, following the rules.** Following the rules in `AGENTS.md`, it updates the requirements and acceptance criteria in the requirements definition, the catalog, the tests, and the code in the same change, and makes `python scripts/verify.py` exit 0. New IDs come from `next-id.py`; the ledger is updated with `ledger.py`. Review the diff and approve, in chat, any requirements that need approval.
+3. **On push / PR, CI runs the same checks.** `ebak-verify` and `ebak-data-layer` run the same checks as locally.
+4. **Ask rd-auditor for an audit at milestones.** When a group of features is done, before a release, and so on, choose `rd-auditor` as the agent and ask, for example, "audit the diff" or "audit everything 3 times". The diff defaults to the diff against `base_branch` (default `main`). On clients that support subagents, the requested number of runs execute in parallel and are decided by majority. Results go to `work/audit/<datetime>/report.md`. You decide whether to apply the findings, and fix them in a separate change.
+5. **Watch the status in EABK Studio** (optional). Use `python EABK-Studio/studio.py --role pm` and the like to see the state of requirements, the catalog, and tests as diagrams and tables ([EABK Studio](#eabk-studio-data-layer-viewer)).
 
-*This is a screen image. The numbers correspond to the steps below. The display and the positions of items differ depending on the VS Code version.*
+For details, see [Daily workflow](users-guide/02-daily-workflow.en.md) and [Writing requests](users-guide/01-writing-requests.en.md).
 
-1. Open the repository where you installed the toolkit in VS Code, and select **New** in the **Agents window**.
-2. Configure it as follows.
+EABK Lite does not add a preamble to your requests automatically. If you want a standing preamble, put it in your own Copilot instructions.
 
-   | Setting | Value | Reason |
-   |---|---|---|
-   | Session Target | **Copilot** | With the Copilot harness (Agent Host), the session continues even if you close the window. The hooks in `.github/hooks` also run with the same specification as Copilot CLI |
-   | Agent | **conductor** | The only agent that the user calls directly |
-   | Mode | **Autopilot** | Runs tools without approval, retries on errors, and continues until the work is complete |
-   | Code isolation | **New Worktree** (base: main) | Works without polluting the original working tree. If you want to set up the app's dependencies in a container, choose Dev Container |
+### Adopting an existing app
 
-3. Enable the agent **sandbox**. For the network, allow only the destinations you need, such as package registries (because a worktree is not a security boundary).
-4. Type `/build` in the chat box, **continue in the same box** by writing what you want to do, and send it (example: `/build I want to build a new internal equipment-lending app. …`).
-   - `/build` is a skill (`.github/skills/build/SKILL.md`). It treats the text you enter as `<request>` and uses default values for `<run_options>` (such as `max_hours: 24`). If you also want to specify answers and run_options, paste the template from [Writing requests](users-guide/01-writing-requests.en.md) after `/build` and edit it. Sending `/build-template` (or `/build template`) displays the template in the chat (it does not start a run).
-   - **No input form** such as `<request>` is displayed. Write the request text directly in the chat box.
-   - If `/build` does not appear in the suggestions, re-run the installation command to update. Even without updating, if the Agent is conductor, you can edit the template and send it as is, and it works the same way (prompt files are not loaded by Agent Host, so when the Session Target is Copilot it is not shown as `/build`).
-5. After sending, you may close the window. However, **do not let the PC sleep** (Agent Host runs on your local PC). You can check progress by opening the session from the session list in the Agents window.
-
-> With New Worktree, files that git does not manage (such as `/work`) are not copied to the new worktree. conductor's `/work` is created inside that session's worktree.
-
-### Run in the GitHub Copilot app
-
-The [GitHub Copilot app](https://docs.github.com/en/copilot/how-tos/github-copilot-app) (a desktop app) is built on top of Copilot CLI and loads the repository's `.github/agents` (custom agents), `.github/skills` (skills, including `/build`), and `.github/hooks` (quality gates) as they are. No additional toolkit-side configuration is needed.
-
-1. **Commit** the toolkit installation (a new working tree is checked out from a commit, so uncommitted files will not be included). If you select the repository from GitHub or use a cloud sandbox, also push.
-2. Create a new session with the **+** next to **Projects** in the sidebar, and select the repository where you installed the toolkit.
-3. Configure the following below the prompt box.
-
-   | Setting | Value | Reason |
-   |---|---|---|
-   | Where to run | **New working tree** (recommended) | Each session runs in its own branch and worktree (for example, `<parent of the repository>/copilot-worktrees/<repository name>/<branch name>`), so the original working tree is not polluted. If you choose **Local repository**, it runs in your current checkout, as with Copilot CLI |
-   | Session mode | **Autopilot** | Proceeds to the end without waiting for input. The agentStop hook sends back work that finishes too early |
-   | Model | A model with strong reasoning | You can leave it to Copilot's automatic selection, such as Copilot Fusion |
-   | Agent | **conductor** | Select it in the agent picker, or with `/agent` in the prompt box |
-
-4. Enable the local sandbox (app settings → Projects → **Sandbox** → **New sessions in sandbox**, or `/sandbox on` during a session). With the default policy, you can read and write the worktree, install packages, and connect to local development servers. Hooks also run inside the sandbox.
-5. Type `/build` in the prompt box, continue with what you want to do, and send it. The template is displayed with `/build-template` (or `/build template`) (it does not start a run).
-6. After sending, keep the app running and **do not let the PC sleep** (local sessions run on your PC). You can check progress from the session in the sidebar.
-
-Notes specific to the GitHub Copilot app:
-
-- **Renaming the branch**: The app may rename the session's branch with an agent tool (`rename_branch`). After a run starts, the integration branch is recorded in `meta.json`, so the hook (G-5) denies this tool. Even if you change the branch name from the app's UI or elsewhere, `python scripts/run-state.py status` re-records the current branch as the integration branch.
-- **Merging**: For a run started in a new working tree, the session's branch becomes the integration branch as is, and conductor does not merge into main. After checking `run-report.md`, merge it by creating a pull request in the app (or with `git merge`). With `git_push: しない` (do not push), you do the push yourself using the app.
-- **Resuming**: `/work` (the run state) is not managed by git, so it exists only inside that session's worktree. When a run stops, send "continue" in the **same session**. A new session gets a different worktree and cannot take over the run state. Do not archive or delete the session until the run has finished and you have merged the result.
-- **Cloud sandbox**: The whole session runs in a GitHub-hosted Linux environment, so it continues even if your PC sleeps. However, note that the repository is fetched from GitHub so the toolkit must already be pushed, that it must be enabled by your organization or Enterprise policy, and that usage-based billing applies. The deliverables are inside the sandbox, so either set `git_push` to "push to the work branch," or push and create a pull request from the app after it finishes. At first, verify [What to check the first time](#what-to-check-the-first-time) with a short run.
-
-### Run in Copilot CLI
-
-The same customizations (`.github/agents`, `.github/skills`, `.github/hooks`) can also be used in Copilot CLI.
-
-![Screen image of starting conductor with autopilot in Copilot CLI and a run in progress](images/quickstart-copilot-cli.png)
-
-*This is a screen image. The display differs depending on the Copilot CLI version.*
-
-```bash
-# Prepare a file containing your request (the template is in 1.1 of users-guide/01-writing-requests.md), then run
-copilot --agent conductor --autopilot --allow-all --max-autopilot-continues 500 -i "$(cat request.md)"
-```
-
-```powershell
-copilot --agent conductor --autopilot --allow-all --max-autopilot-continues 500 -i (Get-Content request.md -Raw)
-```
-
-- The default value of `--max-autopilot-continues` is 5. For a 24 to 48 hour run, use a large value.
-- Configure the sandbox interactively with `/sandbox` (`copilot help sandbox`). Using full permissions (`--allow-all`) in combination with the sandbox is recommended.
-- If you want to run on a different branch, first run `git switch -c run/<name>` and then start. Even if you start on main, conductor first creates the integration branch `run/<run-id>`.
-
-### Example of a first request
-
-```text
-<request>
-I want to build a new internal equipment-lending app. Employees search for equipment and reserve it, and General Affairs records lending and returns.
-When an item is more than 3 days overdue, notify the borrower and their manager. It is a web app, and for now it only needs to run locally.
-</request>
-<answers>
-</answers>
-<references>
-docs/source/備品管理の現状.md
-</references>
-<run_options>
-max_hours: 8
-approval_policy: 安全範囲は推奨どおり
-parallel_workers: auto
-scope: 承認済みすべて
-git_push: しない
-deploy: しない
-external_write: しない
-paid_services: 使わない
-external_exposure: 公開しない
-</run_options>
-```
-
-For your first run, we recommend a short `max_hours` (4 to 8 hours) so you can check the format and quality of the report.
-
-The `run_options` values (`approval_policy` onward) are written in Japanese in the original template, and are kept as is here. The meaning of the values in this example: `approval_policy` = follow the recommendations within the safe range; `scope` = everything that has been approved; `git_push` / `deploy` / `external_write` = no; `paid_services` = do not use; `external_exposure` = do not publish.
-
-### What happens in a run
-
-1. conductor starts the run with `run-state.py start`, creates the integration branch, and records the verify baseline.
-2. rd-author creates the requirements definition and catalog and raises the question list (the `[RD]` commit).
-3. rd-auditor audits independently. If there are direct contradictions, it sends the work back to rd-author.
-4. conductor creates the work queue.
-5. test-designer creates the System Tests and the ledger cases (the `[ST]` commit; all `not_run`).
-6. implementers implement each item in a worktree (the `[FR-xxx]` commits), and conductor integrates them one at a time.
-7. Finally, it runs the full System Test suite and a full audit, and writes `work/runs/<run-id>/run-report.md`.
-
-### What to check the first time
-
-The behavior of hooks and subagents can differ depending on the client (VS Code, Copilot CLI, the GitHub Copilot app) and its version. In the first run (or a short trial), check the following items, and record the results in the notes of `docs/run-history.md` or in your team's records (in the adoption plan this is called the "Phase 1 checklist"; see [Adoption roadmap and KPIs](users-guide/08-roadmap.en.md)).
-
-| # | What to check | How to check |
-|---|---|---|
-| 1 | Can custom agents be called as subagents? | The results of rd-author, test-designer, and implementer are recorded in progress.md |
-| 2 | Does the per-custom-agent model setting take effect? | Check each worker's model in Agent Debug Logs or the usage display |
-| 3 | Can the hook events identify the calling agent? | `work/.ebak/gate.log` records entries such as `START rd-author` and `DENY`/`BLOCK` |
-| 4 | Does processing continue after you close the window? | Close the window, reopen it 30 minutes later, and progress.md has advanced |
-| 5 | Do tests and browser automation (Playwright) run inside the sandbox? | The result of `ledger.py run` is recorded as pass/fail (not `TIMEOUT` or a permission error) |
-| 6 | How does the completion decision change with or without Advanced Autopilot? | No premature completion declarations occur (the agentStop hook sends work back with `完了条件を満たしていません` ("completion conditions are not met")) |
-| 7 | (GitHub Copilot app) Do hooks run inside the sandbox, and does the integration branch stay unchanged? | There are entries in `work/.ebak/gate.log`. The app shows no hook failure warning. `integration:` in `python scripts/run-state.py status` matches the session's branch (`run/<run-id>` if you started on main) |
-
-If check 3 shows that subagents cannot be identified, see the line `[G-5] conductor が編集できるのは…` ("[G-5] conductor can only edit…") under "Denials and send-backs" in [Troubleshooting](users-guide/07-troubleshooting.en.md).
-
-### Important: Risks of sending a prompt other than `/build`
-
-> [!IMPORTANT]
-> The quality assurance of this toolkit is designed to work when you start a run with `/build` (conductor). Even in a repository where the toolkit is installed, many gates do not work for ordinary prompts that do not use `/build` (such as requests in Agent mode). **Request changes to requirements, tests, and implementation with `/build`.** We recommend limiting ordinary prompts to read-only uses such as questions and investigation.
-
-Many of the rules in `scripts/hooks/gate.py` apply only while a run is active (the run's state in `work/current-run.txt` is `active`) or while you are on a work branch (`work/<run-id>/…`).
-
-| Category | Rules |
-|---|---|
-| Denied even outside a run | Directly editing the ledger (`tests/system/ledger.json`) (G-2), directly editing the ID registry (G-3), writing temporary files outside `/work` (G-6), writing outside the working directory, pushing and force-pushing to `main`, git operations that rewrite history, directly deleting `/work` |
-| **Not stopped** outside a run | Editing the requirements definition by anyone other than rd-author (G-1), directly committing or merging to `main`, restrictions from `deploy`, `git_push`, and `external_write` in `run_options` (deployment, and changes via external tools such as MCP), changes to the hooks themselves, the completion check before finishing (agentStop), verify before a worker finishes (G-4) |
-
-For this reason, the following can happen with ordinary prompts.
-
-1. **The requirements definition changes without notice**: `docs/requirements-definition.md` is rewritten without going through rd-author's structured fields, the question list, or the decision log. It also does not go through the independent audit (rd-auditor). IDs tend to be assigned by hand without using `next-id.py`. As a result, ID inconsistencies and missing numbering are found only later by verify.
-2. **System Tests get adjusted to the implementation**: An ordinary agent can edit `tests/system/`. If it fixes the tests treating the implementation rather than the acceptance criteria as correct, test-designer's independence (the countermeasure to the test oracle problem) is lost.
-3. **Unverified changes enter `main`**: There is no isolation through the integration branch and worktrees, no verify and canary at each integration, no automatic rollback on failure, and no reviewer review.
-4. **External changes occur**: The restrictions from run_options do not take effect, so deployment and changes to external systems via MCP or plugins are not stopped.
-5. **Completion is declared midway**: Without the completion-condition check, work can end without running verification.
-6. **Context and tokens bloat**: Without delegation to workers and resuming from state files, long work accumulates in a single conversation, and rules and progress are easily confused when it is compacted.
-
-Conversely, **if an interrupted run remains** (the run is `active`), conductor's restrictions also apply to ordinary prompts. For example, edits to anything other than `/work` and `docs/run-history.md` are denied (G-5). Also, the working tree may still have the integration branch (`run/<run-id>`) checked out, and if you commit unrelated changes there, the preconditions break when the run is resumed. Before using an ordinary prompt, check the state with `python scripts/run-state.py status`, and if you want to continue the run, resume it with `/build`.
-
-If you changed files with an ordinary prompt, run `python scripts/verify.py` before committing and confirm that it exits 0. CI (`.github/workflows/ebak-verify.yml`) runs the same checks.
+Take an inventory with `python scripts/adopt.py scan`, and use `python scripts/adopt.py request` to create, in `work/import/adopt-<datetime>.md`, a request you can paste into Copilot chat as is (with a `<constraints>` section; defaults are "implementation: no" and "approval: strict"). Reverse-engineered requirements enter as "pending approval" and you approve them ([Adopting an existing app](users-guide/10-adopting-existing-apps.en.md)).
 
 ### Data layer workflow (ebak-data-layer)
 
-`.github/workflows/ebak-data-layer.yml` (ebak-data-layer) runs `python scripts/verify.py --docs-only` on pull requests, on pushes to main, on manual runs (workflow_dispatch), and on a weekly schedule.
+`.github/workflows/ebak-data-layer.yml` (ebak-data-layer) runs `python scripts/verify.py --docs-only` on pull requests, on push to main, on manual runs (workflow_dispatch), and on a weekly schedule.
 
-- On failure, it automatically repairs with the common entry point `python scripts/rdfix.py --full --apply`, re-checks, and commits the repair only if it passes. It is designed not to change the requirements definition. For a PR in the same repository, the repair goes to that PR's branch; for pushes to main and scheduled runs, it is reflected in the repair branch (`eabk/data-layer-fix`) and a PR.
-- If it is still not fixed after repair, it creates an Issue labeled `eabk-data-layer` containing a failure summary and a link to the run (or comments on an existing unresolved Issue with the same content).
-- Its permissions are only write on contents, pull-requests, and issues, and for PRs from forks it only performs the check. It does not repair again on the bot's own repair commits.
-- To disable it, delete the file or Disable it on the Actions screen (use `--no-ci` at installation). For details, see `users-guide/04-customization.md`.
+- When it fails, it auto-repairs through the common entry point `python scripts/rdfix.py --full --apply` and re-checks, and commits the repair only if it passes. The requirements definition is never changed by design. For a PR in the same repository, the repair goes to that PR's branch; for a push to main and scheduled runs, it goes to a repair branch (`eabk/data-layer-fix`) and a PR.
+- If it is still not fixed after repair, it creates an Issue labeled `eabk-data-layer` with a failure summary and a link to the run (or comments on an open Issue with the same content).
+- Permissions are only contents, pull-requests, and issues write; PRs from forks are only checked. Repair commits by the bot are not repaired again.
+- To disable it, delete the file or Disable it on the Actions page (or use `--no-ci` at install time). Details in `users-guide/04-customization.en.md`.
+
+---
+
+## Migrating from 0.5.x
+
+0.6.0 (EABK Lite) removes the orchestration (conductor and the worker agents, worktree runs, `/build`, per-role gates). When you update with the same installation command:
+
+| 0.5.x | In 0.6.0 |
+|---|---|
+| Asking conductor with `/build` | Ask the default agent as usual ([Recommended workflow](#recommended-workflow)) |
+| `<run_options>` (`max_hours`, `approval_policy`, `parallel_workers`, `scope`, etc.) | Not needed. Instead of blanket approval (`approval_policy`), approve in chat |
+| conductor, rd-author, test-designer, implementer, reviewer; the skills `build`, `build-template`, `implement-fr`, `system-test-increment`, `dedupe` | Removed if you did not modify them (`REMOVE`). Kept if modified (`KEEP-LOCAL`; `--force` removes) |
+| Hooks (`.github/hooks/quality-gates.json`, `.github/hooks/prompt-prefix.json`, `scripts/hooks/gate.py`) and the automatic preamble | 0.6.0 has no hooks. Removed if unmodified (`REMOVE`). If a modified hook file is kept (`KEEP-LOCAL`), the installer prints `WARN-HOOK  <path>`: the file calls the deleted `gate.py`, and when a hook errors Copilot denies every tool, so delete the file and reopen the Copilot session. An existing `.github/ebak-prompt-prefix.md` is left alone but no longer read |
+| `run-state.py`, `integrate.py`, `kpi.py`, `watch.py`, `clean-work.py`, etc. | Removed. There is no replacement (state and integration are left to git and CI) |
+| Settings keys `gates`, `limits`, `credits`, `worktree_share`, `prompt_prefix` | Removed (shown as `PRUNE`) |
+| `docs/run-history.md` | If it remains, it is a read-only record (Studio can show it, and `rdfix.py` still fixes duplicated rows). New installs do not create it |
+| Worktrees and `work/*` branches left by 0.5.x runs | Not removed automatically. Check with `git worktree list` / `git branch --list "work/*"` and remove them by hand |
+
+The update does not change the requirements definition, the ledger, or the catalog. For details, see [Version upgrades](users-guide/09-versioning.en.md) and [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
 ## EABK Studio (data-layer viewer)
 
-**EABK Studio** (`EABK-Studio/`) is a local-only web app for browsing the data layer that EABK manages (the requirements definition, catalog, System Test ledger, ID registry, and run history) through **diagrams, tables, and search**. It is part of the toolkit and goes into the target repository when you install.
+**EABK Studio** (`EABK-Studio/`) is a local-only web app for browsing the data layer EABK manages (the requirements definition, the catalog, the System Test ledger, the ID registry, and a run history left from 0.5.x) through **diagrams, tables, and search**. It is part of the toolkit and is installed into the target repository.
 
-- It is **read-only**. It does not open source code, and it listens only on `127.0.0.1`. The only write is to the title and decision state in `docs/catalog.md`, performed after you review the preview in "Consistency maintenance."
-- It runs on the Python 3.9+ standard library only (no additional installation). When you update the data-layer files, the screen is reloaded within a few seconds.
-- It is a window for people to understand and make decisions about a run's results (requirements, catalog, tests). Changes to requirements and implementation are still requested with `/build`, as before.
+- It is **read-only**. It does not open source code and listens only on `127.0.0.1`. The only write is the title / decision state in `docs/catalog.md`, executed from "Consistency maintenance" after you check the preview.
+- It runs on the Python 3.9+ standard library alone (no extra installs). When data-layer files change, the screen reloads within seconds.
+- It is a window for people to understand and judge the state of requirements, the catalog, and tests. To change requirements or the implementation, ask Copilot.
 
 ![EABK Studio dashboard](users-guide/studio/images/dashboard.png)
 
 | Role | How to use it | Guide |
 |---|---|---|
 | Product Manager | Check progress, approvals, and unanswered questions on the dashboard, and decide which goal to invest in next | [S5. For Product Managers](users-guide/studio/05-product-manager.en.md) |
-| Architect | Check dependencies, boundaries, placement, and missing layers with the 2D/3D map, diagrams, layout, and structure | [S6. For Architects](users-guide/studio/06-architect.en.md) |
-| Software Engineer | Trace from a requirement to its implementation files and tests with the tables, source mapping, and detail panel | [S7. For Software Engineers](users-guide/studio/07-software-engineer.en.md) |
-| Everyone | Which screen reads what from which file, and how it is calculated | [S8. Data reference](users-guide/studio/08-data-reference.en.md) |
+| Architect | Check dependencies, boundaries, placement, and missing layers with the 2D/3D map, diagrams, placement, and structure views | [S6. For Architects](users-guide/studio/06-architect.en.md) |
+| Software Engineer | Trace from requirements to implementation files and tests with tables, source mapping, and the detail panel | [S7. For Software Engineers](users-guide/studio/07-software-engineer.en.md) |
+| Everyone | Which screen reads what from which file, and how it computes it | [S8. Data reference](users-guide/studio/08-data-reference.en.md) |
 
-Each guide consists of a 15-minute tutorial (with real screenshots), recommended links, and what that role can decide (the index is [users-guide/studio/](users-guide/studio/README.en.md)).
+The index is [users-guide/studio/](users-guide/studio/README.en.md).
 
 ### Start it in your own repository
 
-At the root of the repository where you installed the toolkit with `tools/install.py` ([Installation](#installation)), run the following.
+At the root of a repository where the toolkit is installed, run:
 
 ```bash
-python EABK-Studio/studio.py --check      # Check that the data layer can be read (the files found and the number of items parsed)
-python EABK-Studio/studio.py --role pm    # Opens the browser. --role is pm / architect / swe
+python EABK-Studio/studio.py --check      # check that the data layer can be read (files found and items parsed)
+python EABK-Studio/studio.py --role pm    # opens the browser. --role is pm / architect / swe
 ```
 
-You can also start it with `.\EABK-Studio\start.ps1 -Role pm` on Windows, or `./EABK-Studio/start.sh . 8765 --role pm` on macOS / Linux. This start command is also shown at the end of installation. For details, see [EABK-Studio/README.md](EABK-Studio/README.md); for the script options, see the [Script reference](users-guide/05-scripts-reference.en.md#eabk-studio-data-layer-viewer).
+On Windows you can also use `.\EABK-Studio\start.ps1 -Role pm`, and on macOS / Linux `./EABK-Studio/start.sh . 8765 --role pm`. Details are in [EABK-Studio/README.md](EABK-Studio/README.md); script options are in the [Scripts reference](users-guide/05-scripts-reference.en.md).
 
 ---
 
 ## Detailed documentation
 
-The details are in [users-guide/](users-guide/README.en.md).
+Details are in [users-guide/](users-guide/README.en.md).
 
-| # | Document | When to read it |
+| # | Document | When to read |
 |---|---|---|
-| 1 | [Writing requests (/build and run_options)](users-guide/01-writing-requests.en.md) | You want to know how to write good requests and answers, and about approval policies |
-| 2 | [During and after a run](users-guide/02-during-and-after-run.en.md) | You want to check progress, resume, read the report, and merge |
-| 3 | [Format of managed data](users-guide/03-requirements-format.en.md) | You want to know the formats of the requirements definition, catalog, ID registry, and System Test ledger |
-| 4 | [Settings and customization](users-guide/04-customization.en.md) | You want to adjust build and test commands, model assignments, and gates. You want to use MCP servers and plugins (Work IQ, Azure, and so on) |
-| 5 | [Script reference](users-guide/05-scripts-reference.en.md) | You want to know how to use each command in `scripts/` |
-| 6 | [Quality gates and checks](users-guide/06-quality-gates.en.md) | You want to know the meaning of hooks (G-1 to G-6) and verify (CHK-01 to 27) and how to fix them |
-| 7 | [Troubleshooting](users-guide/07-troubleshooting.en.md) | A run stopped, something was denied, or something failed |
-| 8 | [Adoption roadmap and KPIs](users-guide/08-roadmap.en.md) | You want to know the steps from diagnosis to production operation, and how to measure the effect |
-| 9 | [Version upgrade procedure](users-guide/09-versioning.en.md) | Bump the version (the distributor), or update an already-installed repository (the user) |
-| 10 | [Adopting an existing app](users-guide/10-adopting-existing-apps.en.md) | Build up the data layer from existing code and design documents: inventory → reverse-generated requirements (pending approval) → freezing current behavior |
-| 11 | [External integration catalog](users-guide/11-integration-catalog.en.md) | Record integrations with external apps and data in `docs/integrations.md` (optional). Procedures for adding, changing, retiring, and checking |
-| Reference | [EABK Studio guides](users-guide/studio/README.en.md) | You want to view the data layer in diagrams and tables. You want to know the procedures for each of Product Manager, Architect, and Software Engineer, and the data each screen reads |
+| 1 | [Writing requests](users-guide/01-writing-requests.en.md) | You want to know how to write requests, answers, and approvals so the requirements definition is updated correctly |
+| 2 | [Daily workflow](users-guide/02-daily-workflow.en.md) | You want the flow request → verify → push / CI → milestone audit → Studio, and how to check results |
+| 3 | [Management data format](users-guide/03-requirements-format.en.md) | You want the format of the requirements definition, catalog, ID registry, and System Test ledger |
+| 4 | [Settings and customization](users-guide/04-customization.en.md) | You want to adjust build / test commands, the check profile, or CI, or use MCP servers / plugins |
+| 5 | [Scripts reference](users-guide/05-scripts-reference.en.md) | You want to know how to use each command in `scripts/` |
+| 6 | [Checks and audits](users-guide/06-quality-gates.en.md) | You want the meaning of verify's CHKs and how to fix them, rdfix, and rd-auditor audits |
+| 7 | [Troubleshooting](users-guide/07-troubleshooting.en.md) | verify, CI, or a repair failed |
+| 8 | [Adoption roadmap](users-guide/08-roadmap.en.md) | You want the steps from trial to production use |
+| 9 | [Version upgrades](users-guide/09-versioning.en.md) | Releasing a version (distributor), updating an installed repository (user), migrating from 0.5.x |
+| 10 | [Adopting an existing app](users-guide/10-adopting-existing-apps.en.md) | Build the data layer from existing code and design documents: inventory → reverse-engineered requirements (pending approval) → pinning current behavior |
+| 11 | [Integration catalog](users-guide/11-integration-catalog.en.md) | Record integrations with external apps / data in `docs/integrations.md` (optional): adding, changing, retiring, and checking |
+| Reference | [EABK Studio guide](users-guide/studio/README.en.md) | You want to view the data layer as diagrams and tables, with per-role procedures and the data each screen reads |
 
 ## Glossary
 
 | Term | Meaning |
 |---|---|
-| conductor (orchestrator) | The only agent the user calls directly. It handles planning, assigning work, integration, gate decisions, and reporting. |
-| Worker | A custom agent that conductor calls as a subagent. There are five: rd-author, rd-auditor, test-designer, implementer, and reviewer. |
-| Managed data | The requirements definition (`docs/requirements-definition.md`) and the catalog (`docs/catalog.md`). The Single Source of Truth for requirements and existing assets. |
-| Ledger | The System Test case definitions and their latest state (`tests/system/ledger.json`). |
-| run | One execution of conductor. Identified by `run-id` (the start datetime; for example, `202610080900`). |
-| Step (stage) | A phase of a run. There are steps 0 (initialization) through 6 (final) ([The flow of one run](#the-flow-of-one-run)). |
-| `/work` | The location for temporary files (not managed by git; deleted after 14 days). It holds the work queue, progress, logs, evidence, and reports. |
-| Gate | A mechanism that enforces rules regardless of the model's judgment. It has two layers: hooks (G-1 to G-6) and the deterministic checks of verify (CHK-01 to 27). |
-| Blanket approval | Deciding in advance, with `approval_policy` in run_options, that "AI proposals within this scope may be accepted as recommended." |
+| Rules | The block that goes into `AGENTS.md` and `.github/copilot-instructions.md`. Every Copilot reads it ([Rules](#rules-the-block-that-goes-into-agentsmd)). |
+| Management data | The requirements definition (`docs/requirements-definition.md`), the catalog (`docs/catalog.md`), and so on. The single source of truth for requirements and existing assets. |
+| Ledger | System Test case definitions and their latest state (`tests/system/ledger.json`). Updated only with `ledger.py`. |
+| ID registry | The record of assigned IDs (`docs/id-registry.md`). Updated only with `next-id.py`. |
+| Check profile | `lite` (default; only the structure and traceability CHKs) and `full` (all of CHK-00 to CHK-34) in `checks.profile`. |
+| Audit | rd-auditor's semantic audit (contradictions, alignment with goals, writing quality). You ask for it at milestones. Results go to `work/audit/<datetime>/`. |
+| `/work` | Location for temporary files (not tracked by git): logs, evidence, audit results, working notes. |
 
 ## Repository structure
 
 | Content | Location |
 |---|---|
 | Detailed documentation | [users-guide/](users-guide/README.en.md) |
-| Agents (conductor + 5 workers) | [.github/agents/](.github/agents/) |
-| Procedure documents (skills) | [.github/skills/](.github/skills/) |
-| Enforced gates (hooks) | [.github/hooks/quality-gates.json](.github/hooks/quality-gates.json), [scripts/hooks/gate.py](scripts/hooks/gate.py) |
+| Auditor (rd-auditor) | [.github/agents/](.github/agents/) |
+| Procedures (skills) | [.github/skills/](.github/skills/) |
 | Deterministic scripts | [scripts/](scripts/) |
-| Data-layer viewer (EABK Studio) | [EABK-Studio/](EABK-Studio/README.md); guides are in [users-guide/studio/](users-guide/studio/README.en.md) |
-| Managed data templates | [docs/](docs/), [tests/system/ledger.json](tests/system/ledger.json) |
+| CI | [.github/workflows/](.github/workflows/) |
+| Data-layer viewer (EABK Studio) | [EABK-Studio/](EABK-Studio/README.md), guide in [users-guide/studio/](users-guide/studio/README.en.md) |
+| Management data templates | [docs/](docs/), [tests/system/ledger.json](tests/system/ledger.json) |
 | Installation scripts | [tools/](tools/) |
 | Toolkit tests | [tests/toolkit/](tests/toolkit/) (`python -m pytest tests/toolkit -q`) |

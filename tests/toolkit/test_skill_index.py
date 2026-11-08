@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 
 SKILLS = Path(__file__).resolve().parents[2] / ".github" / "skills"
-PAIRS = (("implement-fr", "original-fr.md"), ("requirement-definition", "original.md"))
+PAIRS = (("requirement-definition", "original.md"),)
 
 
 def _tags(text):

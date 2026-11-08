@@ -48,7 +48,7 @@ def test_request_draft_is_unapproved_and_scope_none(repo):
     make_app(repo)
     repo.py("adopt.py", "scan", check=True)
     out = repo.py("adopt.py", "request", "--stdout", check=True).stdout
-    assert "adopt-existing" in out and "scope: なし" in out and "approval_policy: 厳格" in out
+    assert "adopt-existing" in out and "実装: しない" in out and "承認: 厳格" in out and "<run_options>" not in out
     assert "`orders`" in out and "orders-design.md" in out
 
 

@@ -37,6 +37,15 @@ HISTORY_SECTION_RE = re.compile(r"変更履歴|決定記録|監査指摘")
 ASSET_RE = re.compile(r"(共通部品|API|イベント|テーブル)\s*[「『]([^」』]+)[」』]")
 
 
+PROFILES = ("lite", "full")
+
+
+def check_profile(cfg: dict, override: Optional[str] = None) -> str:
+    """The check profile: the CLI value, else checks.profile, else "lite". Unknown values fall back to "full"."""
+    p = override or cfg.get("checks", {}).get("profile") or "lite"
+    return p if p in PROFILES else "full"
+
+
 @dataclass
 class Finding:
     level: str
@@ -59,9 +68,11 @@ class Ref:
 
 class Checker:
     def __init__(self, root: Path, cfg: dict, base: Optional[str], run_id: Optional[str],
-                 strict: bool, strict_ledger: Optional[bool]):
+                 strict: bool, strict_ledger: Optional[bool], profile: Optional[str] = None):
         self.root, self.cfg, self.base, self.run_id = root, cfg, base, run_id
         self.strict = strict
+        self.profile = check_profile(cfg, profile)
+        self.lite_checks = set(cfg["checks"].get("lite_checks") or [])
         self.findings: List[Finding] = []
         self.doc = h.parse_requirements(root, cfg)
         self.ledger = h.load_ledger(root, cfg)
@@ -81,6 +92,8 @@ class Checker:
 
     # ------------------------------------------------------------------ helpers
     def add(self, level: str, chk: str, loc: str, msg: str) -> None:
+        if self.profile == "lite" and chk not in self.lite_checks:
+            return
         self.findings.append(Finding(level, chk, loc, msg))
 
     def err(self, chk: str, loc: str, msg: str) -> None:
@@ -140,7 +153,7 @@ class Checker:
         req_path = h.mf(self.cfg, "requirements")
         if not self.doc.exists:
             self.add("ERROR" if self.strict else "WARN", "CHK-00", req_path,
-                     "要求定義書がありません（未初期化）。conductor の工程 1 で rd-author が作成します")
+                     "要求定義書がありません（未初期化）。skill `requirement-definition` に従って作成します")
             self.chk23()
             return self.findings
         self.prefetch(self.scan_files())
@@ -205,7 +218,7 @@ class Checker:
             ent = reg.get(id_)
             if ent is None:
                 self.err("CHK-01", self.loc(defs[0].file, defs[0].line),
-                         f"{id_} が ID 台帳にありません。ID は scripts/next-id.py でだけ採番します（G-3）")
+                         f"{id_} が ID 台帳にありません。ID は scripts/next-id.py でだけ採番します")
             elif re.search(r"削除済み|欠番", ent["state"]):
                 self.err("CHK-02", self.loc(defs[0].file, defs[0].line),
                          f"{id_} は ID 台帳で「{ent['state']}」です。廃止・削除した ID は再利用しません")
@@ -386,7 +399,7 @@ class Checker:
             if old is None:
                 self.add(level_missing, "CHK-11", led, f"{a} の ac_digests がありません（ledger.py digests --update）")
             elif old != cur:
-                self.add(level_missing, "CHK-11", self.loc(ac.file, ac.line), f"{a} の本文が台帳の作成時から変わっています（{old} → {cur}）。test-designer がケースを見直します")
+                self.add(level_missing, "CHK-11", self.loc(ac.file, ac.line), f"{a} の本文が台帳の作成時から変わっています（{old} → {cur}）。ケースを見直し、`ledger.py digests --update` を実行します")
 
     # ------------------------------------------------------------------ CHK-12
     def chk12(self) -> None:
@@ -406,7 +419,7 @@ class Checker:
                 rc, out = h.git(["diff", "--name-only", f"{fork}...HEAD", "--", "tests/system"], self.root)
                 changed = [x for x in out.splitlines() if x.strip()] if rc == 0 else []
                 if changed:
-                    self.err("CHK-12", branch, f"作業役のブランチが System Test を変更しています: {', '.join(changed[:5])}（G-2）")
+                    self.err("CHK-12", branch, f"作業役のブランチが System Test を変更しています: {', '.join(changed[:5])}")
             return
         if not self.base:
             return
@@ -824,7 +837,7 @@ class Checker:
             if reg is not None:
                 ent = reg.get(it.id)
                 if ent is None:
-                    self.warn("CHK-28", where, f"{it.id} が ID 台帳にありません。ID は scripts/next-id.py INT でだけ採番します（G-3）")
+                    self.warn("CHK-28", where, f"{it.id} が ID 台帳にありません。ID は scripts/next-id.py INT でだけ採番します")
                 elif re.search(r"削除済み|欠番", ent["state"]):
                     self.err("CHK-28", where, f"{it.id} は ID 台帳で「{ent['state']}」です。廃止・削除した ID は再利用しません")
             if not it.name:
@@ -1088,7 +1101,8 @@ def cmd_check(args, root, cfg) -> int:
     run_id = args.run
     if run_id == "current":
         run_id = h.current_run(h.conductor_root(root, cfg), cfg)
-    ck = Checker(root, cfg, base, run_id, args.strict, True if args.strict_ledger else (False if args.no_strict_ledger else None))
+    ck = Checker(root, cfg, base, run_id, args.strict, True if args.strict_ledger else (False if args.no_strict_ledger else None),
+                 profile=args.profile)
     findings = ck.run_all()
     # FR-1082: project-specific extensions (extensions.checks / scripts/ext/*.py) run with the standard checks
     ext_results, ext_skipped, ext_errors = extpoints.run(root, cfg, "rdcheck")
@@ -1111,7 +1125,7 @@ def cmd_check(args, root, cfg) -> int:
         if getattr(ck, "area_info", None) is not None and ck.doc.exists and not args.errors_only:
             if ck.area_assignment() is None:
                 print(f"INFO 領域未所属の要求: {ck.area_info} 件（領域の割り当て表の承認まで任意）")
-        print(f"rdcheck: errors={errors} warnings={warns} base={base or '-'} run={run_id or '-'}")
+        print(f"rdcheck: errors={errors} warnings={warns} base={base or '-'} run={run_id or '-'} profile={ck.profile}")
     return 1 if errors else 0
 
 
@@ -1405,8 +1419,8 @@ def cmd_similar(args, root, cfg) -> int:
         else:
             for s, x, y in pairs[:args.top or None]:
                 print(f"{s:.2f}\t{x[1]}\t{x[0]}\t{y[0]}\t{x[2][:40]} | {y[2][:40]}")
-            print(f"similar: pairs={len(pairs)} min={min_score}（似た組は統合を検討します。REQ・AC は rd-author が残す方を変更しもう一方を廃止、"
-                  "CASE は test-designer が残す方に AC を寄せてもう一方を停止（ledger.py block）、CAT は統合した要求・部品に合わせて行を整理します）")
+            print(f"similar: pairs={len(pairs)} min={min_score}（似た組は統合を検討します。REQ・AC は残す方を変更しもう一方を廃止、"
+                  "CASE は残す方に AC を寄せてもう一方を停止（ledger.py block）、CAT は統合した要求・部品に合わせて行を整理します）")
         return 0
     if not args.text:
         raise SystemExit("ERROR similar: 文章か ID を指定します（全体の重複候補は --pairs）")
@@ -1629,6 +1643,8 @@ def main(argv=None) -> int:
     c.add_argument("--strict", action="store_true", help="warn の一部を error にする（最終・統合時）")
     c.add_argument("--strict-ledger", action="store_true", help="CHK-10/11 の不足を error にする（工程 4 以降）")
     c.add_argument("--no-strict-ledger", action="store_true")
+    c.add_argument("--profile", choices=PROFILES, default=None,
+                   help="報告する検査の範囲。lite（既定）は構造と追跡性の CHK だけ、full はすべて（checks.profile で既定を変える）")
     c.add_argument("--errors-only", action="store_true")
     c.add_argument("--json", action="store_true")
     s = sub.add_parser("show")

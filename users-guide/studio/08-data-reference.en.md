@@ -321,7 +321,7 @@ Data read: the requirement's `決定状態`, the AC's `検証レベル` and `BLO
 
 - Source code, configuration, logs, and the contents of `work/` (run progress, evidence, audit results). The only things that appear as names are paths written in the catalog and the ledger.
 - The contents of `docs/manual-tests.md` (existence check only).
-- The contents of `.github/` (agents, skills, hooks).
+- The contents of `.github/` (agents, skills).
 - Usage scenarios in the requirements definition (parsed but not displayed).
 
 ## S8.9 What Is Written

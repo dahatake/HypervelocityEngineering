@@ -61,7 +61,7 @@ def test_nfr_ops_007_ac257_managed_version_and_documents():
     ver = re.search(r'TOOLKIT_VERSION = "(\d+)\.(\d+)\.(\d+)"', _read("scripts/ebaklib.py"))
     assert tuple(map(int, ver.groups())) > (0, 4, 0)
     for d in ("README.md", "CHANGELOG.md", "users-guide/04-customization.md", "users-guide/05-scripts-reference.md",
-              "users-guide/06-quality-gates.md", "users-guide/07-troubleshooting.md", ".github/agents/conductor.agent.md"):
+              "users-guide/06-quality-gates.md", "users-guide/07-troubleshooting.md"):
         assert "rdfix.py --full --apply" in _read(d), d
     for d in ("README.md", "users-guide/05-scripts-reference.md", "users-guide/06-quality-gates.md"):
         t = _read(d)

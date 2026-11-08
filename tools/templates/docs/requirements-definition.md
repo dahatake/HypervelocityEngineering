@@ -1,15 +1,15 @@
 # 要求定義書
 
 <!--
-この文書は、このアプリの要求の唯一の正本です。編集できるのは rd-author だけです（hook G-1）。
+この文書は、このアプリの要求の唯一の正本です。振る舞いを変える人が、同じ変更の中で更新します（手順は skill `requirement-definition`）。
 書式の規則は EABK-docs/03-requirements-format.md と .github/skills/requirement-definition/SKILL.md を参照します。
-ID（FR・NFR・AC・Q・PARAM）は `python scripts/next-id.py <種別>` でだけ採番します（G-3）。
+ID（FR・NFR・AC・Q・PARAM）は `python scripts/next-id.py <種別>` でだけ採番します（複数の人・PC で並行しても重複させないため）。
 -->
 
 | 項目 | 内容 |
 |---|---|
 | 文書名 | （アプリ名）要求定義書 |
-| 版 | 0.0（未作成。conductor の工程 1 で rd-author が作成します） |
+| 版 | 0.0（未作成。skill `requirement-definition` に従って作成します） |
 | 最終更新 | - |
 
 ## 変更履歴

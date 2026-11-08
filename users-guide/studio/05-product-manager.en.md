@@ -41,7 +41,7 @@ Click `🎯 Product Manager` at the top right of the screen to open the dashboar
    | BLOCKED requirements | Requirements that have acceptance criteria that cannot proceed because a question is unanswered |
 3. **Look inside a number** (2 minutes). Click the `Implementation registered %` card. The requirements included in that number are highlighted on the 2D map. Every chart and number on the dashboard is clickable.
 4. **Look at progress by goal** (2 minutes). In "Implementation progress by goal" on the dashboard, click the bar of a goal that is progressing slowly. The requirements belonging to that goal light up on the map. Set the **color switch** to `Implementation status` to see unregistered requirements in red.
-5. **Prepare to answer pending questions** (2 minutes). Open `Tables` → `Questionnaire` and, in the `state` filter, choose any state other than "answered." The questions, options, and recommendations are listed. You can identify BLOCKED requirements in the "BLOCKED" column of `Tables` → `Requirements`. Pass your answers to the conductor as `<answers>`, following the EABK workflow ("How to write a request" in the main README). You cannot answer from Studio.
+5. **Prepare to answer pending questions** (2 minutes). Open `Tables` → `Questionnaire` and, in the `state` filter, choose any state other than "answered." The questions, options, and recommendations are listed. You can identify BLOCKED requirements in the "BLOCKED" column of `Tables` → `Requirements`. Answer in Copilot chat, for example `Q-003: B` ([Chapter 1 "How to write requests"](../01-writing-requests.en.md)). You cannot answer from Studio.
    ![Table of test cases](images/cases.png)
 6. **Review how decisions were made** (2 minutes). In `Tables` → `Decision log` and `Sources`, check the date, subject, decision, rationale, and run. Pressing each card in "Design and development history and progress" at the bottom of the dashboard shows the supporting file and line on the right.
 7. **Check the content of a requirement** (2 minutes). Enter a term of interest in the search box at the top (the `/` key) and select a result. The detail panel on the right shows the requirement's body, acceptance criteria, priority, parent goal, and implementation files.
@@ -71,7 +71,7 @@ Open them by appending the following to the URL shown at launch (`http://127.0.0
 | Decision | Screen to base it on | Next action |
 |---|---|---|
 | Decide which goal to invest in next | Implementation progress by goal on the dashboard, priority pie chart | Put the MUST requirements of the slowest goal into the `scope` of the next run |
-| Advance approvals | Approved %, `Tables` → `Requirements` (status = proposed; AI proposals) | Pass approval, rejection, or hold to the conductor via `<answers>` |
+| Advance approvals | Approved %, `Tables` → `Requirements` (status = proposed; AI proposals) | Answer approval, rejection, or hold in Copilot chat, for example `FR-031: 承認` (approve) |
 | Get stalled requirements moving | BLOCKED requirements, unanswered questions | Answer the questionnaire |
 | Report on quality status | Test pass %, `Tables` → `Test cases` | When there are many `not_run`, request that a run be executed |
 | Fix mismatches between requirements and catalog | `Consistency maintenance` | Review the preview and execute (only the catalog's titles and decision states change) |
@@ -80,6 +80,6 @@ Open them by appending the following to the URL shown at launch (`http://127.0.0
 
 - "Implementation registered" means whether a path is written in the catalog. It does not check whether the file actually exists or works. Judge whether it works by "test pass" and the result of `python scripts/verify.py`.
 - When `Test pass %` is 0, either there is no ledger or the cases are `not_run`. You can check whether the ledger is found with `python EABK-Studio/studio.py --check`.
-- You cannot add or change requirements in Studio. Request them with `/build` (main README).
+- You cannot add or change requirements in Studio. Request them in Copilot chat ([Chapter 1](../01-writing-requests.en.md)).
 
 Next, proceed to [06-architect.en.md](06-architect.en.md) (view design consistency) or [08-data-reference.en.md](08-data-reference.en.md) (the basis for the numbers).

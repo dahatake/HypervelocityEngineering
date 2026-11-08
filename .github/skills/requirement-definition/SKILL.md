@@ -1,34 +1,48 @@
 ---
 name: requirement-definition
-description: rd-author が、conductor から渡された依頼・回答・資料を、docs/requirements-definition.md と docs/catalog.md の構造化欄つきの要求・受入基準・質問票・決定記録・出典台帳に反映する手順書（要求定義書とカタログの唯一の書き手。コードは変更しない）。ID は next-id.py で採番し、終了前に `verify.py --docs-only` を exit 0 にする。
+description: 振る舞いを変える変更（機能の追加・変更・削除）のときに、docs/requirements-definition.md と docs/catalog.md の構造化欄つきの要求・受入基準・質問票・決定記録・出典台帳を、同じ変更の中で更新する手順書（EABK Lite。誰が編集してもよい）。ID は next-id.py で採番し、終わる前に `verify.py --docs-only` を exit 0 にする。
 ---
-# requirement-definition（rd-author の手順書）
+# requirement-definition（要求定義書を更新する手順書・EABK Lite）
 
-この手順書は、利用者の原本「RequirementDefinition作成」の本文（同じフォルダーの別ファイルにある「原本」）に、conductor による無人の連続実行につなぐための読み替えと規則を加えたものです。
+この手順書は、利用者の原本「RequirementDefinition作成」の本文（同じフォルダーの `original.md`）を、EABK Lite の進め方で使うための読み替えと規則です。EABK Lite には専任の書き手（rd-author）も進行役（conductor）もありません。**振る舞いを変える人（Copilot または開発者）が、コード・テストと同じ変更の中で要求定義書とカタログを更新します。** 手元の `verify.py` と CI の `ebak-verify` が同じ検査をします。
 
-## 読み替え表（原本の指示 → この実行での扱い）
+## いつ使うか
 
-原本は、利用者が 1 本ずつ手で投入する前提で書かれています。conductor が無人で連続実行するため、次のとおり読み替えます。**読み替えと原本が食い違うときは、読み替えを優先します。**
+- 機能を追加・変更・削除するとき（UI の文言・配置だけの変更でも、受入基準が観察している振る舞いが変わるなら対象）。
+- 依頼が既存の要求と矛盾する、または要求に書かれていない振る舞いを作るとき。
+- 新しい要求定義書を作るとき（`docs/requirements-definition.md` がない・空のとき）。
+
+振る舞いが変わらないリファクタリング・依存の更新・誤字の修正では、要求定義書は変えません（カタログのファイルのパスが変わるときだけ、カタログの行を直します）。
+
+## 読み替え表（原本の指示 → EABK Lite での扱い）
+
+**読み替えと原本が食い違うときは、読み替えを優先します。**
 
 | 原本の指示 | 読み替え | 理由 |
 |---|---|---|
-| RequirementDefinition「commit と push は行わない。利用者が差分をレビュー」 | rd-author は統合ブランチに `[RD] <要約>` で commit します。利用者のレビューは、最終報告（run-report）と取り込みの判断で行います。 | 無人で連続実行するため |
-| RD-FR「依頼をもって承認」「要求定義書を作成または更新」 | implementer は要求定義書を変更しません。要求の誤りや不足は、結果の `CONFLICTS:` に書き、conductor が rd-author に回します。 | 要求の書き手を 1 つにする（GAP-1、H1） |
-| SystemTest「対象 AC はシステム全体を通して確かめるもの」 | 「検証レベル: system」の AC にします。 | 判断のぶれをなくす（GAP-5） |
-| 3 Prompt「最終報告はチャットで」 | `work/runs/<run-id>/run-report.md` に書きます（conductor）。作業役は 10 行以内の結果を返します。残すべき情報は `/docs` と台帳に転記します。依頼に関係しない既存の問題は、要求定義書の「監査指摘」に書きます。 | 監査結果を消さない（GAP-7） |
-| 3 Prompt・SystemTest「ログ、証跡（スクリーンショット）、実行結果の保存先」 | `work/runs/<run-id>/logs/`、`evidence/`、`results.json` にします。台帳には最新の状態（status、last_commit、last_run_at、evidence、history）だけを書きます。 | /docs と tests を永続のものだけにする |
-| 3 Prompt「新しい ID は最大番号の続き」 | `python scripts/next-id.py <種別>` で採番します（FR、NFR-<区分>、AC、Q、PARAM、E2E、IT）。 | 並行作業での ID の衝突を防ぐ（GAP-6） |
-| RD-FR・SystemTest「承認済みの要求だけを実装・テスト」 | approval_policy で包括承認したものを含みます。決定記録に「包括承認」と書きます。 | 承認待ちで止まらない（§承認ポリシー） |
-| 3 Prompt「質問せずに最後まで進める」「<request> <answers> <references> <execution_options> <run_options>」 | 利用者が毎回書く部分は、conductor が作業役への依頼の本文で渡します。原本の入力欄（`<request>` など）は、その置き場所を示すだけです。 | 利用者の Prompt を 1 回にする |
+| RequirementDefinition「commit と push は行わない。利用者が差分をレビュー」 | 要求定義書・カタログの変更は、コード・テストの変更と同じ commit（またはプルリクエスト）に入れます。利用者はその差分をレビューします。 | 要求とコードのずれを、変更の単位で無くす |
+| SystemTest「対象 AC はシステム全体を通して確かめるもの」 | 「検証レベル: system」の AC にし、System Test の台帳のケースを `ledger.py add` で足します。 | 判断のぶれをなくす |
+| 3 Prompt「新しい ID は最大番号の続き」 | `python scripts/next-id.py <種別>` で採番します（FR、NFR-<区分>、AC、Q、PARAM、E2E、IT）。 | 複数の人・PC で並行しても ID を重複させない |
+| 3 Prompt「質問せずに最後まで進める」 | 決められない点は質問票（Q-ID）に載せ、関係する AC を `BLOCKED: Q-xxx` にして先に進めます。チャットで利用者が答えたら、回答を反映して BLOCKED を外します。 | 止まらずに、未決を見える形で残す |
+| 3 Prompt「最終報告はチャットで」 | チャットで報告します。残すべき決定は要求定義書の決定記録に、依頼に関係しない既存の問題は「監査指摘」に書きます。 | 決定と監査の結果をリポジトリに残す |
+| 3 Prompt・SystemTest「ログ、証跡、実行結果の保存先」 | `/work` に置きます（git の管理対象外）。台帳には最新の状態（status、last_commit、last_run_at、evidence、history）だけを書きます。 | /docs と tests を永続のものだけにする |
 
-## この役割で追加する規則
+## 手順（1 回の変更で行うこと）
+
+1. 変える振る舞いに関係する要求を探します: `python scripts/rdcheck.py similar "<変えたいこと>"`、`python scripts/rdcheck.py trace <ID>`。
+2. 既存の要求で足りるなら、その要求の本文・受入基準・PARAM を変えます。足りないときだけ、下の「既存の項目の再利用」に従って新しく採番します。
+3. 受入基準を確かめるテストの名前かコメントに、要求 ID と AC ID を書きます（例: `FR-012 AC-031`）。「検証レベル: system」の AC は、System Test の台帳にケースを足すか更新します（`ledger.py add` / `update --reason`）。
+4. 実装ファイル・テストのパスを、カタログの機能の表に書きます（`python scripts/rdfix.py --only catalog --apply` で行の追従ができます）。
+5. `python scripts/verify.py --docs-only` を exit 0 にしてから、変更を終えます。
+
+## 規則
 
 ### 構造化欄（ルール B。scripts/verify.py が検査します）
 
 ```markdown
 #### FR-012 入力の中断と再開
 - 要求: 申請を入力している利用者は、入力を中断して後で再開したときに、入力済みの内容と未完了の項目を確認できる。
-- 決定状態: 承認済み（包括承認 2026-10-08・approval_policy）　出自: AI提案　優先度: SHOULD（中断のたびの再入力が離脱の原因）
+- 決定状態: 承認済み（依頼 2026-10-08）　出自: AI提案　優先度: SHOULD（中断のたびの再入力が離脱の原因）
 - 上位: G-002　出典: SRC-003 §2.1
 - 対象エンティティ: 申請　関係する状態: 下書き→提出済み　参照パラメータ: PARAM-004
 - 関連する既存資産: 共通部品「下書き保存」
@@ -61,7 +75,7 @@ description: rd-author が、conductor から渡された依頼・回答・資�
 
 ### 既存の項目の再利用（新規に作る前に。数を最適に保つ）
 
-要求・受入基準が増えるほど、各役割が読む量（トークン）、System Test のケースと実行時間、監査の照合の組が増えます。依頼の内容が既存の項目と重なるときは、新規に作らず既存の項目を変更します。新しい目的・対象の要求は、ためらわず追加します。
+要求・受入基準が増えるほど、Copilot が読む量（トークン）、System Test のケースと実行時間、監査の照合の組が増えます。依頼の内容が既存の項目と重なるときは、新規に作らず既存の項目を変更します。新しい目的・対象の要求は、ためらわず追加します。
 
 1. 採番の前に `python scripts/rdcheck.py similar "<書こうとする要求・受入基準の文>"` を実行します（要求だけなら `--kind FR`、受入基準だけなら `--kind AC`）。類似度の高い順に既存の項目が出ます。
 2. 出た項目を `rdcheck.py show <ID>` で読み、**目的（上位の G）と対象エンティティが同じ**なら、その項目を変更します。
@@ -69,7 +83,7 @@ description: rd-author が、conductor から渡された依頼・回答・資�
    - 閾値・期間の違い → PARAM の値を変えます（新しい要求にしません）。
    - 同じ振る舞いの言い換え → 何も足しません（結果に「既存の ID で充足」と書きます）。
 3. 目的か対象が違うときだけ、新規に採番します。
-4. `rdcheck.py similar --pairs` で出た似た組（既定の下限 0.35）のうち、依頼の範囲に入るものは、1 つに統合します。台帳のケースの組（`--kind CASE`）は test-designer が残す方に AC を寄せ、もう一方を停止します。残す方を変更し、もう一方を「廃止（依頼 YYYY-MM-DD）」にして、変更履歴に「統合: 廃止した ID → 残した ID」と書きます。依頼の範囲外の組は、監査指摘（カテゴリ: 重複）に書くだけにします。
+4. `rdcheck.py similar --pairs` で出た似た組（既定の下限 0.35）のうち、依頼の範囲に入るものは、1 つに統合します。台帳のケースの組（`--kind CASE`）は、残す方に AC を寄せ（`ledger.py update`）、もう一方を停止します（`ledger.py block`）。残す方を変更し、もう一方を「廃止（依頼 YYYY-MM-DD）」にして、変更履歴に「統合: 廃止した ID → 残した ID」と書きます。依頼の範囲外の組は、監査指摘（カテゴリ: 重複）に書くだけにします。
 5. 承認済みの要求の文面を変えるのは、依頼がその変更を含むときだけです（ほかは競合として記録する従来の規則のまま）。
 
 ### 外部連携を含む依頼（FR-1039。`integration-checklist.md`・`integration-requirements.md`）
@@ -78,19 +92,15 @@ description: rd-author が、conductor から渡された依頼・回答・資�
 
 1. 外部連携カタログ（`docs/integrations.md`。ない導入先は雛形から作成）を確認し、既存の連携があれば再利用・更新します。新しい連携は `python scripts/next-id.py INT` で INT-ID を採番し、`#### INT-xxx <名前>` の項目と索引表の行を足します。
 2. [integration-requirements.md](integration-requirements.md) の 16 観点（連携先・方向・方式・頻度と量・データ分類と個人情報・認証認可・可用性／SLA・レート制限・エラー／再試行／冪等性・契約／バージョン・変更通知・監視・データ保持・障害時の代替・責任分界・法務／ライセンス）を 1 つずつ走査します。決まらない観点は、質問票（Q-ID）に載せて値を `TBD（Q-xxx）` にし、関係する受入基準を BLOCKED にします。
-3. 個人情報・認証認可・外部公開に触れる観点は、approval_policy の包括承認の対象にしません（承認待ちのまま質問票に載せます）。
+3. 個人情報・認証認可・外部公開に触れる観点は、包括承認の対象にしません（利用者が承認するまで承認待ちのまま質問票に載せます）。
 4. 要求の「関連する既存資産」と構造化欄に、カタログの INT-ID を書きます。要求は同じ文書のテンプレート（基本形と構造化欄・検証レベル付きの受入基準）で書きます。
 5. 終了前に `python scripts/verify.py --docs-only` を exit 0 にし、結果に 16 観点の走査（観点番号ごとの扱い）を書きます。
 
-### 承認ポリシー（approval_policy）
+### 承認
 
-| 値 | 動作 |
-|---|---|
-| `厳格` | 原本のとおり。AI提案は「AI提案／承認待ち」とし、実装しません。 |
-| `安全範囲は推奨どおり`（既定） | AI提案と質問票の推奨案のうち、次の条件をすべて満たすものは「承認済み（包括承認 YYYY-MM-DD・approval_policy）」にします。条件: 利用者データ・権限・セキュリティ・プライバシー・課金・法令・外部公開・マスターと ID の体系・取り消せない操作に触れない／PARAM の変更で戻せる／既存の承認済み要求と競合しない。それ以外は承認待ちのままにし、関係する AC を `BLOCKED: Q-xxx` にします。 |
-| `すべて推奨どおり` | 上記の除外分野だけを承認待ち・BLOCKED にし、残りはすべて推奨案で「承認済み（包括承認 …）」にします。 |
-
-包括承認した要求は、結果の `APPROVED-BY-POLICY:` に返します（conductor が最終報告に影響の大きい順で載せ、利用者は次の Prompt の `<answers>` で却下・修正できます）。
+- 利用者が依頼した振る舞いは「承認済み（依頼 YYYY-MM-DD）」にします。
+- Copilot が提案した振る舞い（依頼にない補足・推奨案）は「AI提案／承認待ち」にし、実装しません。チャットで利用者が承認したら「承認済み（承認依頼 YYYY-MM-DD）」に変えます。
+- 利用者データ・権限・セキュリティ・プライバシー・課金・法令・外部公開・マスターと ID の体系・取り消せない操作に触れる提案は、必ず利用者の承認を得ます。
 
 ### 使うスクリプト
 
@@ -101,22 +111,10 @@ description: rd-author が、conductor から渡された依頼・回答・資�
 | 新規に作る前に似た既存の項目を探す | `python scripts/rdcheck.py similar "<文>"`、`similar FR-012`、`similar --pairs`（統合の候補） |
 | つながり・影響範囲をたどる | `python scripts/rdcheck.py trace FR-012`、`trace 申請`、`trace PARAM-004` |
 | 一覧・件数 | `python scripts/rdcheck.py list --state 承認済み`、`python scripts/rdcheck.py stats` |
-| 終了前の検査（G-4） | `python scripts/verify.py --docs-only --show-warnings`（exit 0 にする） |
-| 工程 6 の ID 台帳の整理 | `python scripts/next-id.py --sync --finalize`（conductor が実行） |
+| 終了前の検査 | `python scripts/verify.py --docs-only`（exit 0 にする。`--profile full --show-warnings` で書式の警告も見る） |
+| ID 台帳の整理（節目） | `python scripts/next-id.py --sync --finalize` |
 
 既存の文書に初めて導入するときは、`python scripts/next-id.py --sync --adopt` で既存の ID を ID 台帳に取り込みます。
-
-### 工程 6 の転記（conductor から依頼されたとき）
-
-`/work` は 14 日で消えるので、残すべき情報を要求定義書に転記します。
-
-| 情報 | 転記先 |
-|---|---|
-| 包括承認した項目、回答を反映した決定 | 決定記録（「包括承認 YYYY-MM-DD・<run-id>」） |
-| 未回答の質問票、承認依頼 | 仮定・未解決事項 |
-| 監査の指摘のうち、残っているもの | 監査指摘（`| ID | 日付 | カテゴリ | 重大度 | 位置 | 要約 | 状態 |`） |
-
----
 
 ## 原本 RequirementDefinition作成 の読み方（起動のたびに全文を読まない）
 

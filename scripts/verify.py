@@ -3,8 +3,8 @@
 
 Usage:
   python scripts/verify.py                 # management data checks + build/lint/test commands
-  python scripts/verify.py --docs-only     # management data checks only (rd-author, test-designer)
-  python scripts/verify.py --quick         # skip commands marked "slow": true (implementer gate)
+  python scripts/verify.py --docs-only     # management data checks only (requirements, catalog, ledger)
+  python scripts/verify.py --quick         # skip commands marked "slow": true
   python scripts/verify.py --run current   # add CHK-21 for the active run's queue.json
   python scripts/verify.py --strict        # final / integration gate: warnings that matter become errors
   python scripts/verify.py --no-cache      # always run (a PASS on the same clean commit is otherwise reused)
@@ -16,7 +16,7 @@ Full logs go to /work (never to /docs or tests); only a short summary is printed
 
 Cache: when the working tree is clean (no tracked or untracked changes), a PASS is stored in
 /work/.ebak/verify-cache.json under a key made of HEAD, the arguments, scripts/ebak.config.json and the run state
-that the checks read. The same verify on the same commit (e.g. the implementer's gate, then hook G-4) is then
+that the checks read. The same verify on the same commit (e.g. a local run, then CI) is then
 answered from the cache. FAIL is never cached. Disable with --no-cache or EBAK_VERIFY_NO_CACHE=1.
 """
 from __future__ import annotations
@@ -199,6 +199,8 @@ def main(argv=None) -> int:
     ap.add_argument("--strict-ledger", action="store_true")
     ap.add_argument("--no-strict-ledger", action="store_true")
     ap.add_argument("--show-warnings", action="store_true")
+    ap.add_argument("--profile", choices=("lite", "full"), default=None,
+                    help="rdcheck の検査の範囲（既定は scripts/ebak.config.json の checks.profile、未設定なら lite）")
     ap.add_argument("--no-cache", action="store_true")
     ap.add_argument("--root", default=None)
     args = ap.parse_args(argv)
@@ -223,6 +225,8 @@ def main(argv=None) -> int:
         rd_args += ["--base", args.base]
     if args.run:
         rd_args += ["--run", args.run]
+    if args.profile:
+        rd_args += ["--profile", args.profile]
     if args.strict:
         rd_args.append("--strict")
     if args.strict_ledger:

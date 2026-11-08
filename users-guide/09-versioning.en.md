@@ -6,8 +6,8 @@ This chapter covers how Enterprise App Build Kit versions are assigned, the proc
 
 ## 9.1 Versioning rules
 
-- Versions follow [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`). The current version is **0.2.0**.
-- The source of truth for the version is `TOOLKIT_VERSION` in `scripts/ebaklib.py`. The installer (`tools/install.py`) and the records of `scripts/run-state.py` all read it from there. Do not copy the version anywhere else.
+- Versions follow [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`). The current version is **0.6.0** (EABK Lite).
+- The source of truth for the version is `TOOLKIT_VERSION` in `scripts/ebaklib.py`. The installer (`tools/install.py`) and the record in `.github/ebak-toolkit.json` all read it from there. Do not copy the version anywhere else.
 - Write the change history in [CHANGELOG.md](../CHANGELOG.md) at the repository root.
 - Until 1.0.0, a MINOR update may include incompatible changes.
 
@@ -44,7 +44,7 @@ This chapter covers how Enterprise App Build Kit versions are assigned, the proc
 
 The installed version is recorded in `version` in `.github/ebak-toolkit.json`.
 
-1. Clean the working tree (commit or stash uncommitted changes). If a run is `active`, wait until it finishes.
+1. Clean the working tree (commit or stash uncommitted changes). When upgrading from 0.5.x to 0.6.0, read 9.4 first.
 2. Check whether an update is needed. It exits 1 if one is needed.
    ```bash
    curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.sh | bash -s -- --check
@@ -62,8 +62,9 @@ The installed version is recorded in `version` in `.github/ebak-toolkit.json`.
    | `UPDATE` | Updated to the new version |
    | `REMOVE` | A file that is no longer distributed in the new version was deleted because you had not modified it |
    | `KEEP-LOCAL` | A file you modified locally was not updated. Review the diff, and if it is fine to overwrite, rerun with `--force` (a `*.ebak-backup-<datetime>` remains) |
+   | `PRUNE` | Keys no longer used by the new version were removed from `scripts/ebak.config.json` (in 0.6.0: `gates`, `limits`, `credits`, `worktree_share`, and the old default verify command `toolkit-unit`) |
 
-   The managed data (`docs/` and the ledgers) and the existing values in `scripts/ebak.config.json` are not changed. Only new keys are added to `ebak.config.json`.
+   The managed data (`docs/` and the ledgers) and the existing values in `scripts/ebak.config.json` are not changed. Only new keys are added to `ebak.config.json`, and keys no longer used are removed (`PRUNE`).
 5. Verify. At the end, the installer runs `python scripts/rdfix.py --full --apply` once (`--no-repair` plans only; `--skip-verify` skips it). Then also pass the overall verification.
    ```bash
    python scripts/verify.py
@@ -74,10 +75,39 @@ The installed version is recorded in `version` in `.github/ebak-toolkit.json`.
    ```
 7. To detect version drift in CI, use `--check`.
 
-## 9.4 Rolling back
+## 9.4 Migrating from 0.5.x to 0.6.0 (EABK Lite)
+
+0.6.0 is an incompatible change. It drops the orchestration (conductor and worker roles, worktree runs, `/build`, role gates) and keeps only the rules (AGENTS.md), the data layer, deterministic checks (`verify.py` and CI), milestone audits (rd-auditor), and EABK Studio. The formats of the managed data (requirements definition, catalog, ledger, ID ledger) do not change.
+
+| What you used in 0.5.x | Replacement in 0.6.0 |
+|---|---|
+| `/build` and conductor | Ask your usual Copilot (the default agent) as usual. Following the rules in AGENTS.md, requirements, catalog, tests, and code are updated in the same change |
+| `<run_options>` (`max_hours`, `parallel_workers`, `scope`, and so on) | Not needed. If you want to state constraints, write them in the request |
+| Blanket approval with `approval_policy` | Approve in chat (for example `FR-031: 承認`) |
+| Only rd-author edits the requirements definition | Anyone may edit it. IDs are allocated only with `next-id.py`, and the ledger is updated only with `ledger.py` |
+| `run-state.py`, `integrate.py`, `kpi.py`, `watch.py`, `clean-work.py` | No replacement. Leave progress and integration to git and pull requests, and checks to CI (`ebak-verify`, `ebak-data-layer`) |
+| Hooks (`quality-gates.json`, `prompt-prefix.json`) and the automatic preamble | None. `verify.py` and CI check the same rules. If you want a standing preamble, put it in your own Copilot instructions |
+| `docs/run-history.md` | If it remains, it is a read-only record (EABK Studio displays it). No new rows are appended |
+
+Steps:
+
+1. Make sure no 0.5.x run is in progress, and clean the working tree.
+2. Rerun the installation command as in 9.3. Old files you did not modify (the conductor, rd-author, test-designer, implementer, and reviewer agents; the build, build-template, implement-fr, system-test-increment, and dedupe skills; the hook files `.github/hooks/quality-gates.json`, `.github/hooks/prompt-prefix.json`, and `scripts/hooks/gate.py`; `run-state.py`, `integrate.py`, `next-impl.py`, `build-request.py`, `watch.py`, `kpi.py`, `clean-work.py`, `select-tests.py`) are shown as `REMOVE`; those you modified stay as `KEEP-LOCAL` (use `--force` to delete or overwrite them if not needed). Old config keys (`gates`, `limits`, `credits`, `worktree_share`, `prompt_prefix`) are removed with `PRUNE`. The requirements definition, ledger, and catalog do not change. `.github/ebak-prompt-prefix.md` is left alone but no longer read.
+   - If `WARN-HOOK  <path>` appears, a locally modified hook file was kept. It calls the deleted `gate.py`, and when a hook errors Copilot denies every tool, so delete the file and reopen the Copilot session.
+3. Confirm that the block in AGENTS.md and `.github/copilot-instructions.md` has been replaced with the "Enterprise App Build Kit Lite" rules.
+4. Worktrees and `work/*` branches left by 0.5.x runs are not removed automatically. Check them and remove the ones you no longer need by hand.
+   ```bash
+   git worktree list
+   git branch --list "work/*"
+   git worktree remove <path>      # an unneeded worktree
+   git branch -D <branch>          # an unneeded branch
+   ```
+5. Make `python scripts/verify.py` exit 0, review the diff, and commit. The check scope defaults to `lite` (`checks.profile`; use `--profile full` for all checks).
+
+## 9.5 Rolling back
 
 To roll back an update, `git revert` the update's commit. To return to a specific version, rerun the install command with `EBAK_REF=v0.1.0` and `--force`. The installer treats a different version as an update, so specifying an older version is replaced by the same procedure.
 
-## 9.5 Notes on version notation
+## 9.6 Notes on version notation
 
 Records from before the versions were reorganized to 0.1.0 (such as `toolkit_version: 1.2.0` and `1.3.0` in past rows of `docs/run-history.md`) are left in the notation of the time. Even if `.github/ebak-toolkit.json` in an installed environment says `1.3.0`, updating with the procedure in 9.3 replaces it with version 0.1.0 or later.

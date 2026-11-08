@@ -370,7 +370,7 @@ def repair(root: Path, cfg: dict, doc, apply: bool, by: str = "rdfix") -> List[d
     path = root / led
     out: List[dict] = []
 
-    def add(kind: str, chk: str, msg: str, owner: str = "test-designer") -> None:
+    def add(kind: str, chk: str, msg: str, owner: str = "System Test の台帳") -> None:
         out.append({"kind": kind, "chk": chk, "loc": led, "msg": msg, "owner": owner})
 
     try:
@@ -1192,7 +1192,7 @@ def main(argv=None) -> int:
     h.setup_io()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--root", default=None)
-    ap.add_argument("--by", default="script", help="history に残す実行者（例: test-designer, conductor）")
+    ap.add_argument("--by", default="script", help="history に残す実行者（例: 自分の名前、ci）")
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("summary")
     s.add_argument("-v", "--verbose", action="store_true")

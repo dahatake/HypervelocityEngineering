@@ -311,7 +311,7 @@ def test_ac114_no_ci_still_installs_non_ci_files(tmp_path: Path):
     run(["git", "init", "-q", "-b", "main"], repo)
     (repo / "README.md").write_text("x\n", encoding="utf-8")
     run([sys.executable, SOURCE / "tools" / "install.py", "--target", repo, "--skip-verify", "--no-ci"], repo)
-    assert (repo / ".github" / "agents" / "conductor.agent.md").exists()
+    assert (repo / ".github" / "agents" / "rd-auditor.agent.md").exists()
     assert not (repo / ".github" / "workflows" / "ebak-data-layer.yml").exists()
 
 

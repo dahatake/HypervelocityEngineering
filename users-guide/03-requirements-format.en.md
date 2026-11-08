@@ -2,7 +2,7 @@
 
 # 3. Format of the Managed Data
 
-The managed data consists of documents meant for humans to read, but they are written in a format that `scripts/verify.py` can check mechanically. Normally rd-author, test-designer, and implementer write them, so users do not need to write them by hand. This page is a reference for when you fix them by hand or migrate existing documents.
+The managed data consists of documents meant for humans to read, but they are written in a format that `scripts/verify.py` can check mechanically. In a change that alters behavior, the requirements definition, catalog, and ledger are updated within that same change (anyone may edit them; usually Copilot does, following the rules in AGENTS.md and the skill `requirement-definition`). This page is a reference for when you write or fix them by hand or migrate existing documents.
 
 Note: field names, decision-state values, and other keywords in the examples and tables below (such as `要求`, `決定状態`, `承認済み`) are literal strings that the verifier checks, so they are kept in Japanese, with an English gloss in parentheses where needed.
 
@@ -136,7 +136,7 @@ It consists of 4 tables. Write one item per row and leave the details to the lin
 
 ## 3.2.1 External integration catalog (`docs/integrations.md`; optional)
 
-Create it only if the app integrates with external apps or data through APIs, files, DBs, events, and so on (apps with no external integrations need not create it, and the behavior of checks, Studio, and cleanup is unchanged when it is absent). On install, a template containing a format description and an empty index table is created **only when it does not exist yet** (an existing file is not overwritten). The path can be changed with `management_files.integrations` in `scripts/ebak.config.json`. rd-author performs additions, changes, and retirements, and changes are recorded in the change history of the requirements definition document.
+Create it only if the app integrates with external apps or data through APIs, files, DBs, events, and so on (apps with no external integrations need not create it, and the behavior of checks and Studio is unchanged when it is absent). On install, a template containing a format description and an empty index table is created **only when it does not exist yet** (an existing file is not overwritten). The path can be changed with `management_files.integrations` in `scripts/ebak.config.json`. Additions, changes, and retirements are made within the change that alters the integration (anyone may edit), and changes are recorded in the change history of the requirements definition document.
 
 One item per integration: under a heading `#### INT-001 <name>`, write a bulleted list of "field name: value," and place an index table (ID, name, integration partner, direction, status, related requirements) at the top.
 
@@ -153,7 +153,7 @@ Procedure:
 
 ## 3.3 ID registry (`docs/id-registry.md`)
 
-Only `scripts/next-id.py` may add rows. Editing by hand is rejected by a hook (G-3).
+Only `scripts/next-id.py` may add rows. Do not assign numbers or add rows by hand (so that IDs do not collide even when several people or PCs work in parallel). Hand-written numbers and duplicates are detected by CHK-01 and CHK-02.
 
 | State | Meaning |
 |---|---|
@@ -163,7 +163,7 @@ Only `scripts/next-id.py` may add rows. Editing by hand is rejected by a hook (G
 | 削除済み (deleted) | Removed from the body. **Reuse prohibited** (CHK-02) |
 | 欠番 (skipped) | Allocated but not used. Reuse prohibited |
 
-So that parallel branches do not conflict when adding rows at the same time, `merge=union` is specified in `.gitattributes`. ID allocation across worktrees is mutually exclusive via `ebak-id-alloc.json` in git's common directory.
+So that parallel branches do not conflict when adding rows at the same time, `merge=union` is specified in `.gitattributes`. ID allocation across multiple working trees of the same repository is mutually exclusive via `ebak-id-alloc.json` in git's common directory. If IDs allocated at the same time on different PCs collide, CHK-01 detects it; reallocate with `next-id.py`.
 
 ## 3.4 System Test ledger (`tests/system/ledger.json`)
 
@@ -184,7 +184,7 @@ So that parallel branches do not conflict when adding rows at the same time, `me
       "last_commit": "a1b2c3d",
       "last_run_at": "2026-10-08T10:15:00+09:00",
       "evidence": "work/runs/202610080900/logs/system-test/E2E-001-202610081015.log",
-      "history": [{ "at": "…", "by": "test-designer", "change": "追加", "reason": "受入基準からケースを作成" }]
+      "history": [{ "at": "…", "by": "script", "change": "追加", "reason": "受入基準からケースを作成" }]
     }
   ]
 }
@@ -199,15 +199,15 @@ So that parallel branches do not conflict when adding rows at the same time, `me
 | `command` | A command that can be run non-interactively from the repository root and returns exit 0 on success |
 | `canary` | The main flow run first (smoke test) |
 | `status` | not_run, pass, fail, blocked (pass/fail are set only by actual execution results) |
-| `evidence` | The log of the last run (under `/work`. It is deleted after the retention period, so re-run to recreate it if needed) |
+| `evidence` | The log of the last run (under `/work`. It is not tracked by git, so it is absent on other PCs or after you delete it. Re-run to recreate it if needed) |
 | `ac_digests` | Digest of the AC body (with PARAM expanded). CHK-11 detects when an AC changes |
 
 **Definition of "1:1"**: The state in which approved, non-BLOCKED ACs with verification level system and ledger cases correspond in both directions (one AC may have multiple cases), and the digests match.
 
-The ledger is updated only via `scripts/ledger.py` (direct edits are rejected by hook G-2). Cases cannot be deleted. A case that is no longer needed is set to blocked with `ledger.py block --reason`, and the reason is left in history.
+The ledger is updated only via `scripts/ledger.py` (do not edit it directly; the `by` in `history` is set with `--by`, default `script`). Cases cannot be deleted. A case that is no longer needed is set to blocked with `ledger.py block --reason`, and the reason is left in history.
 
-Keep the number of requirements, acceptance criteria, and cases optimal (so as not to increase the amount each role reads, tokens, and test execution time). When a request overlaps an existing requirement, rd-author looks for similar items with `rdcheck.py similar` and changes the existing item instead of creating a new one. `ledger.py add` refuses to add if there is a valid case that already guarantees the same acceptance criterion (extend the existing case with `ledger.py update`. Add `--new-case-reason "reason"` only when the layer differs and a separate case is truly needed).
+Keep the number of requirements, acceptance criteria, and cases optimal (so as not to increase the amount to read, tokens, and test execution time). When a request overlaps an existing requirement, the writer (usually Copilot) looks for similar items with `rdcheck.py similar` and changes the existing item instead of creating a new one. `ledger.py add` refuses to add if there is a valid case that already guarantees the same acceptance criterion (extend the existing case with `ledger.py update`. Add `--new-case-reason "reason"` only when the layer differs and a separate case is truly needed).
 
 ## 3.5 Run history (`docs/run-history.md`)
 
-`run-state.py finish` appends one row per run. The columns are run-id, start, end, HEAD, result, implemented requirement IDs, BLOCKED, AC pass rate, elapsed time, first-time gate pass rate, AI credits, human interventions, and verified requirements. The run-id must be unique (CHK-23). When appending to a table from 1.1.0 or earlier, the "人の介入" (human interventions) and "検証済み要求" (verified requirements) columns are added automatically, and `-` is entered in past rows.
+In 0.6.0 (EABK Lite), a new installation does not create this file, and no script appends to it. A table left in a repository updated from 0.5.x is a read-only record of the past (in 0.5.x one row was appended per run; the columns were run-id, start, end, HEAD, result, implemented requirement IDs, BLOCKED, AC pass rate, elapsed time, first-time gate pass rate, AI credits, human interventions, and verified requirements). If the file exists, EABK Studio displays it; duplicate run-ids are detected by CHK-23 and fixed by `rdfix.py --apply`.

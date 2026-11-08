@@ -1,6 +1,8 @@
 name: ebak-verify
 
-# Re-runs the L1 deterministic verification outside the agent (plan §10, Q-5).
+# EABK Lite: the deterministic checks (rdcheck profile from scripts/ebak.config.json, default "lite") and the
+# project commands in verify.commands run here for every push and pull request, so the rules in AGENTS.md hold
+# for every person and every PC without relying on prompts.
 on:
   pull_request:
   push:
@@ -19,7 +21,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: install pytest (default verify command toolkit-unit)
+      - name: install pytest (used by the default verify command studio-ui and most Python projects)
         run: python -m pip install pytest
       # Add the toolchain your verify.commands need (for example actions/setup-node + npm ci) above this step.
       - name: verify

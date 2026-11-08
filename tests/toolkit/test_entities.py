@@ -33,7 +33,7 @@ def rows(out: str, *needles: str):
 
 
 def rdcheck(repo: Path):
-    return subprocess.run([sys.executable, "scripts/rdcheck.py", "check"], cwd=repo, capture_output=True,
+    return subprocess.run([sys.executable, "scripts/rdcheck.py", "check", "--profile", "full"], cwd=repo, capture_output=True,
                           text=True, encoding="utf-8", errors="replace")
 
 

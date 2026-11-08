@@ -43,7 +43,7 @@ REGISTRY = "docs/id-registry.md"
 HISTORY = "docs/run-history.md"
 LEDGER = "tests/system/ledger.json"
 PROTECTED = (RD, INTEGRATIONS)
-ROLES = ("rd-author", "test-designer", "implementer", "conductor")
+ROLES = ("要求定義書", "System Test の台帳", "コードとカタログ", "リポジトリ")
 CHECK = ["scripts/rdfix.py", "--full"]
 APPLY = ["scripts/rdfix.py", "--full", "--apply"]
 
@@ -126,14 +126,25 @@ def write_clean_data_layer(root: Path) -> None:
     py(root, "scripts/ledger.py", "--by", "test-designer", "digests", "--update", check=True)
     py(root, "scripts/next-id.py", "--sync", check=True)  # 採番済み -> 使用中
     hist = root / HISTORY
-    hist.write_text(hist.read_text(encoding="utf-8").rstrip("\n") + "\n"
+    hist.write_text((hist.read_text(encoding="utf-8") if hist.exists() else (SOURCE / "tools" / "templates" / "docs" / "run-history.md").read_text(encoding="utf-8")).rstrip("\n") + "\n"
                     "| 202610010000 | 2026-10-01 00:00 | 2026-10-01 01:00 | abc1234 | 完了 | FR-001 | なし | 100% | 60 分 | 100% | 0 | 0 | FR-001 |\n",
                     encoding="utf-8", newline="\n")
+
+
+def pin_full_profile(root: Path) -> None:
+    """These tests check repair semantics with every CHK (the planted manual item is CHK-23, outside the lite
+    profile). The profile itself is covered by tests/toolkit/test_lite.py (FR-1084)."""
+    p = root / "scripts" / "ebak.config.json"
+    cfg = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    cfg.setdefault("checks", {})["profile"] = "full"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
 
 
 def _build_clean_installed(root: Path) -> None:
     git_init(root)
     install(root, "--skip-verify")
+    pin_full_profile(root)
     commit(root, "install EABK")
     write_clean_data_layer(root)
     commit(root, "clean data layer")
@@ -158,6 +169,7 @@ def make_clean_uninstalled(root: Path, scratch: Path) -> Path:
         dst = root / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(scratch / rel, dst)
+    pin_full_profile(root)  # the installer keeps the user's value when it merges the config
     commit(root, "data layer without toolkit")
     return root
 
@@ -184,7 +196,7 @@ def plant_automatic(root: Path) -> None:
 
 def plant_manual(root: Path) -> None:
     hist = root / HISTORY
-    hist.write_text(hist.read_text(encoding="utf-8").rstrip("\n") + "\n"
+    hist.write_text((hist.read_text(encoding="utf-8") if hist.exists() else (SOURCE / "tools" / "templates" / "docs" / "run-history.md").read_text(encoding="utf-8")).rstrip("\n") + "\n"
                     "| 202610010000 | 2026-10-01 00:00 | 2026-10-01 02:00 | def5678 | 中断 | FR-002 | なし | 50% | 120 分 | 50% | 0 | 1 | なし |\n",
                     encoding="utf-8", newline="\n")
 

@@ -29,6 +29,10 @@ def template(tmp_path_factory):
     git(path, "add", "-A")
     git(path, "commit", "-q", "-m", "init")
     run([sys.executable, str(INSTALL), "--target", str(path), "--skip-verify"], path, check=True)
+    cfg_path = path / "scripts" / "ebak.config.json"  # every CHK: the planted manual item is CHK-23 (FR-1084)
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    cfg.setdefault("checks", {})["profile"] = "full"
+    cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     r = Repo(path)
     r.commit("install toolkit")
     r.write(RD, SAMPLE_RD)
@@ -65,7 +69,8 @@ def plant_manual(r: Repo):
     # two run-history rows with the same run-id and different contents -> manual (merge=union leftovers)
     row = "| 202610010000 | 2026-10-01 00:00 | 2026-10-01 01:00 | abc1234 | 完了 | FR-001 | なし | 100% | 60 分 | 100% | 0 | 0 | FR-001 |\n"
     other = row.replace("abc1234 | 完了", "def5678 | 中断")
-    r.write("docs/run-history.md", r.read("docs/run-history.md").rstrip("\n") + "\n" + row + other)
+    hist = r.read("docs/run-history.md") if (r.path / "docs/run-history.md").exists() else (SOURCE / "tools" / "templates" / "docs" / "run-history.md").read_text(encoding="utf-8")  # 0.5.x leftover
+    r.write("docs/run-history.md", hist.rstrip("\n") + "\n" + row + other)
 
 
 def layer_bytes(r: Repo):
@@ -145,7 +150,7 @@ def test_ac237_ac239_install_repairs_reports_and_keeps_exit_code(template, tmp_p
     assert p.returncode == 0, t
     assert "承認待ち" not in r.read(CATALOG).split("FR-001")[1].split("\n")[0]
     assert (r.path / RD).read_bytes() == rd
-    assert re.search(r"MANUAL CHK-\d+ docs/run-history.md:\d+", t) and "conductor" in t
+    assert re.search(r"MANUAL CHK-\d+ docs/run-history.md:\d+", t) and "リポジトリ" in t
     assert re.search(r"合否: 不合格", t)
     assert "python scripts/rdfix.py --full --apply" in t and (r.path / "scripts" / "rdfix.py").exists()
 
@@ -201,11 +206,11 @@ def test_ac257_managed_version_and_documents():
     ver = re.search(r'TOOLKIT_VERSION = "(\d+)\.(\d+)\.(\d+)"', (SOURCE / "scripts" / "ebaklib.py").read_text(encoding="utf-8"))
     assert tuple(map(int, ver.groups())) > (0, 4, 0)
     docs = ["README.md", "CHANGELOG.md", "users-guide/04-customization.md", "users-guide/05-scripts-reference.md",
-            "users-guide/06-quality-gates.md", "users-guide/07-troubleshooting.md", ".github/agents/conductor.agent.md"]
+            "users-guide/06-quality-gates.md", "users-guide/07-troubleshooting.md"]
     for d in docs:
         t = (SOURCE / d).read_text(encoding="utf-8")
         assert "rdfix.py --full --apply" in t, d
-        assert "--no-repair" in t or d.endswith("07-troubleshooting.md") or d.endswith("conductor.agent.md") or "--no-repair" in t, d
+        assert "--no-repair" in t or d.endswith("07-troubleshooting.md") or "--no-repair" in t, d
     for d in ("README.md", "users-guide/05-scripts-reference.md", "users-guide/07-troubleshooting.md"):
         t = (SOURCE / d).read_text(encoding="utf-8")
         assert "exit 2" in t or "2 =" in t, d

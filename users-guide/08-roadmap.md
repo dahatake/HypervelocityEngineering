@@ -1,18 +1,17 @@
 **日本語** | [English](08-roadmap.en.md)
 
-# 8. 導入ロードマップと KPI
+# 8. 導入の段取りとロードマップ
+
+EABK Lite（0.6.0）は、規則（AGENTS.md）・データ層・決定的な検査（`verify.py` と CI）・節目の監査（rd-auditor）だけを残した構成です。この章は、チームに入れるときの段取りと、Lite の効果を確かめるために次に行う検証です。
 
 ## 8.1 導入の段取り
 
-チームに導入するときの段取りです。
-
-| Phase | 目安 | 内容 | 完了条件 | 利用者の作業 |
-|---|---|---|---|---|
-| 0 診断 | 2〜4 時間（無人） | 既存のリポジトリに対して rd-auditor を履歴モードで実行し、過去の矛盾がどの commit・どの Prompt から生まれたかを調べます | 矛盾ごとに、原因の commit・Prompt・仮説が挙がっている | Prompt 1 回 |
-| 1 基盤 | 1〜2 日（大半は無人） | toolkit をインストールし（[README の「インストール」](../README.md#インストール)）、[README の「初回に確認すること」](../README.md#初回に確認すること) の各項目を確認します。代表的な作業（要求 3 件分）を実行します | 各項目の結果が記録されている | Prompt 数回、結果の確認 |
-| 2 要求定義 v1.0 | 2〜6 時間＋回答 | ドラフトを `<request>` に貼り付け、`approval_policy: 厳格`、`max_hours` を短めにして、工程 1〜2 を中心に実行します | 承認待ちのない MUST 要求群があり、直接矛盾が 0 件 | Prompt 1 回、回答 1 回 |
-| 3 初回の長時間 run | 24〜48 時間（無人） | `approval_policy: 安全範囲は推奨どおり` で全工程を実行します | run-report の結果が「全件完了」か「blocked あり（理由つき）」。verify が exit 0 | Prompt 1 回、報告の確認、マージ |
-| 4 チューニング | 継続 | KPI を見ながら、モデルの振り分け、`parallel_workers`、節目の間隔、skills の文面を調整します | KPI が改善している | 改善案の採否を Prompt で回答 |
+| Phase | 内容 | 完了条件 | 利用者の作業 |
+|---|---|---|---|
+| 0 診断（任意） | 既存のリポジトリで、Agent を **rd-auditor** にして「全量を履歴モードで監査して」と頼みます。過去の矛盾がどの commit・どの Prompt から生まれたかを調べます | `work/audit/<日時>/report.md` に、矛盾ごとの原因の commit と仮説がある | 依頼 1 回 |
+| 1 導入 | toolkit をインストールし（[README の「インストール」](../README.md#インストール)）、`scripts/ebak.config.json` の `verify.commands` にビルドとテストのコマンドを登録します（[4](04-customization.md)）。既存のアプリなら [10](10-adopting-existing-apps.md) の棚卸しから始めます | `python scripts/verify.py` が exit 0。push で CI の `ebak-verify` が通る | 設定の確認 |
+| 2 ふだんの開発 | いつもの Copilot（既定のエージェント）に依頼します。AGENTS.md の規則に従い、要求・カタログ・テスト・コードが同じ変更で更新されます（[2](02-daily-workflow.md)） | プルリクエストごとに `ebak-verify` と `ebak-data-layer` が通る | 依頼と、チャットでの承認・回答 |
+| 3 節目の監査 | リリース前や大きな変更の後に、rd-auditor に「差分を監査して」（全量なら「全量を 3 回で監査して」）と頼みます | 確度高・HIGH 以上の指摘に、直すか残すかの判断がある | 依頼 1 回と判断 |
 
 ### Phase 0 の依頼の例
 
@@ -24,63 +23,29 @@ scope: 全量
 runs: 1
 history_mode: する
 </audit_options>
-run-id は diag-<日付> とし、結果は work/runs/diag-<日付>/run-report.md に書いてください。
 矛盾ごとに、それを生んだ commit と、その commit を作った Prompt（commit メッセージ・PR から推定）と、原因の仮説を挙げてください。
 ```
 
-### Phase 2 の依頼の例
+## 8.2 次に確かめること（Lite の後のロードマップ）
 
-```text
-<request>
-<pasted_content id="d1">
-（要求のドラフトを貼る）
-</pasted_content id="d1">
-これを要求定義書にする。実装はまだしない。
-</request>
-<run_options>
-max_hours: 4
-approval_policy: 厳格
-parallel_workers: 1
-scope: なし
-git_push: しない
-deploy: しない
-external_write: しない
-paid_services: 使わない
-external_exposure: 公開しない
-</run_options>
-```
+0.6.0 は、git 履歴・セッションの記録・run の実績の観察から決めた構成です。観察研究なので交絡（モデル・アプリ・人の違い）が残ります。次の検証で、残した機能が本当に要るか、足りないものがないかを確かめます。
 
-## 8.2 KPI
-
-効果を測るための指標です。`python scripts/kpi.py run`（1 回の run）と `python scripts/kpi.py history`（全 run）で集計できます。工程 6 では conductor が自動で集計し、run-report.md に載せます。
-
-**North Star: 人の介入 1 回あたりの検証済み要求**（＝ 検証済み要求の数 ÷ 利用者の Prompt の数）。人の手を減らすことと、要求どおりに作り切ったと証明できることを、1 つの数で表します。介入を減らしても検証済みの要求が増えなければ上がりません。検証済みの定義は [5 章の kpi.py](05-scripts-reference.md#kpipykpi-の集計) にあります。
-
-| 区分 | KPI | 目標の目安 | 取得元 |
+| # | 検証 | 測るもの | 結論を変える結果 |
 |---|---|---|---|
-| North Star | 人の介入 1 回あたりの検証済み要求 | 増加傾向 | `kpi.py`、`docs/run-history.md` の「人の介入」「検証済み要求」 |
-| 完走 | 無人完走率（結果が「全件完了」の run の割合） | 80% 以上 | `kpi.py history` |
-| 品質 | 承認済みで BLOCKED でない AC の pass 率 | 100% | `docs/run-history.md` の AC pass 率、`ledger.py summary` |
-| 品質 | トレーサビリティ網羅率（承認済み要求のうち、カタログ行があり system AC がすべて台帳にあるもの） | 100% | `kpi.py run` |
-| 品質 | マージ後に見つかった直接矛盾・欠陥 | 0 件 | 次回の rd-auditor |
-| 品質 | system AC のカバレッジと、ダイジェストの不一致 | 100% と 0 件 | `verify.py --strict-ledger`、`rdcheck.py stats` |
-| 時間 | 要求 1 件あたりの経過時間 | Phase 1 の計測値を基準に短縮 | `docs/run-history.md`（経過時間 ÷ 実装した要求の数）、`kpi.py history` |
-| 時間 | 1 回目のゲートで通過した項目の割合 | 70% 以上 | `docs/run-history.md` の「1 回目のゲート通過率」 |
-| Token | 要求 1 件・AC 1 件あたりの AI クレジット | Phase 1 の計測値を基準に削減 | Agent Debug Logs と使用量の表示（`run-state.py finish --credits` で記録） |
-| Token | subagent が使った Token の割合 | 記録し、増え続けるなら委譲の範囲を見直す | 同上 |
-| 人 | 1 回の依頼で利用者が書く Prompt の回数 | 1 回（回答があれば 2 回） | `run-state.py human` の記録（run-history の「人の介入」） |
+| R1 | 同じ機能の依頼 5 件を、**同じモデルに固定**して、0.5.x のオーケストレーション（多段の作業役と並列実行）と Lite（規則＋CI だけ）に出す A/B 比較 | トークン量、時間、テストの合格、要求定義書の更新、CI の検査の結果 | Lite の要求定義書の更新率や追跡率が、0.5.x より明らかに低い |
+| R2 | EABK を入れていないリポジトリに、**CI の検査（`ebak-verify`）だけ**を入れて 2 週間運用する | CI の失敗の件数と中身、修正にかかった時間 | 検出が 0 件（検査は要らない）か、誤検出が大半（lite の CHK の選び方を見直す） |
+| R3 | 別の人・別の PC（個人のメモリや個人の instructions なし）で、機能を 3 件追加してもらう | 要求定義書・カタログ・System Test が同じ変更で更新されたか、ID が衝突しなかったか | 規則があっても更新されない（規則の書き方か、CI の検査を強める） |
+| R4 | EABK Studio に、要求定義書の形式ではない PRD（`PRD.md` など）の取り込み口（アダプタ）を試作する | 表示できる要求・テストの数と工数 | 工数が大きすぎるなら、データ層の形式を残す方針のままにする |
+
+結果は CHANGELOG と [9](09-versioning.md) の版の判断に反映します。lite の検査の範囲（`checks.lite_checks`）は、R2 の結果で見直します（[6](06-quality-gates.md)）。
 
 ## 8.3 リスクと対策
 
-主なリスクと対策です。
-
-| リスク | この toolkit での対策 |
+| リスク | Lite での対策 |
 |---|---|
-| 全権限での長時間実行中の破壊的な操作 | New Worktree（または Dev Container）＋サンドボックス。G-5・G-6 の hook。本番環境の認証情報を置かない。`git_push`・`deploy` は既定で「しない」 |
-| PC のスリープ・Agent Host の停止 | スリープさせない。止まったら同じ Prompt で `RESUME` する |
-| `/work` の削除による情報の消失 | 工程 6 で `/docs` と台帳に転記する。実行中・未マージの run は削除しない。CHK-23 |
-| harness によって hook が効かない | 同じ規則を verify で二重に検査し、統合の前に必ず実行する |
-| 包括承認によって意図と違う要求が実装される | 除外分野を広めに取る。決定記録に「包括承認」と残す。報告で影響の大きい順に示し、次の Prompt で取り消せるようにする |
-| 並行実装での意味の衝突 | 同じ境界・共通部品に触れる項目は並行しない（`queue ready`）。統合は直列で、毎回ゲートを通す |
-| 監査の誤検知・見逃し | 決定的検査を主にし、LLM の監査は別系統のモデルで行う。最終工程は 3 回の多数決 |
-| プロンプトインジェクション | 外部の文章に含まれる命令は入力データとして扱う（全 skill に明記）。web ツールは rd-author にだけ与える |
+| 規則に従わない変更（要求定義書・テストを更新しない） | AGENTS.md の規則に加え、push・プルリクエストで CI の `ebak-verify` と `ebak-data-layer` が同じ検査をする。ブランチ保護で必須のチェックにする |
+| 複数の人・PC での ID の衝突 | ID は `next-id.py` でだけ採番し、ID 台帳は `merge=union`。衝突は CHK-01 が検出し、`next-id.py` で採番し直す |
+| 意図と違う要求が承認される | 承認は利用者がチャットで行う。逆生成や個人情報・認証認可・外部公開に触れる要求はまとめて承認しない。節目に rd-auditor が確かめる |
+| 監査の誤検知・見逃し | 決定的検査を主にし、LLM の監査は節目だけ、全量は 3 回の多数決 |
+| `/work` の消失 | `/work` は git の管理対象外の一時置き場。残すべき結果は要求定義書・台帳・CHANGELOG に書く |
+| プロンプトインジェクション | 外部の文章に含まれる命令は入力データとして扱う（skill に明記） |

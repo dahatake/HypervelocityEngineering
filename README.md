@@ -1,37 +1,38 @@
 **日本語** | [English](README.en.md)
 
-# HypervelocityEngineering — Enterprise App Build Kit
+# HypervelocityEngineering — Enterprise App Build Kit Lite
 
-GitHub Copilot（VS Code の Agents ウィンドウ / Copilot CLI / GitHub Copilot app）用のマルチエージェント開発 toolkit です。要求定義書・カタログ・System Test の整合性を保ったまま、アプリケーションを**最高品質・最短時間・最小 Token** で実装することを目指します。
+GitHub Copilot（VS Code・Copilot CLI・GitHub Copilot app・cloud agent）で開発するリポジトリに、**要求定義書・カタログ・System Test の一貫性**を保つための規則と検査を入れる toolkit です（EABK Lite 0.6.0）。
 
-- やることは、オーケストレーターのエージェント `conductor` に Prompt を **1 回**送るだけです。
-- conductor は、要求定義 → 独立監査 → System Test の先行設計 → 並行実装 → 直列の統合 → 最終監査 → 報告 までを、最大 24〜48 時間、人の介入なしで実行します。
-- 品質を左右する規則は、LLM の判断に任せずに hook と決定的スクリプト（LLM を使わず、同じ入力から常に同じ結果を返すスクリプト）で強制します。具体的には次の 4 つです。
-  - 要求定義書を書けるエージェントは 1 つだけ
-  - 実装担当は System Test を変更できない
-  - 終了前に必ず検証する
-  - 危険な操作は拒否する
-- これらの規則の多くは、`/build` で run を開始したときだけ働きます。`/build` 以外の Prompt で変更を依頼するリスクは、[重要: `/build` 以外の Prompt を送るときのリスク](#重要-build-以外の-prompt-を送るときのリスク) を参照してください。
-- すでにソースコード・設計書があるアプリ（brownfield）にも使えます。まず `python scripts/adopt.py scan` で棚卸しし、逆生成の要求の仮説（承認待ち）と現状の挙動の固定からデータ層を整えます（[既存のアプリを導入する](users-guide/10-adopting-existing-apps.md)）。
+- 利用者は、いつもの Copilot（既定のエージェント）に**ふだんどおり**依頼します。特別なエージェントやコマンドは要りません。
+- リポジトリの `AGENTS.md` の規則に従って、振る舞いを変える変更の中で、要求定義書・カタログ・テストが同じ変更として更新されます。
+- 検査は LLM の判断に任せず、決定的スクリプト（LLM を使わず、同じ入力から常に同じ結果を返すスクリプト）で行います。手元では `python scripts/verify.py`、push・PR では CI の `ebak-verify` が同じ検査をします。
+- 意味の矛盾（要求どうしの衝突・目的とのずれ）は、節目に読み取り専用の監査役 `rd-auditor` に頼んで確かめます。
+- データ層は **EABK Studio**（ローカルの読み取り専用ビューアー）で図・表・検索で見られます。
+- すでにソースコード・設計書があるアプリ（brownfield）にも使えます。まず `python scripts/adopt.py scan` で棚卸しします（[既存のアプリを導入する](users-guide/10-adopting-existing-apps.md)）。
+
+### なぜ Lite か
+
+0.5.x までは、conductor が作業役を worktree で並行させる長時間の run で開発を進めていました。実際の利用を検証すると、トークン量と経過時間がふだんの依頼より大きく増え、役割ごとの書き込み制限が作業を止める例もありました。一方で、要求定義書とテストの対応は、規則がリポジトリになければ人や PC が変わると保たれず、決定的な検査と節目の監査は本物のずれと矛盾を見つけていました。そこで Lite は、オーケストレーションをやめ、**リポジトリに入る規則・データ層・決定的な検査（手元と CI）・節目の手動監査**だけを残します。規則と検査はリポジトリと CI にあるので、複数の人・複数の PC でも、個人のプロンプトやメモリに依らず同じように効きます。
 
 ## はじめに（読者別の読み方）
 
-初めて使う方は、役割に合わせて次の順で読んでください。どの役割でも、最初の run は短い時間（`max_hours: 4`〜`8`）で試すことをお勧めします。
-
 | あなたは | あなたがすること | 読む順 |
 |---|---|---|
-| **Product Manager**（何を作るか決め、結果を受け入れる） | 作りたいことを依頼に書く。質問票に回答する。報告を読んで、マージするか決める | ① [解決する問題](#解決する問題) → ② [Quickstart](#quickstart) → ③ [依頼の書き方](users-guide/01-writing-requests.md) → ④ [実行中と終了後](users-guide/02-during-and-after-run.md) → ⑤ [Studio: Product Manager](users-guide/studio/05-product-manager.md) |
-| **Architect**（設計の整合・境界・品質ゲートを決める） | 規則と権限の仕組みを理解する。設定（検証コマンド・モデル・ゲート）を決める。要求定義書の構造を確かめる | ① [概要](#概要)（アーキテクチャ・エージェントと権限・run の流れ） → ② [管理データの書式](users-guide/03-requirements-format.md) → ③ [設定とカスタマイズ](users-guide/04-customization.md) → ④ [品質ゲートと検査項目](users-guide/06-quality-gates.md) → ⑤ [Studio: Architect](users-guide/studio/06-architect.md) |
-| **Software Engineer**（toolkit を導入・運用し、実装・テストを確かめる） | インストールする。検証コマンドを登録する。run を起動し、止まったときや拒否されたときに直す | ① [インストール](#インストール) → ② [Quickstart](#quickstart) → ③ [スクリプトリファレンス](users-guide/05-scripts-reference.md) → ④ [トラブルシューティング](users-guide/07-troubleshooting.md) → ⑤ [Studio: Software Engineer](users-guide/studio/07-software-engineer.md) |
+| **Product Manager**（何を作るか決め、結果を受け入れる） | 作りたいことを Copilot に依頼する。承認待ちの要求と質問票に答える。Studio で状態を見る | ① [なぜ Lite か](#なぜ-lite-か) → ② [Quickstart](#quickstart) → ③ [依頼の書き方](users-guide/01-writing-requests.md) → ④ [ふだんの進め方](users-guide/02-daily-workflow.md) → ⑤ [Studio: Product Manager](users-guide/studio/05-product-manager.md) |
+| **Architect**（設計の整合・境界・品質の基準を決める） | データ層の書式と検査の範囲（検査プロファイル）を決める。節目に監査を頼む | ① [概要](#概要) → ② [管理データの書式](users-guide/03-requirements-format.md) → ③ [設定とカスタマイズ](users-guide/04-customization.md) → ④ [検査項目と監査](users-guide/06-quality-gates.md) → ⑤ [Studio: Architect](users-guide/studio/06-architect.md) |
+| **Software Engineer**（toolkit を導入・運用し、実装・テストを確かめる） | インストールする。検証コマンドを登録する。verify と CI の失敗を直す | ① [インストール](#インストール) → ② [Quickstart](#quickstart) → ③ [スクリプトリファレンス](users-guide/05-scripts-reference.md) → ④ [トラブルシューティング](users-guide/07-troubleshooting.md) → ⑤ [Studio: Software Engineer](users-guide/studio/07-software-engineer.md) |
 
-既存のアプリ（ソースコード・設計書がすでにある）に導入する場合は、まず [既存のアプリを導入する](users-guide/10-adopting-existing-apps.md) を読んでください。チームで段階的に導入する場合は [導入ロードマップと KPI](users-guide/08-roadmap.md) が参考になります。
+0.5.x から更新する場合は、先に [0.5.x からの移行](#05x-からの移行) を読んでください。
 
 ## 目次
 
+- [なぜ Lite か](#なぜ-lite-か)
 - [はじめに（読者別の読み方）](#はじめに読者別の読み方)
 - [概要](#概要)
 - [インストール](#インストール)
 - [Quickstart](#quickstart)
+- [0.5.x からの移行](#05x-からの移行)
 - [EABK Studio（データ層のビューアー）](#eabk-studioデータ層のビューアー)
 - [詳細ドキュメント](#詳細ドキュメント)
 - [用語](#用語)
@@ -41,154 +42,102 @@ GitHub Copilot（VS Code の Agents ウィンドウ / Copilot CLI / GitHub Copil
 
 ### 解決する問題
 
-複数の AI エージェントに要求定義・実装・テストを繰り返させると、次の問題が起きがちです。
+AI に要求定義・実装・テストを繰り返させると、次の問題が起きがちです。
 
-- 実装の途中で要求が書き換わり、承認していない内容が「承認済み」になる。
+- 機能を足したり変えたりしても、要求定義書が更新されず、コードとずれていく。
+- 新しいテストがどの要求・受入基準を検証しているのか分からない。
+- 複数の人・PC で並行して ID を付けると、重複や欠番が起きる。
 - 離れた要求どうしの矛盾に、書いた本人のセルフレビューでは気づけない。
-- テストを実装に合わせて書き換えてしまい、要求の意味が変わる（実装のバグが「正解」になる）。
-- 並行作業で ID が重複したり、要求の意味が衝突したりする。
-- 監査結果やログがチャット履歴にしか残らず、失われる。
+- 指示がプロンプトや個人のメモリにしかなく、人・PC・モデルが変わると振る舞いが変わる。
 
-Enterprise App Build Kit は、次の 4 つの手段でこれらを防ぎます。
+EABK Lite は、次の 5 つでこれらを防ぎます。
 
 | 手段 | 内容 |
 |---|---|
-| **役割の分離** | 要求を書く役・監査する役・テストを作る役・実装する役を別のエージェントに分けます。どのエージェントも、自分が作った成果物を自分で「正解」と判定できません。 |
-| **強制ゲート** | エージェントごとの書き込み範囲と、作業を終える前の検証を、hook と verify で強制します。 |
-| **決定的スクリプト** | 検査・ID の採番・台帳の更新・ログの要約は、LLM ではなくスクリプトで行います。同じ入力なら常に同じ結果になります。 |
-| **データの永続管理** | 要求定義書、カタログ、ID 台帳、System Test の台帳、run の状態・結果・ログ・証跡・監査結果を、決まったパスのファイルとして作成・更新します。チャット履歴に依存しないので、要求・テスト・実装のトレーサビリティを後から追えます。中断しても途中から再開できます。 |
+| **リポジトリに入る規則** | `AGENTS.md` と `.github/copilot-instructions.md` に短い規則を書きます（下の「規則」）。どの人・PC・クライアントの Copilot も同じ規則を読みます。 |
+| **データ層** | 要求定義書・カタログ・外部連携カタログ・ID 台帳・System Test の台帳を、決まったパスのファイルとして git で管理します。 |
+| **決定的な検査** | `scripts/verify.py`（手元）と CI の `ebak-verify`・`ebak-data-layer` が、同じ検査をします。ID の採番（`next-id.py`）と台帳の更新（`ledger.py`）もスクリプトで行います。 |
+| **節目の手動監査** | 意味の矛盾は機械では見つけにくいので、節目に `rd-auditor` に監査を頼みます。毎回の依頼では動かしません。 |
+| **可視化** | EABK Studio で、要求・カタログ・試験の状態を図と表で見ます。 |
 
-土台になるのは、4 つ目の**データの永続管理**です。要求・判断・品質の状態は、永続データとして `/docs` と `tests/system/ledger.json` に置きます（git で管理）。run ごとの状態・ログ・証跡は、一時データとして `/work` に置きます。残すべき内容は、run の最後に `/docs` と台帳へ転記します（[データの置き場所](#データの置き場所)）。
+### 規則（`AGENTS.md` に入るブロック）
 
-### アーキテクチャ
+インストーラは、`AGENTS.md` と `.github/copilot-instructions.md` に `<!-- ebak-abk:begin -->`〜`end` で囲んだ次のブロックを書きます。
 
-![Enterprise App Build Kit のコンポーネント構成](images/enterprise-app-build-kit-components.svg)
+```text
+## Enterprise App Build Kit Lite（要求定義書・カタログ・System Test の一貫性）
 
-利用者は conductor に依頼を 1 回渡すだけです。
+- 振る舞いを変える変更（機能の追加・変更・削除）では、同じ変更の中で `docs/requirements-definition.md` の要求と受入基準（AC）を更新します。誰が編集してもかまいません（手順は skill `requirement-definition`）。
+- 新しい ID は `python scripts/next-id.py <種別>` でだけ採番します。手で番号を振りません（複数の人・PC で並行しても重複させないため）。
+- テストの名前かコメントに、検証する要求 ID と AC ID を書きます（例: `FR-012 AC-031`）。System Test の台帳 `tests/system/ledger.json` は `python scripts/ledger.py` でだけ更新し、テストを消す・弱めるときは `--reason` で理由を残します。
+- ファイルを足す・名前を変える・消すときは、`docs/catalog.md` の行も直します（`python scripts/rdfix.py --apply` で追従できます）。
+- 完了の前に `python scripts/verify.py` を実行して exit 0 にします（CI の `ebak-verify` も同じ検査をします）。
+- 一時ファイル（ログ・証跡・作業メモ）は `/work` に置きます（git の管理対象外）。
+```
 
-1. conductor が作業を subagent（作業役）に割り当てます。
-2. 作業役は、skills の手順書を読みながら scripts を使って作業します。
-3. 規則は hook と verify が強制します。verify は CI でも再実行します。
-4. 成果はデータ層のファイルに残ります。
+常に読み込まれる instructions はこの数行だけです。長い手順は skills（`requirement-definition`・`rd-audit`・`adopt-existing`）に置き、必要なときだけ読み込まれます。
 
-ファイルの配置は次のとおりです。
+### 構成
 
 ```text
 .github/
-  agents/        conductor（オーケストレーター）と 5 つの作業役の定義（*.agent.md）
-  skills/        手順書。必要な作業役だけが読み込む（Token を節約）
-                 requirement-definition / implement-fr / system-test-increment / rd-audit / adopt-existing
-                 build … 利用者が /build で呼ぶ依頼の入口（手動呼び出し専用）
-                 build-template … /build-template で依頼の雛形を表示する（run は開始しない）
-  hooks/         quality-gates.json … 全エージェント共通の強制ゲート（G-1〜G-6）
-  workflows/     ebak-verify.yml … GitHub Actions で verify を再実行（外部での再確認）
+  agents/        rd-auditor.agent.md … 節目に利用者が選んで頼む、読み取り専用の監査役
+  skills/        requirement-definition（要求定義の手順。誰が使ってもよい）/ rd-audit / adopt-existing
+  workflows/     ebak-verify.yml … push・PR で verify を実行
                  ebak-data-layer.yml … データ層の検査と自動修復（下の「データ層ワークフロー（ebak-data-layer）」）
 scripts/         決定的スクリプト（Python 3.9 以上。標準ライブラリだけを使用）
-  verify.py / verify.ps1 / verify.sh   L1 検査（CHK-01〜27）＋ビルド・テスト
-  rdcheck.py  next-id.py  ledger.py  select-tests.py  summarize.py  clean-work.py  run-state.py
-  rdfix.py         データ層のファイル間の不整合を、要求定義書に合わせて自動修正
-  integrate.py     worktree のプールと、統合（merge → verify → System Test → commit）を 1 コマンドで行う
-  kpi.py           KPI の集計（North Star: 人の介入 1 回あたりの検証済み要求。流れの指標も出す）
-  adopt.py         既存アプリの導入（棚卸し・証跡の固定・現状の挙動の固定・依頼文の作成）
-  hooks/gate.py   hook の本体
-  ebak.config.json 設定（検証コマンド、モデル、ゲート、保持期間）
+  verify.py / verify.ps1 / verify.sh   データ層の検査（検査プロファイル）＋ビルド・テストのコマンド
+  rdcheck.py  rdfix.py  next-id.py  ledger.py  summarize.py  adopt.py  entities.py  extpoints.py  ebaklib.py
+  ebak.config.json 設定（検証コマンド、検査プロファイル、base_branch）
 EABK-Studio/     データ層のビューアー（ローカルの Web アプリ。読み取り専用）と、役割別ガイド・画面画像
-  studio.py  eabk_model.py  start.ps1 / start.sh  web/  users-guide/  tests/
 docs/            永続のドキュメント（git で管理）
-  requirements-definition.md  catalog.md  id-registry.md  run-history.md
+  requirements-definition.md  catalog.md  integrations.md  id-registry.md
 tests/system/ledger.json      System Test の台帳（永続）
-work/            一時ファイル（.gitignore 対象。14 日で削除）
-  current-run.txt  runs/<run-id>/{meta.json, queue.json, progress.md, run-report.md, results.json, logs/, evidence/, audit/}
-  worktrees/<run-id>-w<N>/    作業役の git worktree のプール（項目をまたいで再利用し、工程 6 で削除）
+work/            一時ファイル（.gitignore 対象）。監査の結果は work/audit/<日時>/
 ```
 
-常に読み込まれる instructions（`AGENTS.md`、`.github/copilot-instructions.md`）は数行に抑えています。長い手順は skills に置き、担当の作業役が必要になったときだけ読み込みます。
+EABK Lite には hook も、依頼への定型文の自動付与もありません。規則は `AGENTS.md`・`copilot-instructions.md` のブロックで伝わり、守れているかは verify と CI の検査で確かめます。
 
-### エージェントと権限
+### 検査（verify と検査プロファイル）
 
-| エージェント | 責務 | 書き込める範囲（hook で強制） | 読み込む skill |
-|---|---|---|---|
-| **conductor** | 計画、作業の割り当て、統合、ゲートの判定、報告。小さな作業は自分で行う | `work/` と `docs/run-history.md` だけ | build（利用者が `/build` で呼んだときだけ） |
-| **rd-author** | 要求定義書・カタログの作成と更新、質問票、決定記録。**要求を書けるのはこのエージェントだけ** | `docs/`（run-history を除く） | requirement-definition |
-| **rd-auditor** | 意味の監査（矛盾・目的との整合・記述の質）。rd-author とは別系統のモデルを使う | `work/` だけ（読み取り専用） | rd-audit |
-| **test-designer** | 受入基準から System Test と台帳のケースを、**実装より前に**作る | `tests/system/`（台帳は ledger.py 経由） | system-test-increment |
-| **implementer** | 1 つの作業項目（要求 1〜5 個）をプールの worktree で実装し、単体テスト・結合テストとカタログの行を書く | 自分の worktree（要求定義書と System Test は変更不可） | implement-fr |
-| **reviewer** | 差分と受入基準の照合。共通部品・契約・テーブルの変更、セキュリティ・個人情報・認証、画面の変更にだけ使う | なし（読み取り専用） | なし |
+| 層 | 実装 | 動くタイミング |
+|---|---|---|
+| 手元 | `python scripts/verify.py`（データ層の検査＋ `verify.commands` のビルド・テスト）。`--docs-only` でデータ層だけ | 完了の前（`AGENTS.md` の規則） |
+| CI | `.github/workflows/ebak-verify.yml`（`scripts/verify.sh --show-warnings`） | push・PR のたび |
+| CI | `.github/workflows/ebak-data-layer.yml`（検査と自動修復） | PR・push・手動・毎週 |
+| 節目 | `rd-auditor`（意味の監査。読み取り専用） | 利用者が頼んだとき |
 
-既存アプリの導入（`adopt.py` を使う依頼）のときは、conductor・rd-author・rd-auditor・test-designer が skill `adopt-existing` も読み込みます。
+検査プロファイルは `scripts/ebak.config.json` の `checks.profile` で決めます。
 
-どのエージェントも frontmatter でツールを限定していません。利用者が GitHub Copilot に設定した MCP Server・plugin・拡張機能のツールと skill は、そのまま使えます。例は、Work IQ（社内のメール・会議・チャット・ドキュメント）、Microsoft Learn、Azure MCP Server、Copilot Studio の plugin です。rd-author は、これらを一次情報の参照に使い、得た事実を出典付きで要求定義書に残します。外部のシステムを変更する操作（送信・作成・更新・削除・デプロイ）は、run_options の `external_write`・`deploy` で許可したときだけ行えます（hook G-5）。詳しくは [設定とカスタマイズ 4.4](users-guide/04-customization.md#44-mcp-serverplugin拡張機能を使う) を参照してください。
+- `lite`（既定）: `checks.lite_checks` の CHK だけを報告します。既定は `CHK-01, CHK-02, CHK-03, CHK-05, CHK-09, CHK-12, CHK-17, CHK-19, CHK-24`（構造と追跡性）です。ほかの CHK は出力にも終了コードにも影響しません。
+- `full`: CHK-00〜34 をすべて報告します。
+- `rdcheck.py check` と `verify.py` に `--profile lite|full` を付けると、設定より優先します。要約行は `rdcheck: errors=N warnings=M base=… run=… profile=lite` の形です。
+- 書式の警告（CHK-13 曖昧語、CHK-14 数値の直書き、CHK-15 禁止同義語）などは full でだけ出ます。見たいときは `python scripts/verify.py --docs-only --profile full --show-warnings` を実行します（rd-auditor の監査もこれを使います）。
+- プロファイルは `rdcheck.py check`・`verify.py`・`rdfix.py`（`--full` を含む）に同じように効きます。そのため `rdfix.py --full` は、同じプロファイルの `verify.py --docs-only` が合格するときに合格します（カタログの同期などの機械的な修復は、どのプロファイルでも同じように行います）。
 
-### 1 回の run の流れ
+### データ層の修復（rdfix）
 
-```mermaid
-flowchart TD
-  P[利用者: conductor に Prompt を 1 回] --> S0[工程0 初期化<br/>run-state.py start・clean-work・verify の基準]
-  S0 --> S1[工程1 要求定義<br/>rd-author]
-  S1 --> A1[工程2 独立監査<br/>rd-auditor 差分]
-  A1 -->|直接矛盾 最大3周| S1
-  A1 --> S3[工程3 計画<br/>queue.json 機能単位・依存・境界]
-  S3 --> S4[工程4 System Test を先に設計<br/>test-designer 全ケース not_run]
-  S4 --> L{工程5 実装ループ}
-  L -->|依存のない項目を最大5本 パイプライン| W[implementer プールの worktree]
-  W --> G[ゲート verify＋関係する System Test<br/>終了前に hook G-4 が再検査]
-  G -->|共通部品・セキュリティ・画面| RV[reviewer]
-  G --> M[integrate.py merge で直列に統合<br/>verify quick・canary・差分のケース]
-  RV --> M
-  M --> K{節目 10項目・4時間}
-  K -->|はい| A2[rd-auditor 差分 background・System Test 増分] --> L
-  K -->|いいえ| L
-  L -->|完了 or 時間予算85%| F[工程6 最終<br/>System Test 全量・監査 3体並行の多数決・転記・run-report]
-  F --> U[利用者: 報告を読み、回答 or 取り込み]
-```
+verify が見つけたデータ層のファイル間の不整合（カタログの決定状態のずれ、ID 台帳の状態、マージで重複した行、名前が変わったファイルの参照など）のうち、要求定義書から機械的に決まるものは、共通の入口 `python scripts/rdfix.py --full`（確認）と `python scripts/rdfix.py --full --apply`（検査→修復→再検査）で直せます。入口は 3 つ（GitHub Actions のワークフロー・インストーラ・手動）で、どこから呼んでも同じ検査・同じ修復・同じ結果です。
 
-- **品質の土台（工程 1〜2）**: 実装を始める前に、要求定義書の直接矛盾を 0 件にします。利用者の判断が必要なものは質問票に挙げます。関係する受入基準は BLOCKED にして、残りの作業を先に進めます。
-- **テストファースト（工程 4）**: test-designer は要求定義書だけを根拠に期待値を決めます。実装を正解として扱わないためです（テストオラクル問題）。
-- **項目単位の並行実装（工程 5）**: 並行するのは、依存関係がなく、同じ共通部品・テーブル・境界に触れない項目だけです。統合は 1 本ずつ直列に行い、そのたびに verify と canary テストを実行します。
-- **最終工程（工程 6）**: System Test の全量実行と、rd-auditor による全量監査（3 回の多数決）を行います。残すべき情報を `/docs` と台帳に転記してから報告します。
+- 終了コードは 0 = 合格・修復済み、1 = 手動対応が残る・修復の計画あり、2 = 実行しなかった・取り消した（排他の待ち時間切れ・書き込み失敗・0.5.x の名残の作業ブランチ `work/…/…` の上での実行など。すべて元に戻します）。exit 2 のときは、既定のブランチで実行し直します。
+- 同じリポジトリでは、適用を同時に 1 つだけ実行します（排他）。
+- 要求定義書と `docs/integrations.md` は変更しません。判断が要るもの（AC の本文の変更、ID の再利用など）は `MANUAL` として、作業の種類（`要求定義書`・`System Test の台帳`・`コードとカタログ`・`リポジトリ`）と次の行動とともに示します。例: `MANUAL CHK-11 tests/system/ledger.json AC-001 の本文が…（担当: System Test の台帳）次の行動: …`。
 
-### 2 層の品質ゲート
+詳しくは [検査項目と監査](users-guide/06-quality-gates.md) を参照してください。
 
-| 層 | 実装 | 発火するタイミング | 例 |
-|---|---|---|---|
-| hook | `.github/hooks/quality-gates.json` → `scripts/hooks/gate.py` | ツール実行の**前**と、作業役・conductor が**終了する前** | rd-author 以外が要求定義書を編集しようとしたら拒否する（G-1）。implementer の終了前に verify を実行し、失敗なら差し戻す（G-4） |
-| verify | `scripts/verify.py`（CHK-01〜27） | 作業役のゲート、統合のたび、CI | 台帳のケースが理由なく削除された（CHK-12）。AC の本文が変わったのに台帳が古いまま（CHK-11） |
+### 複数の人・複数の PC で使う
 
-VS Code の hook はプレビュー機能で、harness によって動作が異なることがあります（Copilot CLI と、その上に構築された GitHub Copilot app は同じ `.github/hooks` を読み込みます）。そのため同じ規則を verify でも検査し、hook が効かない環境でも統合の時点で必ず止まるようにしています。詳しくは [品質ゲートと検査項目](users-guide/06-quality-gates.md) を参照してください。
-
-verify が見つけたデータ層のファイル間の不整合（カタログの決定状態のずれ、ID 台帳の状態、マージで重複した行、名前が変わったファイルの参照など）のうち、要求定義書から機械的に決まるものは、共通の入口 `python scripts/rdfix.py --full`（確認）と `python scripts/rdfix.py --full --apply`（検査→修復→再検査）で直せます。入口は 3 つ（GitHub Actions のワークフロー・インストーラ・手動）で、どこから呼んでも同じ検査・同じ修復・同じ結果です。終了コードは 0 = 合格・修復済み、1 = 手動対応が残る・修復の計画あり、2 = 実行しなかった・取り消した（作業役のブランチ・排他の待ち時間切れ・書き込み失敗など。すべて元に戻します）。同じリポジトリでは適用を同時に 1 つだけ実行します（排他）。要求定義書は変更せず、判断が要るもの（AC の本文の変更、ID の再利用など）は担当の役割とともに `MANUAL` として示します（[6.3](users-guide/06-quality-gates.md#63-データ層の不整合の自動修正rdfix)）。
-
-### 状態の永続化と再開
-
-会話の要約（compaction）には依存しません。状態はすべて次のファイルと git にあります。
-
-- `work/current-run.txt`: 実行中の run-id
-- `work/runs/<run-id>/meta.json`: 開始時刻、run_options、現在の工程、統合ブランチ
-- `work/runs/<run-id>/queue.json`: 作業キュー（項目ごとの要求 ID、AC、境界、依存、状態、試行回数、ブランチ）
-- `work/runs/<run-id>/progress.md`: 工程・判断・残課題（1 項目 3 行以内）
-
-新しいコンテキストで起動すると、conductor は `python scripts/run-state.py start` から始めます。実行中の run があれば、`RESUME` と状態を表示して続きを実行します。止まったときは、同じセッションで「続けて」と送るか、新しいセッションで同じ Prompt を送れば再開します。
+- 規則はリポジトリ（`AGENTS.md`）にあるので、誰の Copilot も同じ規則を読みます。
+- ID は `next-id.py` で採番し、ID 台帳は `.gitattributes` の `merge=union` でマージします。同時に採番した ID が衝突したら CHK-01 が検出するので、`next-id.py` で採番し直します。
+- 検査は CI で動くので、どの PC から push しても同じ結果になります。
 
 ### データの置き場所
 
-| 置き場所 | 置くもの | git | 保持期間 |
-|---|---|---|---|
-| `/docs` | 要求定義書、カタログ、ID 台帳、実行履歴 | 管理する | 永続 |
-| `tests/system/ledger.json` | System Test のケースと最新の状態 | 管理する | 永続 |
-| `/work` | キュー、進捗、報告、結果、証跡、監査の生データ、ログ、worktree | 管理しない | 14 日 |
-
-`/work` が消えても、要求・判断・品質の状態を `/docs` と台帳だけで追えるように、工程 6 で転記します。
-
-### Token 消費を抑える設計
-
-| 工夫 | 実装 |
-|---|---|
-| 長い手順書は、必要な作業役だけが読む | `.github/skills/`（長い手順を skill に分け、担当の作業役だけが読み込む） |
-| 機械的な検査・採番・台帳更新・要約はスクリプトで行う | `scripts/*.py`。LLM には要約だけを渡す（`summarize.py`、`verify.py` の短い出力） |
-| 必要な節だけを読む | `rdcheck.py show FR-012 AC-031` |
-| 工程ごとに新しいコンテキストから再開する | `run-state.py status` と progress.md |
-| テストは影響範囲だけを実行し、全量は節目と最終工程だけ | `select-tests.py`、`ledger.py run --select changed` |
-| 多数決の監査は最終工程だけ | 節目は runs: 1、最終は runs: 3 |
+| 置き場所 | 置くもの | git |
+|---|---|---|
+| `/docs` | 要求定義書、カタログ、外部連携カタログ（`docs/integrations.md`。任意）、ID 台帳 | 管理する |
+| `tests/system/ledger.json` | System Test のケースと最新の状態 | 管理する |
+| `/work` | ログ、証跡、監査の結果、作業メモ | 管理しない |
 
 ---
 
@@ -199,9 +148,9 @@ verify が見つけたデータ層のファイル間の不整合（カタログ�
 | 必要なもの | 確認方法 | 備考 |
 |---|---|---|
 | git リポジトリ | `git status` | まだなら `git init -b main` して最初の commit を作ります |
-| Python 3.9 以上 | `python --version`（macOS/Linux は `python3 --version`） | スクリプトと hook が使います。標準ライブラリだけで動くので、追加パッケージは不要です。Windows では Microsoft Store の `python` スタブではなく、実体の Python をインストールします（`winget install Python.Python.3.12`） |
-| GitHub Copilot | VS Code（Agents ウィンドウ）、Copilot CLI、または GitHub Copilot app | 長時間の実行は、VS Code の Copilot harness（Agent Host）か GitHub Copilot app と、Autopilot を前提にしています |
-| MCP Server・plugin（任意） | VS Code の `MCP: List Servers`、Copilot CLI の `/mcp`、GitHub Copilot app の **カスタマイズ** → **MCP** | Work IQ、Microsoft Learn、Azure などを設定しておくと、エージェントが自動で使います。toolkit は MCP の設定を配布しません |
+| Python 3.9 以上 | `python --version`（macOS/Linux は `python3 --version`） | スクリプトが使います。標準ライブラリだけで動くので、追加パッケージは不要です。Windows では Microsoft Store の `python` スタブではなく、実体の Python をインストールします（`winget install Python.Python.3.12`） |
+| GitHub Copilot | VS Code、Copilot CLI、GitHub Copilot app、または cloud agent | どれでもかまいません。`AGENTS.md` と `.github/` を読むクライアントなら同じ規則が効きます |
+| MCP Server・plugin（任意） | VS Code の `MCP: List Servers`、Copilot CLI の `/mcp` など | Work IQ、Microsoft Learn、Azure などを設定しておくと、Copilot が一次情報の参照に使えます。toolkit は MCP の設定を配布しません |
 
 ### インストールコマンド（推奨）
 
@@ -227,7 +176,7 @@ curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/m
 curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.sh | bash -s -- --dry-run
 ```
 
-特定のバージョン（タグ・ブランチ・commit）を使う場合は、環境変数 `EBAK_REF` を指定します（例: `EBAK_REF=v1.0.0`）。フォークを使う場合は `EBAK_REPO=<owner>/<repo>` を指定します。
+特定のバージョン（タグ・ブランチ・commit）を使う場合は、環境変数 `EBAK_REF` を指定します（例: `EBAK_REF=v0.6.0`）。フォークを使う場合は `EBAK_REPO=<owner>/<repo>` を指定します。
 
 **toolkit を clone 済みの場合**
 
@@ -242,24 +191,25 @@ python tools/install.py --target /path/to/your-repo
 | `--target <dir>` | `-Target` | インストール先（既定: カレントディレクトリ） |
 | `--dry-run` | `-DryRun` | 何も書き込まず、実行する操作だけを表示します |
 | `--check` | `-Check` | 更新が必要かどうかを確認します（必要なら exit 1。CI でバージョンのずれを検出できます） |
-| `--force` | `-Force` | ローカルで変更した toolkit のファイルも上書きします（`*.ebak-backup-<日時>` を残します） |
+| `--force` | `-Force` | ローカルで変更した toolkit のファイルも上書き・削除します（`*.ebak-backup-<日時>` を残します） |
 | `--no-ci` | `-NoCi` | `.github/workflows/ebak-verify.yml` と `ebak-data-layer.yml` をインストールしません |
-| `--no-repair` | `-NoRepair` | 導入後のデータ層の自動修復をせず、検査と修復の計画だけを表示します（書き込みません）。`--skip-verify` は検査も修復も行いません |
+| `--no-repair` | `-NoRepair` | 導入後のデータ層の自動修復をせず、検査と修復の計画だけを表示します（書き込みません） |
+| `--skip-verify` | — | 導入後のデータ層の検査も修復も行いません |
 | `--uninstall` | `-Uninstall` | 変更していない toolkit のファイル、`AGENTS.md` などのブロック、マニフェスト、空になったフォルダーを削除します（管理データと設定は残します）。`uninstall.ps1` / `uninstall.sh` でも実行できます |
-| `--purge` | `-Purge` | `--uninstall` に加えて、管理データ（`docs/` の要求定義書・カタログ・ID 台帳・run 履歴・手動テスト、`tests/system/ledger.json`）、`scripts/ebak.config.json`、`/work`、`.gitignore`・`.gitattributes` に追記した行、`*.ebak-backup-*` も削除します |
+| `--purge` | `-Purge` | `--uninstall` に加えて、管理データ（`docs/` の要求定義書・カタログ・外部連携カタログ・ID 台帳など、`tests/system/ledger.json`）、`scripts/ebak.config.json`、`/work`、`.gitignore`・`.gitattributes` に追記した行、`*.ebak-backup-*` も削除します |
 
 ### インストールされるファイル
 
 | 種類 | ファイル | 再実行時の扱い |
 |---|---|---|
-| toolkit のファイル | `.github/agents/*.agent.md`（6）、`.github/skills/*/SKILL.md`（7。`/build`・`/build-template` の skill を含む）、`.github/hooks/quality-gates.json`、`.github/workflows/ebak-verify.yml`、`scripts/*.py`・`verify.ps1`・`verify.sh`・`scripts/hooks/gate.py`、`EABK-Studio/`（ビューアー本体・テスト）、`EABK-docs/`（このリポジトリの `users-guide/` と同じ内容。EABK Studio のガイドは `EABK-docs/studio/`。導入先の `users-guide/` は触りません） | 変更していなければ新しいバージョンに更新します。ローカルで変更していれば**そのまま残します**（`KEEP-LOCAL`。`--force` で上書き） |
-| 管理データの雛形 | `docs/requirements-definition.md`、`docs/catalog.md`、`docs/integrations.md`（外部連携カタログ。任意）、`docs/id-registry.md`、`docs/run-history.md`、`tests/system/ledger.json` | **存在しない場合だけ**作成します。既存のファイルは上書きしません |
+| toolkit のファイル | `.github/agents/rd-auditor.agent.md`、`.github/skills/`（`requirement-definition`・`rd-audit`・`adopt-existing`）、`.github/workflows/ebak-verify.yml`・`ebak-data-layer.yml`、`scripts/*.py`・`verify.ps1`・`verify.sh`、`EABK-Studio/`（ビューアー本体・テスト）、`EABK-docs/`（このリポジトリの `users-guide/` と同じ内容。EABK Studio のガイドは `EABK-docs/studio/`。導入先の `users-guide/` は触りません） | 変更していなければ新しいバージョンに更新します。ローカルで変更していれば**そのまま残します**（`KEEP-LOCAL`。`--force` で上書き） |
+| 管理データの雛形 | `docs/requirements-definition.md`、`docs/catalog.md`、`docs/integrations.md`（外部連携カタログ。任意）、`docs/id-registry.md`、`tests/system/ledger.json` | **存在しない場合だけ**作成します。既存のファイルは上書きしません |
 | 設定 | `scripts/ebak.config.json` | なければ作成します。あれば新しいキーだけを追加し、利用者が設定した値は変更しません |
-| 追記 | `.gitignore` に `/work/`、`.gitattributes` に `docs/id-registry.md merge=union` と `docs/run-history.md merge=union` | 足りない行だけを追記します |
-| ブロック | `AGENTS.md`、`.github/copilot-instructions.md` に `<!-- ebak-abk:begin -->`〜`end` で囲んだ数行 | ブロックの中だけを置き換えます。ブロック外の記述は変更しません |
+| 追記 | `.gitignore` に `/work/`、`.gitattributes` に `docs/id-registry.md merge=union` など | 足りない行だけを追記します |
+| ブロック | `AGENTS.md`、`.github/copilot-instructions.md` に `<!-- ebak-abk:begin -->`〜`end` で囲んだ規則（[上の「規則」](#規則agentsmd-に入るブロック)） | ブロックの中だけを置き換えます。ブロック外の記述は変更しません |
 | マニフェスト | `.github/ebak-toolkit.json` | バージョンと、インストールしたファイルのハッシュ（更新・削除の判定に使います） |
 
-インストール・更新の最後に、データ層の共通の入口 `python scripts/rdfix.py --full --apply` を 1 回だけ実行します（検査→自動修復→再検査。`verify.py --docs-only` を別に重ねません）。修復した項目・残った手動対応（検査項目 ID・位置・担当の役割）・再検査の合否を表示します。修復は commit せず作業ツリーに残し、要求定義書と外部連携カタログは変更しません。`--no-repair` を付けると `python scripts/rdfix.py --full`（検査と修復の計画の表示だけ。書き込まない）になり、`--skip-verify` では検査も修復も行いません。`--dry-run`・`--check`・`--uninstall`・`--purge` では修復しません。修復が取り消された（exit 2）・手動対応が残った（exit 1）場合も toolkit のファイルは残り、確認と修復のコマンドを表示します。インストーラの終了コードはデータ層の結果で変わりません。
+インストール・更新の最後に、データ層の共通の入口 `python scripts/rdfix.py --full --apply` を 1 回だけ実行します（検査→自動修復→再検査）。修復した項目・残った手動対応（検査項目 ID・位置・作業の種類）・再検査の合否を表示します。修復は commit せず作業ツリーに残し、要求定義書と外部連携カタログは変更しません。`--no-repair`（PowerShell では `-NoRepair`）を付けると `python scripts/rdfix.py --full`（検査と修復の計画の表示だけ。書き込まない）になり、`--skip-verify` では検査も修復も行いません。`--dry-run`・`--check`・`--uninstall`・`--purge` では修復しません。修復が取り消された（exit 2）・手動対応が残った（exit 1）場合も toolkit のファイルは残り、確認と修復のコマンドを表示します。インストーラの終了コードはデータ層の結果で変わりません。
 
 ### インストール後の設定
 
@@ -267,14 +217,14 @@ python tools/install.py --target /path/to/your-repo
    ```bash
    git add -A && git commit -m "Add Enterprise App Build Kit"
    ```
-2. `scripts/ebak.config.json` の `verify.commands` に、ビルド・静的解析・テストのコマンドを登録します（[設定とカスタマイズ](users-guide/04-customization.md)）。空のままでも、初回の run で implementer がその技術スタックの標準的なコマンドを登録します。
+2. `scripts/ebak.config.json` の `verify.commands` に、ビルド・静的解析・テストのコマンドを登録します（[設定とカスタマイズ](users-guide/04-customization.md)）。空のままでも、Copilot に「この技術スタックの標準的なビルドとテストのコマンドを `verify.commands` に登録して」と頼めます。
 3. CI でアプリのツールチェーン（Node.js など）が必要な場合は、`.github/workflows/ebak-verify.yml` の verify ステップの前にセットアップのステップを追加します。
 4. 既存の要求定義書がある場合は、その ID を ID 台帳に取り込みます。
    ```bash
    python scripts/next-id.py --sync --adopt
    ```
-   続けて `python scripts/verify.py --docs-only --show-warnings` を実行し、構造化欄の不足（CHK-20）などを確認します。修正は最初の run で rd-author に任せてかまいません（依頼に「既存の要求定義書を toolkit の書式に合わせる」と書きます）。
-5.  （任意）社内の情報や対象の技術のツールを使う場合は、run を実行する環境（VS Code・Copilot CLI・GitHub Copilot app）に MCP Server・plugin を設定し、サインインしておきます。例は、要求の一次情報には Work IQ、Azure を使う開発には Microsoft Learn と Azure MCP Server、Copilot Studio を使う開発には Microsoft が提供する plugin です。エージェント側の設定は不要です（[設定とカスタマイズ 4.4](users-guide/04-customization.md#44-mcp-serverplugin拡張機能を使う)）。
+   続けて `python scripts/verify.py --docs-only` を実行し、指摘を確認します。書式まで見る場合は `--profile full --show-warnings` を付けます。直すときは Copilot に「既存の要求定義書を skill `requirement-definition` の書式に合わせて」と頼みます。
+5. （任意）社内の情報や対象の技術のツールを使う場合は、利用するクライアントに MCP Server・plugin を設定し、サインインしておきます（[設定とカスタマイズ](users-guide/04-customization.md)）。
 
 ### 更新・確認
 
@@ -285,6 +235,8 @@ curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/m
 # 更新が必要かどうかだけを確認する
 curl -fsSL .../tools/install.sh | bash -s -- --check
 ```
+
+0.5.x から更新するときの変化は [0.5.x からの移行](#05x-からの移行) を参照してください。
 
 ### アンインストール・クリーンアップ
 
@@ -313,31 +265,29 @@ toolkit を clone 済みの場合は `python tools/install.py --target /path/to/
 
 | 対象 | `--uninstall` | `--purge` |
 |---|---|---|
-| toolkit のファイル（`.github/agents`・`skills`・`hooks`・`workflows/ebak-verify.yml`、`scripts/*.py` など）と旧版のファイル | 変更していなければ削除（変更していれば `KEEP-LOCAL` で残す。`--force` で削除） | 同じ |
+| toolkit のファイル（`.github/agents`・`skills`・`workflows/ebak-*.yml`、`scripts/*.py` など）と旧版のファイル | 変更していなければ削除（変更していれば `KEEP-LOCAL` で残す。`--force` で削除） | 同じ |
 | `AGENTS.md`・`.github/copilot-instructions.md` のブロック | ブロックだけを削除（ほかに記述がなければファイルごと削除） | 同じ |
 | マニフェスト `.github/ebak-toolkit.json`、空になったフォルダー、削除した `.py` の `__pycache__` | 削除 | 削除 |
-| 管理データ（`docs/requirements-definition.md`・`catalog.md`・`id-registry.md`・`run-history.md`・`manual-tests.md`・`docs/requirements/`、`tests/system/ledger.json`）。パスは `scripts/ebak.config.json` の `files` に従います | 残す | 削除 |
+| 管理データ（`docs/requirements-definition.md`・`catalog.md`・`integrations.md`・`id-registry.md`・`manual-tests.md`・`docs/requirements/`、0.5.x から残る `run-history.md`、`tests/system/ledger.json`）。パスは `scripts/ebak.config.json` の `management_files` に従います | 残す | 削除 |
 | `scripts/ebak.config.json`、`/work`、`*.ebak-backup-*` | 残す | 削除 |
 | `.gitignore` の `/work/`、`.gitattributes` の `merge=union` の行 | 残す | 追記した行だけを削除（空になればファイルごと削除） |
 | System Test のコード（`tests/system/` の台帳以外）、アプリのコード、`docs/` のほかの文書 | 残す | 残す |
 
 - マニフェストが失われている場合は、この版の toolkit と同じ内容のファイルだけを削除します（`WARN` を表示します）。
 - 削除は git の作業ツリーに対して行います。結果を `git status` で確認してから commit します（`git restore` で戻せます。`/work` は git の管理対象外なので戻せません）。
-- run が作った worktree と `work/*` ブランチは削除しません。必要なら `git worktree list`・`git branch --list "work/*"` で確認して削除します。
 - 何度実行しても安全です（2 回目は `changes=0`）。
 
 ### plugin ではなくインストーラーを使う理由
 
-GitHub Copilot には、agents・skills・hooks をまとめて配布する標準の仕組みとして **plugin**（`copilot plugin install OWNER/REPO`、Agent Plugins 仕様）があります。採用を検討しましたが、この toolkit の配布には使っていません。理由は次のとおりです。
+GitHub Copilot には、agents・skills・hooks をまとめて配布する標準の仕組みとして **plugin**（`copilot plugin install OWNER/REPO`、Agent Plugins 仕様）があります。この toolkit の配布には使っていません。理由は次のとおりです。
 
 | 観点 | plugin | この toolkit に必要なこと |
 |---|---|---|
-| インストール先 | 利用者のホーム（plugin のディレクトリ）。リポジトリには入らない | 決定的スクリプト（`scripts/`）、管理データの雛形（`docs/`）、台帳、`.gitignore`、CI を**対象リポジトリの中**に置いて git で管理し、CI（GitHub Actions）でも同じ verify を実行する必要がある |
-| 可搬性 | Agent Plugins 1.0 で可搬なのは skills と MCP だけ。custom agents と hooks はクライアントごとの拡張 | VS Code の Copilot harness・Copilot CLI・Copilot app で、同じ `.github/agents`・`.github/skills`・`.github/hooks` を使う |
-| hook のスコープ | plugin の hook は、利用者のすべてのリポジトリ・セッションで動く | ゲートは、toolkit をインストールしたリポジトリでだけ動くべき |
-| チームでの共有 | 利用者ごとにインストールが必要 | リポジトリを clone すれば、チーム全員と CI が同じバージョンを使える |
+| インストール先 | 利用者のホーム（plugin のディレクトリ）。リポジトリには入らない | 規則（`AGENTS.md`）、決定的スクリプト（`scripts/`）、管理データの雛形（`docs/`）、台帳、`.gitignore`、CI を**対象リポジトリの中**に置いて git で管理し、CI（GitHub Actions）でも同じ verify を実行する必要がある |
+| 可搬性 | Agent Plugins 1.0 で可搬なのは skills と MCP だけ。custom agents と hooks はクライアントごとの拡張 | VS Code・Copilot CLI・Copilot app・cloud agent で、同じ `AGENTS.md` と `.github/` を使う |
+| チームでの共有 | 利用者ごとにインストールが必要 | リポジトリを clone すれば、チーム全員と CI が同じバージョンの規則と検査を使える |
 
-そこで、customizations（`.github/`）と `scripts/` をリポジトリに直接置く方式にしました。これは VS Code・Copilot CLI・Copilot app・cloud agent が標準で読み込む場所です。そのインストール・更新・アンインストールを 1 コマンドで行うために `tools/install.*`・`tools/uninstall.*` を用意しています。
+そこで、customizations（`AGENTS.md`・`.github/`）と `scripts/` をリポジトリに直接置く方式にしました。そのインストール・更新・アンインストールを 1 コマンドで行うために `tools/install.*`・`tools/uninstall.*` を用意しています。
 
 ### インストール時のトラブル
 
@@ -345,174 +295,38 @@ GitHub Copilot には、agents・skills・hooks をまとめて配布する標�
 |---|---|
 | `Python 3.9 以上が必要です` | Python をインストールし、`python --version` が通ることを確認します |
 | `git リポジトリではありません` | `git init -b main` してから実行します |
-| `KEEP-LOCAL` が表示された | ローカルで変更したファイルは更新していません。差分を確認し、上書きしてよければ `--force` を付けて再実行します |
-| hook の実行時に `python` が見つからない | hook は `python3`（macOS/Linux）または `python`（Windows）を呼び出します。PATH を確認します |
+| `KEEP-LOCAL` が表示された | ローカルで変更したファイルは更新・削除していません。差分を確認し、上書き・削除してよければ `--force` を付けて再実行します |
+| `WARN-HOOK  <パス>` が表示された | 旧版の hook のファイル（`.github/hooks/*.json`）をローカルで変更していたので残しました（`KEEP-LOCAL`）。このファイルは削除された `scripts/hooks/gate.py` を呼びます。hook がエラーになると Copilot がすべてのツールの呼び出しを拒否するので、このファイルを削除してから Copilot のセッションを開き直します |
 
 ---
 
 ## Quickstart
 
-全体の流れは次の 3 ステップです。
-
-1. 自分のリポジトリのルートで、インストールコマンドを 1 回実行します（[インストール](#インストール)）。
+1. 自分のリポジトリのルートで、インストールコマンドを 1 回実行し、commit します（[インストール](#インストール)）。
    - Windows: `irm https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.ps1 | iex`
    - macOS / Linux: `curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.sh | bash`
-2. VS Code の Agents ウィンドウで conductor を選び、チャット欄に `/build` に続けてやりたいことを書いて送信します（[VS Code で実行する](#vs-code-で実行する推奨)）。GitHub Copilot app でも同じように送れます（[GitHub Copilot app で実行する](#github-copilot-app-で実行する)）。
-3. 終わったら `work/runs/<run-id>/run-report.md` を読みます。そのうえで、質問票に回答するか、統合ブランチをマージします（[実行中と終了後](users-guide/02-during-and-after-run.md)）。
+2. `scripts/ebak.config.json` の `verify.commands` にビルドとテストのコマンドを登録します。
+3. あとは、次の「推奨の進め方」で開発します。
 
-### VS Code で実行する（推奨）
+### 推奨の進め方
 
-![VS Code の Agents ウィンドウで conductor に /build で依頼を送る画面イメージ](images/quickstart-vscode-agents.png)
+1. **ふだんどおり Copilot に依頼します**。VS Code・Copilot CLI・GitHub Copilot app・cloud agent のどれでも、既定のエージェントのままでかまいません（例: 「延滞が 3 日を超えたら本人と上長に通知する機能を追加して」）。
+2. **Copilot が規則に従って同じ変更で更新します**。`AGENTS.md` の規則に従い、要求定義書の要求と受入基準・カタログ・テスト・コードを同じ変更の中で更新し、`python scripts/verify.py` を exit 0 にします。新しい ID は `next-id.py`、台帳は `ledger.py` で更新します。差分を確認し、承認が必要な要求はチャットで承認します。
+3. **push・PR で CI が同じ検査をします**。`ebak-verify` と `ebak-data-layer` が、手元と同じ検査を実行します。
+4. **節目に rd-auditor に監査を頼みます**。機能のまとまりが終わったとき・リリースの前などに、Agent に `rd-auditor` を選んで「差分を監査して」「全量を 3 回で監査して」などと頼みます。差分の既定は `base_branch`（既定 `main`）との差分です。サブエージェントを使えるクライアントでは指定の回数を並行して多数決します。結果は `work/audit/<日時>/report.md` に出ます。指摘を反映するかは利用者が判断し、別の変更で直します。
+5. **状況は EABK Studio で見ます**（任意）。`python EABK-Studio/studio.py --role pm` などで、要求・カタログ・試験の状態を図と表で確かめます（[EABK Studio](#eabk-studioデータ層のビューアー)）。
 
-*画面イメージです。番号は下の手順に対応します。VS Code のバージョンによって、表示や項目の位置は異なります。*
+詳しくは [ふだんの進め方](users-guide/02-daily-workflow.md) と [依頼の書き方](users-guide/01-writing-requests.md) を参照してください。
 
-1. toolkit をインストールしたリポジトリを VS Code で開き、**Agents ウィンドウ**で **New** を選びます。
-2. 次のように設定します。
+EABK Lite は依頼に定型文を自動で付けません。毎回伝えたい前提があれば、自分の Copilot の instructions に書きます。
 
-   | 設定 | 値 | 理由 |
-   |---|---|---|
-   | Session Target | **Copilot** | Copilot harness（Agent Host）では、ウィンドウを閉じてもセッションが続きます。`.github/hooks` の hook も Copilot CLI と同じ仕様で動きます |
-   | Agent | **conductor** | 利用者が直接呼ぶ唯一のエージェントです |
-   | モード | **Autopilot** | ツールを承認なしで実行し、エラー時は再試行し、作業が完了するまで続けます |
-   | Code isolation | **New Worktree**（ベースは main） | 元の作業ツリーを汚さずに作業します。アプリの依存関係をコンテナーで揃えたい場合は Dev Container を選びます |
+### 既存のアプリに導入する
 
-3. エージェントの**サンドボックス**を有効にします。ネットワークは、パッケージレジストリなど必要な宛先だけを許可します（worktree はセキュリティ境界ではないためです）。
-4. チャット欄に `/build` と入力し、**同じ欄に続けて**やりたいことを書いて送信します（例: `/build 社内の備品貸出アプリを新規に作りたい。…`）。
-   - `/build` は skill（`.github/skills/build/SKILL.md`）です。入力した文章を `<request>` として扱い、`<run_options>` には既定値（`max_hours: 24` など）を使います。回答や run_options も指定する場合は、[依頼の書き方](users-guide/01-writing-requests.md) の雛形を `/build` の後に貼り付けて書き換えます。雛形は `/build-template`（または `/build template`）と送るとチャットに表示されます（run は開始しません）。
-   - `<request>` などの**入力フォームは表示されません**。依頼の文章はチャット欄に直接書きます。
-   - `/build` が候補に出ない場合は、インストールコマンドを再実行して更新します。更新しなくても、Agent が conductor なら、雛形を書き換えてそのまま送信すれば同じように動きます（prompt file は Agent Host では読み込まれないため、Session Target が Copilot のときは `/build` として表示されません）。
-5. 送信したらウィンドウを閉じてもかまいません。ただし **PC はスリープさせないでください**（Agent Host はローカルの PC 上で動きます）。途中経過は、Agents ウィンドウのセッション一覧から開いて確認できます。
-
-> New Worktree では、git の管理対象外のファイル（`/work` など）は新しい worktree にコピーされません。conductor の `/work` は、そのセッションの worktree の中に作られます。
-
-### GitHub Copilot app で実行する
-
-[GitHub Copilot app](https://docs.github.com/ja/copilot/how-tos/github-copilot-app)（デスクトップアプリ）は Copilot CLI の上に構築されており、リポジトリの `.github/agents`（custom agents）・`.github/skills`（`/build` を含む skill）・`.github/hooks`（品質ゲート）をそのまま読み込みます。toolkit 側の追加設定は不要です。
-
-1. toolkit のインストールを **commit** しておきます（新しい作業ツリーは commit からチェックアウトされるため、commit していないファイルは入りません）。GitHub からリポジトリを選ぶ場合やクラウド サンドボックスを使う場合は、push もしておきます。
-2. サイドバーの **プロジェクト** の横の **+** で新しいセッションを作り、toolkit を入れたリポジトリを選びます。
-3. プロンプト欄の下で次のように設定します。
-
-   | 設定 | 値 | 理由 |
-   |---|---|---|
-   | 実行場所 | **新しい作業ツリー**（推奨） | セッションごとに専用のブランチと worktree（例: `<リポジトリの親>/copilot-worktrees/<リポジトリ名>/<ブランチ名>`）で動くので、元の作業ツリーを汚しません。**ローカル リポジトリ**を選ぶと、Copilot CLI と同じく今のチェックアウトで動きます |
-   | セッション モード | **Autopilot** | 入力を待たずに最後まで進みます。早すぎる完了は agentStop の hook が差し戻します |
-   | モデル | 推論の強いモデル | Copilot Fusion など、Copilot の自動選択に任せられます |
-   | Agent | **conductor** | エージェント ピッカー、またはプロンプト欄の `/agent` で選びます |
-
-4. ローカル サンドボックスを有効にします（アプリの設定 → プロジェクト → **サンドボックス** の **サンドボックスの新しいセッション**、またはセッション中に `/sandbox on`）。既定のポリシーで、worktree の読み書き、パッケージのインストール、ローカルの開発サーバーへの接続ができます。hook もサンドボックスの中で動きます。
-5. プロンプト欄に `/build` と入力し、続けてやりたいことを書いて送信します。雛形は `/build-template`（または `/build template`）で表示されます（run は開始しません）。
-6. 送信後は、アプリを起動したままにし、**PC をスリープさせないでください**（ローカルのセッションは PC 上で動きます）。途中経過は、サイドバーのセッションから確認できます。
-
-GitHub Copilot app に固有の注意点:
-
-- **ブランチ名の変更**: アプリは、セッションのブランチ名をエージェントのツール（`rename_branch`）で付け直すことがあります。run の開始後は、統合ブランチが `meta.json` に記録されているため、hook（G-5）がこのツールを拒否します。アプリの画面などでブランチ名を変えた場合も、`python scripts/run-state.py status` が現在のブランチを統合ブランチとして記録し直します。
-- **取り込み**: 新しい作業ツリーで始めた run は、セッションのブランチがそのまま統合ブランチになり、conductor は main へマージしません。`run-report.md` を確認してから、アプリのプル要求の作成（または `git merge`）で取り込みます。`git_push: しない` の場合、push はアプリの操作で利用者が行います。
-- **再開**: `/work`（run の状態）は git の管理対象外なので、そのセッションの worktree の中にしかありません。止まったときは**同じセッション**で「続けて」と送ります。新しいセッションを作ると別の worktree になり、run の状態を引き継げません。run が終わって取り込むまで、セッションをアーカイブ・削除しないでください。
-- **クラウド サンドボックス**: GitHub がホストする Linux 環境でセッション全体が動くため、PC をスリープさせても続きます。ただし、リポジトリは GitHub から取得されるので toolkit を push 済みであること、組織・Enterprise のポリシーで有効になっていること、使用量に応じた課金があることに注意します。成果物はサンドボックスの中にあるので、`git_push` を「作業ブランチへ push する」にするか、終了後にアプリから push・プル要求の作成を行います。最初は短い run で[初回に確認すること](#初回に確認すること)を確かめます。
-
-### Copilot CLI で実行する
-
-同じ customizations（`.github/agents`・`.github/skills`・`.github/hooks`）を Copilot CLI でも使えます。
-
-![Copilot CLI で conductor を autopilot で起動し、run が進んでいる画面イメージ](images/quickstart-copilot-cli.png)
-
-*画面イメージです。Copilot CLI のバージョンによって表示は異なります。*
-
-```bash
-# 依頼を書いたファイル（雛形は users-guide/01-writing-requests.md の 1.1）を用意して
-copilot --agent conductor --autopilot --allow-all --max-autopilot-continues 500 -i "$(cat request.md)"
-```
-
-```powershell
-copilot --agent conductor --autopilot --allow-all --max-autopilot-continues 500 -i (Get-Content request.md -Raw)
-```
-
-- `--max-autopilot-continues` の既定値は 5 です。24〜48 時間の run では大きな値にします。
-- サンドボックスは、対話中に `/sandbox` で設定します（`copilot help sandbox`）。全権限（`--allow-all`）はサンドボックスと組み合わせて使うことが推奨されています。
-- 別のブランチで実行したい場合は、先に `git switch -c run/<名前>` してから起動します。main 上で起動した場合も、conductor が最初に統合ブランチ `run/<run-id>` を作ります。
-
-### 最初の依頼の例
-
-```text
-<request>
-社内の備品貸出アプリを新規に作りたい。社員は備品を検索して予約し、総務は貸出と返却を記録する。
-延滞が 3 日を超えたら本人と上長に通知する。Web アプリで、まずはローカルで動けばよい。
-</request>
-<answers>
-</answers>
-<references>
-docs/source/備品管理の現状.md
-</references>
-<run_options>
-max_hours: 8
-approval_policy: 安全範囲は推奨どおり
-parallel_workers: auto
-scope: 承認済みすべて
-git_push: しない
-deploy: しない
-external_write: しない
-paid_services: 使わない
-external_exposure: 公開しない
-</run_options>
-```
-
-最初は `max_hours` を短め（4〜8 時間）にして、報告の形式と品質を確認することをお勧めします。
-
-### run の中で起きること
-
-1. conductor が `run-state.py start` で run を開始し、統合ブランチを作り、verify のベースラインを記録します。
-2. rd-author が要求定義書とカタログを作り、質問票を挙げます（`[RD]` の commit）。
-3. rd-auditor が独立に監査します。直接矛盾があれば rd-author に差し戻します。
-4. conductor が作業キューを作ります。
-5. test-designer が System Test と台帳のケースを作ります（`[ST]` の commit。すべて `not_run`）。
-6. implementer が項目ごとに worktree で実装し（`[FR-xxx]` の commit）、conductor が 1 本ずつ統合します。
-7. 最後に System Test の全量実行と全量監査を行い、`work/runs/<run-id>/run-report.md` を書きます。
-
-### 初回に確認すること
-
-hook や subagent の動作は、クライアント（VS Code・Copilot CLI・GitHub Copilot app）やそのバージョンによって異なることがあります。最初の run（または短い試行）で次の項目を確認し、結果を `docs/run-history.md` の備考かチームの記録に残します（導入の段取りでは「Phase 1 のチェックリスト」と呼びます。[導入ロードマップと KPI](users-guide/08-roadmap.md)）。
-
-| # | 確認すること | 確認方法 |
-|---|---|---|
-| 1 | custom agent を subagent として呼べるか | progress.md に rd-author・test-designer・implementer の結果が記録されている |
-| 2 | custom agent ごとのモデル指定が効くか | Agent Debug Logs や使用量の表示で、作業役ごとのモデルを確認する |
-| 3 | hook のイベントで、呼び出し元のエージェントを識別できるか | `work/.ebak/gate.log` に `START rd-author` などと `DENY`/`BLOCK` が記録されている |
-| 4 | ウィンドウを閉じても処理が続くか | ウィンドウを閉じて 30 分後に開き直し、progress.md が進んでいる |
-| 5 | サンドボックス内でテストとブラウザー自動操作（Playwright）が動くか | `ledger.py run` の結果が pass/fail で記録される（`TIMEOUT` や権限エラーではない） |
-| 6 | Advanced Autopilot の有無で完了判定がどう変わるか | 早すぎる完了宣言が起きないか（agentStop の hook が `完了条件を満たしていません` で差し戻しているか） |
-| 7 | （GitHub Copilot app）サンドボックスの中で hook が動くか、統合ブランチが変わらないか | `work/.ebak/gate.log` に記録がある。アプリに hook の失敗の警告が出ていない。`python scripts/run-state.py status` の `integration:` が、セッションのブランチ（main 上で始めた場合は `run/<run-id>`）と一致する |
-
-3 で subagent を識別できない場合は、[トラブルシューティング](users-guide/07-troubleshooting.md) の「拒否・差し戻し」にある `[G-5] conductor が編集できるのは…` の行を参照してください。
-
-### 重要: `/build` 以外の Prompt を送るときのリスク
-
-> [!IMPORTANT]
-> この toolkit の品質保証は、`/build`（conductor）で run を開始したときに働くように作られています。toolkit を入れたリポジトリでも、`/build` を使わない通常の Prompt（Agent モードでの依頼など）では、多くのゲートが働きません。**要求・テスト・実装の変更は `/build` で依頼してください。** 通常の Prompt は、質問や調査など読み取りだけの用途にとどめることをお勧めします。
-
-`scripts/hooks/gate.py` の規則の多くは、run が active なとき（`work/current-run.txt` の run の状態が `active`）か、作業ブランチ（`work/<run-id>/…`）の上にいるときだけ適用されます。
-
-| 区分 | 規則 |
-|---|---|
-| run の外でも拒否される | 台帳（`tests/system/ledger.json`）の直接編集（G-2）、ID 台帳の直接編集（G-3）、一時ファイルを `/work` の外に書くこと（G-6）、作業ディレクトリの外への書き込み、`main` への push と force push、履歴を書き換える git 操作、`/work` の直接削除 |
-| run の外では**止まらない** | rd-author 以外による要求定義書の編集（G-1）、`main` への直接の commit・merge、`run_options` の `deploy`・`git_push`・`external_write` による制限（デプロイと、MCP などの外部ツールでの変更）、hook 自体の変更、終了前の完了確認（agentStop）、作業役の終了前の verify（G-4） |
-
-このため、通常の Prompt では次のことが起こりえます。
-
-1. **要求定義書が無断で変わる**: `docs/requirements-definition.md` が、rd-author の構造化欄、質問票、決定記録を経ずに書き換わります。独立監査（rd-auditor）も通りません。ID は `next-id.py` を使わずに手で付けられがちです。その結果、ID の不整合や未採番は後の verify で初めて見つかります。
-2. **System Test が実装に合わせられる**: 通常のエージェントは `tests/system/` を編集できます。受入基準ではなく実装を正解としてテストを直してしまうと、test-designer の独立性（テストオラクル問題への対策）が失われます。
-3. **`main` に未検証の変更が入る**: 統合ブランチ・worktree による隔離、統合ごとの verify と canary、失敗時の自動の取り消し、reviewer のレビューがありません。
-4. **外部に変更が及ぶ**: run_options による制限が働かないため、デプロイや、MCP・plugin による外部システムの変更が止まりません。
-5. **途中で完了と宣言される**: 完了条件の確認がないため、検証を実行しないまま終わることがあります。
-6. **文脈と Token が膨らむ**: 作業役への委譲と状態ファイルによる再開がないため、長い作業が 1 つの会話にたまり、圧縮されたときに規則や進捗を取り違えやすくなります。
-
-逆に、**中断中の run が残っている**（run が `active`）と、通常の Prompt にも conductor 用の制限がかかります。たとえば、`/work` と `docs/run-history.md` 以外は編集を拒否されます（G-5）。また、作業ツリーでは統合ブランチ（`run/<run-id>`）がチェックアウトされたままのことがあり、そこに無関係な変更を commit すると、run の再開時に前提が崩れます。通常の Prompt を使う前に `python scripts/run-state.py status` で状態を確認し、run を続けるなら `/build` で再開します。
-
-通常の Prompt でファイルを変更した場合は、commit の前に `python scripts/verify.py` を実行し、exit 0 になることを確認してください。CI（`.github/workflows/ebak-verify.yml`）でも同じ検査を実行します。
+`python scripts/adopt.py scan` で棚卸しし、`python scripts/adopt.py request` で Copilot のチャットにそのまま貼れる依頼文（`<constraints>` の節つき。既定は「実装: しない」「承認: 厳格」）を `work/import/adopt-<日時>.md` に作ります。逆生成した要求は「承認待ち」で入り、利用者が承認します（[既存のアプリを導入する](users-guide/10-adopting-existing-apps.md)）。
 
 ### データ層ワークフロー（ebak-data-layer）
 
-`.github/workflows/ebak-data-layer.yml`（ebak-data-layer）は、プルリクエスト、main への push、手動実行（workflow_dispatch）、週 1 回の定期実行（schedule）で `python scripts/verify.py --docs-only` を実行します。
+`.github/workflows/ebak-data-layer.yml`（ebak-data-layer）は、プルリクエスト、main への push、手動実行（workflow_dispatch）、毎週 1 回の定期実行（schedule）で `python scripts/verify.py --docs-only` を実行します。
 
 - 不合格のとき、共通の入口 `python scripts/rdfix.py --full --apply` で自動修復して再検査し、合格した場合だけ修復を commit します。要求定義書は変更しない設計です。同一リポジトリの PR では当該 PR のブランチへ、main への push と定期実行では修復用ブランチ（`eabk/data-layer-fix`）と PR に反映します。
 - 修復後も直らないときは、ラベル `eabk-data-layer` つきで失敗の要約と実行へのリンクを含む Issue を作成します（同じ内容の未解決 Issue があればコメント）。
@@ -521,13 +335,32 @@ hook や subagent の動作は、クライアント（VS Code・Copilot CLI・Gi
 
 ---
 
+## 0.5.x からの移行
+
+0.6.0（EABK Lite）では、オーケストレーション（conductor と作業役、worktree の run、`/build`、役割ごとのゲート）を撤去しました。同じインストールコマンドで更新すると、次のようになります。
+
+| 0.5.x | 0.6.0 での扱い |
+|---|---|
+| `/build` で conductor に依頼 | 既定のエージェントにふだんどおり依頼します（[推奨の進め方](#推奨の進め方)） |
+| `<run_options>`（`max_hours`・`approval_policy`・`parallel_workers`・`scope` など） | 不要です。包括承認（`approval_policy`）の代わりに、チャットで承認します |
+| conductor・rd-author・test-designer・implementer・reviewer、`build`・`build-template`・`implement-fr`・`system-test-increment`・`dedupe` の skill | 利用者が変更していなければ削除します（`REMOVE`）。変更していれば残します（`KEEP-LOCAL`。`--force` で削除） |
+| hook（`.github/hooks/quality-gates.json`・`.github/hooks/prompt-prefix.json`・`scripts/hooks/gate.py`）と定型文の自動付与 | 0.6.0 には hook がありません。変更していなければ削除します（`REMOVE`）。変更した hook の設定が残ると（`KEEP-LOCAL`）、`WARN-HOOK  <パス>` を表示します。削除された `gate.py` を呼ぶので hook がエラーになり、Copilot がすべてのツールを拒否します。そのファイルを削除し、Copilot のセッションを開き直します。導入先の `.github/ebak-prompt-prefix.md` はそのまま残りますが、もう読みません |
+| `run-state.py`・`integrate.py`・`kpi.py`・`watch.py`・`clean-work.py` など | 削除します。代わりはありません（状態と統合は git と CI に任せます） |
+| 設定のキー `gates`・`limits`・`credits`・`worktree_share`・`prompt_prefix` | 削除します（`PRUNE` と表示） |
+| `docs/run-history.md` | 残っていれば読み取り専用の記録です（Studio で表示でき、`rdfix.py` は重複行を従来どおり直します）。新しい導入では作りません |
+| 0.5.x の run が残した worktree と `work/*` ブランチ | 自動では消しません。`git worktree list`・`git branch --list "work/*"` で確認し、手で削除します |
+
+要求定義書・台帳・カタログは更新で変更しません。詳しくは [バージョンアップの手順](users-guide/09-versioning.md) と [CHANGELOG.md](CHANGELOG.md) を参照してください。
+
+---
+
 ## EABK Studio（データ層のビューアー）
 
-**EABK Studio**（`EABK-Studio/`）は、EABK が管理するデータ層（要求定義書・カタログ・System Test の台帳・ID 台帳・実行履歴）を、**図・表・検索**で見て回る、ローカル専用の Web アプリです。toolkit の一部として、インストールすると対象リポジトリに入ります。
+**EABK Studio**（`EABK-Studio/`）は、EABK が管理するデータ層（要求定義書・カタログ・System Test の台帳・ID 台帳、0.5.x から残る実行履歴）を、**図・表・検索**で見て回る、ローカル専用の Web アプリです。toolkit の一部として、インストールすると対象リポジトリに入ります。
 
 - **読み取り専用**です。ソースコードは開かず、`127.0.0.1` だけで待ち受けます。唯一の書き込みは、「整合性保守」でプレビューを確認して実行した、`docs/catalog.md` の題名・決定状態だけです。
 - Python 3.9 以上の標準ライブラリだけで動きます（追加のインストールなし）。データ層のファイルを更新すると、数秒で画面が読み直されます。
-- run の成果（要求・カタログ・試験）を、人が理解し、判断するための窓です。要求や実装の変更は、これまでどおり `/build` で依頼します。
+- 要求・カタログ・試験の状態を、人が理解し、判断するための窓です。要求や実装の変更は、Copilot に依頼します。
 
 ![EABK Studio のダッシュボード](users-guide/studio/images/dashboard.png)
 
@@ -538,18 +371,18 @@ hook や subagent の動作は、クライアント（VS Code・Copilot CLI・Gi
 | Software Engineer | 表・ソース対応・詳細パネルで、要求から実装ファイルとテストまでをたどる | [S7. Software Engineer 向け](users-guide/studio/07-software-engineer.md) |
 | 全員 | どの画面が、どのファイルの何を読み、どう計算するか | [S8. データリファレンス](users-guide/studio/08-data-reference.md) |
 
-ガイドは、各 15 分のチュートリアル（実画面つき）、おすすめのリンク、その役割が判断できることで構成します（索引は [users-guide/studio/](users-guide/studio/README.md)）。
+索引は [users-guide/studio/](users-guide/studio/README.md) です。
 
 ### 自分のリポジトリで起動する
 
-`tools/install.py`（[インストール](#インストール)）で toolkit を入れたリポジトリのルートで、次を実行します。
+toolkit を入れたリポジトリのルートで、次を実行します。
 
 ```bash
 python EABK-Studio/studio.py --check      # データ層が読めるか（見つかったファイルと解析できた件数）を確認
 python EABK-Studio/studio.py --role pm    # ブラウザーが開く。--role は pm / architect / swe
 ```
 
-Windows では `.\EABK-Studio\start.ps1 -Role pm`、macOS / Linux では `./EABK-Studio/start.sh . 8765 --role pm` でも起動できます。インストールの最後にも、この起動コマンドを表示します。詳細は [EABK-Studio/README.md](EABK-Studio/README.md)、スクリプトのオプションは [スクリプトリファレンス](users-guide/05-scripts-reference.md#eabk-studioデータ層のビューアー) です。
+Windows では `.\EABK-Studio\start.ps1 -Role pm`、macOS / Linux では `./EABK-Studio/start.sh . 8765 --role pm` でも起動できます。詳細は [EABK-Studio/README.md](EABK-Studio/README.md)、スクリプトのオプションは [スクリプトリファレンス](users-guide/05-scripts-reference.md) です。
 
 ---
 
@@ -559,42 +392,40 @@ Windows では `.\EABK-Studio\start.ps1 -Role pm`、macOS / Linux では `./EABK
 
 | # | ドキュメント | 読むタイミング |
 |---|---|---|
-| 1 | [依頼の書き方（/build と run_options）](users-guide/01-writing-requests.md) | よい依頼・回答の書き方や、承認ポリシーを知りたい |
-| 2 | [実行中と終了後](users-guide/02-during-and-after-run.md) | 進捗の確認、再開、報告の読み方、マージの方法を知りたい |
+| 1 | [依頼の書き方](users-guide/01-writing-requests.md) | 要求定義書を正しく更新させる依頼・回答・承認の書き方を知りたい |
+| 2 | [ふだんの進め方](users-guide/02-daily-workflow.md) | 依頼 → verify → push・CI → 節目の監査 → Studio の流れと、結果の確かめ方を知りたい |
 | 3 | [管理データの書式](users-guide/03-requirements-format.md) | 要求定義書・カタログ・ID 台帳・System Test の台帳のフォーマットを知りたい |
-| 4 | [設定とカスタマイズ](users-guide/04-customization.md) | ビルド・テストのコマンド、モデルの割り当て、ゲートを調整したい。MCP Server・plugin（Work IQ・Azure など）を使いたい |
+| 4 | [設定とカスタマイズ](users-guide/04-customization.md) | ビルド・テストのコマンド、検査プロファイル、CI を調整したい。MCP Server・plugin を使いたい |
 | 5 | [スクリプトリファレンス](users-guide/05-scripts-reference.md) | `scripts/` の各コマンドの使い方を知りたい |
-| 6 | [品質ゲートと検査項目](users-guide/06-quality-gates.md) | hook（G-1〜G-6）と verify（CHK-01〜27）の意味と直し方を知りたい |
-| 7 | [トラブルシューティング](users-guide/07-troubleshooting.md) | 止まった・拒否された・失敗した |
-| 8 | [導入ロードマップと KPI](users-guide/08-roadmap.md) | 診断から本番運用までの段取りと、効果の測り方を知りたい |
-| 9 | [バージョンアップの手順](users-guide/09-versioning.md) | 版を上げる（配布元）、導入済みのリポジトリを更新する（利用者） |
+| 6 | [検査項目と監査](users-guide/06-quality-gates.md) | verify の CHK の意味と直し方、rdfix、rd-auditor の監査を知りたい |
+| 7 | [トラブルシューティング](users-guide/07-troubleshooting.md) | verify・CI・修復が失敗した |
+| 8 | [導入ロードマップ](users-guide/08-roadmap.md) | 試行から本番運用までの段取りを知りたい |
+| 9 | [バージョンアップの手順](users-guide/09-versioning.md) | 版を上げる（配布元）、導入済みのリポジトリを更新する（利用者）。0.5.x からの移行 |
 | 10 | [既存のアプリを導入する](users-guide/10-adopting-existing-apps.md) | 既存のコード・設計書から、棚卸し → 逆生成の要求（承認待ち）→ 現状の挙動の固定でデータ層を整える |
 | 11 | [外部連携カタログ](users-guide/11-integration-catalog.md) | 外部アプリ・データとの連携を `docs/integrations.md`（任意）に記録する。追加・変更・廃止・検査の手順 |
-| 参考 | [EABK Studio のガイド](users-guide/studio/README.md) | データ層を図・表で見たい。Product Manager・Architect・Software Engineer 別の手順と、各画面が読むデータを知りたい |
+| 参考 | [EABK Studio のガイド](users-guide/studio/README.md) | データ層を図・表で見たい。役割別の手順と、各画面が読むデータを知りたい |
 
 ## 用語
 
 | 用語 | 意味 |
 |---|---|
-| conductor（オーケストレーター） | 利用者が直接呼ぶ唯一のエージェント。計画・作業の割り当て・統合・ゲートの判定・報告を行います。 |
-| 作業役（worker） | conductor が subagent として呼ぶ custom agent。rd-author、rd-auditor、test-designer、implementer、reviewer の 5 つです。 |
-| 管理データ | 要求定義書（`docs/requirements-definition.md`）とカタログ（`docs/catalog.md`）。要求と既存資産の Single Source of Truth です。 |
-| 台帳（ledger） | System Test のケース定義と最新の状態（`tests/system/ledger.json`）。 |
-| run | conductor の 1 回の実行。`run-id`（開始日時。例: `202610080900`）で識別します。 |
-| 工程（stage） | run の段階。工程 0（初期化）から工程 6（最終）まであります（[1 回の run の流れ](#1-回の-run-の流れ)）。 |
-| `/work` | 一時ファイルの置き場所（git の管理対象外。14 日で削除）。作業キュー、進捗、ログ、証跡、報告を置きます。 |
-| ゲート | モデルの判断に関係なく規則を強制する仕組み。hook（G-1〜G-6）と決定的検査 verify（CHK-01〜27）の 2 層です。 |
-| 包括承認 | run_options の `approval_policy` で、「この範囲の AI 提案は推奨案どおりでよい」と事前に決めておくこと。 |
+| 規則 | `AGENTS.md` と `.github/copilot-instructions.md` に入るブロック。どの Copilot も読みます（[規則](#規則agentsmd-に入るブロック)）。 |
+| 管理データ | 要求定義書（`docs/requirements-definition.md`）とカタログ（`docs/catalog.md`）など。要求と既存資産の Single Source of Truth です。 |
+| 台帳（ledger） | System Test のケース定義と最新の状態（`tests/system/ledger.json`）。`ledger.py` でだけ更新します。 |
+| ID 台帳 | 採番済みの ID の記録（`docs/id-registry.md`）。`next-id.py` でだけ更新します。 |
+| 検査プロファイル | `checks.profile` の `lite`（既定。構造と追跡性の CHK だけ）と `full`（CHK-00〜34 すべて）。 |
+| 監査 | rd-auditor による意味の監査（矛盾・目的との整合・記述の質）。節目に利用者が頼みます。結果は `work/audit/<日時>/`。 |
+| `/work` | 一時ファイルの置き場所（git の管理対象外）。ログ・証跡・監査の結果・作業メモを置きます。 |
 
 ## リポジトリの構成
 
 | 内容 | 場所 |
 |---|---|
 | 詳細ドキュメント | [users-guide/](users-guide/README.md) |
-| エージェント（conductor＋作業役 5） | [.github/agents/](.github/agents/) |
+| 監査役（rd-auditor） | [.github/agents/](.github/agents/) |
 | 手順書（skills） | [.github/skills/](.github/skills/) |
-| 強制ゲート（hooks） | [.github/hooks/quality-gates.json](.github/hooks/quality-gates.json)、[scripts/hooks/gate.py](scripts/hooks/gate.py) |
 | 決定的スクリプト | [scripts/](scripts/) |
+| CI | [.github/workflows/](.github/workflows/) |
 | データ層のビューアー（EABK Studio） | [EABK-Studio/](EABK-Studio/README.md)、ガイドは [users-guide/studio/](users-guide/studio/README.md) |
 | 管理データの雛形 | [docs/](docs/)、[tests/system/ledger.json](tests/system/ledger.json) |
 | インストールスクリプト | [tools/](tools/) |

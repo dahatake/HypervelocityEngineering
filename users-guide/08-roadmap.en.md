@@ -1,22 +1,21 @@
 [日本語](08-roadmap.md) | **English**
 
-# 8. Adoption roadmap and KPIs
+# 8. Adoption steps and roadmap
+
+EABK Lite (0.6.0) keeps only the rules (AGENTS.md), the data layer, deterministic checks (`verify.py` and CI), and milestone audits (rd-auditor). This chapter covers the steps for bringing it into a team, and the verification to do next to confirm the effect of Lite.
 
 ## 8.1 Adoption steps
 
-These are the steps for introducing the toolkit to a team.
-
-| Phase | Estimate | Content | Completion criteria | User's work |
-|---|---|---|---|---|
-| 0 Diagnosis | 2–4 hours (unattended) | Run rd-auditor in history mode against the existing repository to find out which commit and which Prompt produced each past contradiction | For each contradiction, the originating commit, Prompt, and a hypothesis are listed | 1 Prompt |
-| 1 Foundation | 1–2 days (mostly unattended) | Install the toolkit ([README "Installation"](../README.en.md#installation)) and check each item in [README "What to check on the first run"](../README.en.md#what-to-check-the-first-time). Run representative work (3 requirements' worth) | The result of each item is recorded | A few Prompts, checking results |
-| 2 Requirements definition v1.0 | 2–6 hours + answers | Paste a draft into `<request>`, set `approval_policy: 厳格` (strict) and a short `max_hours`, and run mainly steps 1–2 | A set of MUST requirements with nothing pending approval exists, and there are 0 direct contradictions | 1 Prompt, 1 answer |
-| 3 First long run | 24–48 hours (unattended) | Run all steps with `approval_policy: 安全範囲は推奨どおり` (follow recommendations within the safe range) | The run-report result is "all completed" or "has blocked (with reasons)". verify exits 0 | 1 Prompt, checking the report, merging |
-| 4 Tuning | Ongoing | While watching the KPIs, adjust model allocation, `parallel_workers`, milestone intervals, and the wording of skills | The KPIs are improving | Answer, by Prompt, whether to adopt each improvement proposal |
+| Phase | Content | Completion condition | User's work |
+|---|---|---|---|
+| 0 Diagnosis (optional) | In an existing repository, set the Agent to **rd-auditor** and ask it to "audit everything in history mode". It investigates which commit and which prompt past contradictions came from | `work/audit/<datetime>/report.md` lists, for each contradiction, the causing commit and a hypothesis | One request |
+| 1 Installation | Install the toolkit ([README "Installation"](../README.en.md#installation)) and register your build and test commands in `verify.commands` of `scripts/ebak.config.json` ([4](04-customization.en.md)). For an existing app, start from the inventory in [10](10-adopting-existing-apps.en.md) | `python scripts/verify.py` exits 0. CI's `ebak-verify` passes on push | Checking the settings |
+| 2 Everyday development | Ask your usual Copilot (the default agent). Following the rules in AGENTS.md, requirements, catalog, tests, and code are updated in the same change ([2](02-daily-workflow.en.md)) | `ebak-verify` and `ebak-data-layer` pass on every pull request | Requests, and approvals and answers in chat |
+| 3 Milestone audits | Before a release or after a large change, ask rd-auditor to "audit the diff" (for everything, "audit everything 3 times") | Each high-confidence finding of HIGH or above has a decision to fix or keep | One request and decisions |
 
 ### Example request for Phase 0
 
-In VS Code, select **rd-auditor** as the Agent (with Copilot CLI, `--agent rd-auditor`; in the GitHub Copilot app, the agent picker or `/agent`), and send the following.
+In VS Code, select **rd-auditor** as the Agent (with Copilot CLI, `--agent rd-auditor`; with the GitHub Copilot app, the agent picker or `/agent`), and send the following.
 
 ```text
 <audit_options>
@@ -24,63 +23,29 @@ scope: 全量
 runs: 1
 history_mode: する
 </audit_options>
-Set the run-id to diag-<date>, and write the result to work/runs/diag-<date>/run-report.md.
-For each contradiction, list the commit that produced it, the Prompt that created that commit (inferred from the commit message and PR), and a hypothesis about the cause.
+For each contradiction, list the commit that introduced it, the prompt that produced that commit (inferred from commit messages and PRs), and a hypothesis about the cause.
 ```
 
-### Example request for Phase 2
+## 8.2 What to verify next (roadmap after Lite)
 
-```text
-<request>
-<pasted_content id="d1">
-(Paste the requirements draft)
-</pasted_content id="d1">
-Turn this into the requirements definition. Do not implement yet.
-</request>
-<run_options>
-max_hours: 4
-approval_policy: 厳格
-parallel_workers: 1
-scope: なし
-git_push: しない
-deploy: しない
-external_write: しない
-paid_services: 使わない
-external_exposure: 公開しない
-</run_options>
-```
+0.6.0 is a configuration decided from observations of git history, session records, and run results. Because it is an observational study, confounders (differences in models, apps, and people) remain. The following verifications check whether the kept features are really needed and whether anything is missing.
 
-## 8.2 KPIs
-
-These are the indicators for measuring the effect. You can aggregate them with `python scripts/kpi.py run` (one run) and `python scripts/kpi.py history` (all runs). In step 6, conductor aggregates them automatically and includes them in run-report.md.
-
-**North Star: verified requirements per human intervention** (= number of verified requirements ÷ number of user Prompts). It expresses both reducing human effort and being able to prove that requirements were fully built, in a single number. It does not rise if you reduce interventions but verified requirements do not increase. The definition of "verified" is in [kpi.py in Chapter 5](05-scripts-reference.en.md#kpipy-kpi-aggregation).
-
-| Category | KPI | Target guideline | Source |
+| # | Verification | What is measured | Result that would change the conclusion |
 |---|---|---|---|
-| North Star | Verified requirements per human intervention | Upward trend | `kpi.py`; "human interventions" and "verified requirements" in `docs/run-history.md` |
-| Completion | Unattended completion rate (share of runs whose result is "all completed") | 80% or more | `kpi.py history` |
-| Quality | Pass rate of ACs that are approved and not BLOCKED | 100% | AC pass rate in `docs/run-history.md`, `ledger.py summary` |
-| Quality | Traceability coverage (of approved requirements, those that have a catalog row and all of whose system ACs are in the ledger) | 100% | `kpi.py run` |
-| Quality | Direct contradictions and defects found after merge | 0 | The next rd-auditor run |
-| Quality | System AC coverage and digest mismatches | 100% and 0 | `verify.py --strict-ledger`, `rdcheck.py stats` |
-| Time | Elapsed time per requirement | Shorten relative to the Phase 1 measurement | `docs/run-history.md` (elapsed time ÷ number of implemented requirements), `kpi.py history` |
-| Time | Share of items that passed the gate on the first attempt | 70% or more | "First-attempt gate pass rate" in `docs/run-history.md` |
-| Token | AI credits per requirement and per AC | Reduce relative to the Phase 1 measurement | Agent Debug Logs and the usage display (recorded with `run-state.py finish --credits`) |
-| Token | Share of Tokens used by subagents | Record it; if it keeps growing, review the scope of delegation | Same as above |
-| Human | Number of Prompts the user writes per request | 1 (2 if there are answers) | Records of `run-state.py human` ("human interventions" in run-history) |
+| R1 | An A/B comparison that sends the same 5 feature requests, **with the model fixed**, to the 0.5.x orchestration (multi-stage workers and parallel execution) and to Lite (rules + CI only) | Tokens, time, test passes, requirements definition updates, CI check results | Lite's update rate of the requirements definition or traceability rate is clearly lower than 0.5.x |
+| R2 | Add **only the CI checks (`ebak-verify`)** to a repository that does not use EABK, and operate it for 2 weeks | Number and content of CI failures, time spent fixing them | Zero detections (the checks are not needed), or mostly false positives (revisit the choice of lite CHKs) |
+| R3 | Have another person on another PC (without personal memory or personal instructions) add 3 features | Whether the requirements definition, catalog, and System Tests were updated in the same change, and whether IDs collided | They are not updated despite the rules (rewrite the rules or strengthen the CI checks) |
+| R4 | Prototype an intake (adapter) in EABK Studio for a PRD not in the requirements definition format (such as `PRD.md`) | Number of requirements and tests that can be shown, and the effort | If the effort is too large, keep the policy of keeping the data layer format |
+
+Results are reflected in the CHANGELOG and in the version decisions of [9](09-versioning.en.md). The lite check set (`checks.lite_checks`) is revisited based on the result of R2 ([6](06-quality-gates.en.md)).
 
 ## 8.3 Risks and countermeasures
 
-These are the main risks and countermeasures.
-
-| Risk | Countermeasure in this toolkit |
+| Risk | Countermeasure in Lite |
 |---|---|
-| Destructive operations during long runs with full permissions | New Worktree (or Dev Container) + sandbox. G-5 and G-6 hooks. Do not place production credentials. `git_push` and `deploy` default to "do not" |
-| PC sleep or Agent Host stopping | Do not let the PC sleep. If it stops, `RESUME` with the same Prompt |
-| Loss of information from deleting `/work` | Transcribe it to `/docs` and the ledgers in step 6. Do not delete runs that are in progress or unmerged. CHK-23 |
-| Hooks not taking effect depending on the harness | The same rules are checked twice in verify, which is always run before integration |
-| Blanket approval causes requirements that differ from the intent to be implemented | Set the excluded areas broadly. Record "blanket approval" in the decision record. Show items in order of impact in the report so they can be revoked in the next Prompt |
-| Semantic conflicts in parallel implementation | Do not parallelize items that touch the same boundary or shared component (`queue ready`). Integrate serially and pass the gate every time |
-| False positives and misses in audits | Rely mainly on deterministic checks, and run LLM audits with a model from a different lineage. The final step uses a majority vote of 3 |
-| Prompt injection | Treat instructions contained in external text as input data (stated in every skill). Only rd-author is given web tools |
+| Changes that do not follow the rules (not updating the requirements definition or tests) | In addition to the rules in AGENTS.md, CI's `ebak-verify` and `ebak-data-layer` run the same checks on push and pull requests. Make them required checks with branch protection |
+| ID collisions across people and PCs | IDs are allocated only with `next-id.py`, and the ID ledger uses `merge=union`. CHK-01 detects collisions; reallocate with `next-id.py` |
+| Requirements approved against intent | The user approves in chat. Reverse-generated requirements and those touching personal information, authentication/authorization, or external exposure are not approved in bulk. rd-auditor checks at milestones |
+| False positives and misses in audits | Rely mainly on deterministic checks; run LLM audits only at milestones, with a majority vote of 3 runs for full audits |
+| Loss of `/work` | `/work` is a temporary area not tracked by git. Write results worth keeping into the requirements definition, the ledger, or the CHANGELOG |
+| Prompt injection | Instructions contained in external text are treated as input data (stated in the skills) |

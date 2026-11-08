@@ -951,7 +951,7 @@
       "layer": "e2e",
       "command": "python -m pytest -q tests/system/e2e/test_run_owned_cleanup.py::test_cleanup_starts_only_after_ordered_success_and_pre_cleanup_report tests/system/test_run_cleanup_system.py::test_cleanup_starts_only_after_all_gates_and_main_integration",
       "canary": true,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "30ae6c99",
       "last_run_at": "2026-11-06T06:17:50+09:00",
       "evidence": "work/runs/202611060524/logs/system-test/E2E-026-202611060609.log",
@@ -967,6 +967,12 @@
           "by": "conductor",
           "change": "command: 'python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_cleanup_starts_only_after_ordered_success_and_pre_cleanup_report' -> 'python -m pytest -q tests/system/e2e/test_run_owned_cleanup.py::test_cleanup_starts_only_after_ordered_success_and_pre_cleanup_report tests/system/test_run_cleanup_system.py::test_cleanup_starts_only_after_all_gates_and_main_integration'",
           "reason": "AC-057 の重複ケース E2E-028 を統合（同じ AC を 1 件で保証）"
+        },
+        {
+          "at": "2026-11-08T09:28:33+09:00",
+          "by": "eabk-lite",
+          "change": "blocked",
+          "reason": "0.6.0 EABK Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/EABKUnnesessaryAnalyticsRepor.md §7）"
         }
       ]
     },
@@ -982,7 +988,7 @@
       "layer": "e2e",
       "command": "python -m pytest -q tests/system/e2e/test_run_owned_cleanup.py::test_every_unsuccessful_branch_is_retained_without_expiry tests/system/test_run_cleanup_system.py::test_run_with_missing_milestone_is_retained_without_expiry",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "30ae6c99",
       "last_run_at": "2026-11-06T06:17:50+09:00",
       "evidence": "work/runs/202611060524/logs/system-test/E2E-027-202611060610.log",
@@ -998,6 +1004,12 @@
           "by": "conductor",
           "change": "command: 'python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_every_unsuccessful_branch_is_retained_without_expiry' -> 'python -m pytest -q tests/system/e2e/test_run_owned_cleanup.py::test_every_unsuccessful_branch_is_retained_without_expiry tests/system/test_run_cleanup_system.py::test_run_with_missing_milestone_is_retained_without_expiry'",
           "reason": "AC-058 の重複ケース E2E-036（マイルストーン欠落の run の保持）を統合"
+        },
+        {
+          "at": "2026-11-08T09:28:33+09:00",
+          "by": "eabk-lite",
+          "change": "blocked",
+          "reason": "0.6.0 EABK Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/EABKUnnesessaryAnalyticsRepor.md §7）"
         }
       ]
     },
@@ -1013,7 +1025,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_report_is_finalized_before_cleanup_and_records_every_candidate_result",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "30ae6c99",
       "last_run_at": "2026-11-06T06:17:50+09:00",
       "evidence": "work/runs/202611060524/logs/system-test/E2E-029-202611060611.log",
@@ -1023,6 +1035,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-08T09:28:33+09:00",
+          "by": "eabk-lite",
+          "change": "blocked",
+          "reason": "0.6.0 EABK Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/EABKUnnesessaryAnalyticsRepor.md §7）"
         }
       ]
     },
@@ -1038,7 +1056,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_mixed_foreign_dirty_active_root_main_and_configured_assets_are_untouched",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "30ae6c99",
       "last_run_at": "2026-11-06T06:17:50+09:00",
       "evidence": "work/runs/202611060524/logs/system-test/E2E-031-202611060611.log",
@@ -1048,6 +1066,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-08T09:28:34+09:00",
+          "by": "eabk-lite",
+          "change": "blocked",
+          "reason": "0.6.0 EABK Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/EABKUnnesessaryAnalyticsRepor.md §7）"
         }
       ]
     },
@@ -1065,7 +1089,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py -k \"test_windows_aliases_are_one_candidate_but_collisions_and_locks_are_protected or test_shipping_catalog_agent_and_guides_publish_one_cleanup_contract or test_cleanup_preserves_unrelated_diff_and_all_final_verifiers_exit_zero\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "30ae6c99",
       "last_run_at": "2026-11-06T06:17:50+09:00",
       "evidence": "work/runs/202611060524/logs/system-test/E2E-033-202611060611.log",
@@ -1081,6 +1105,12 @@
           "by": "conductor",
           "change": "command, ac_ids: E2E-034, E2E-035 を統合",
           "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
+        },
+        {
+          "at": "2026-11-08T09:28:34+09:00",
+          "by": "eabk-lite",
+          "change": "blocked",
+          "reason": "0.6.0 EABK Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/EABKUnnesessaryAnalyticsRepor.md §7）"
         }
       ]
     },
@@ -1112,6 +1142,12 @@
           "by": "conductor",
           "change": "blocked",
           "reason": "E2E-033 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
+        },
+        {
+          "at": "2026-11-08T09:28:34+09:00",
+          "by": "eabk-lite",
+          "change": "blocked",
+          "reason": "0.6.0 EABK Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/EABKUnnesessaryAnalyticsRepor.md §7）"
         }
       ],
       "merged_into": "E2E-033"
@@ -1144,6 +1180,12 @@
           "by": "conductor",
           "change": "blocked",
           "reason": "E2E-033 に統合（同じテストファイル・層・要求のケースを統合（System Test の数の最小化））"
+        },
+        {
+          "at": "2026-11-08T09:28:35+09:00",
+          "by": "eabk-lite",
+          "change": "blocked",
+          "reason": "0.6.0 EABK Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/EABKUnnesessaryAnalyticsRepor.md §7）"
         }
       ],
       "merged_into": "E2E-033"
@@ -1274,7 +1316,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_build_request_system.py -k pasteable -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "30ae6c99",
       "last_run_at": "2026-11-06T06:17:50+09:00",
       "evidence": "work/runs/202611060524/logs/system-test/E2E-075-202611060610.log",
@@ -1284,6 +1326,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-08T09:28:35+09:00",
+          "by": "eabk-lite",
+          "change": "blocked",
+          "reason": "0.6.0 EABK Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/EABKUnnesessaryAnalyticsRepor.md §7）"
         }
       ]
     },
@@ -3758,7 +3806,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/test_watch_status_system.py -k test_status_warns_item_over_limit_ac363",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "30ae6c99",
       "last_run_at": "2026-11-06T06:17:50+09:00",
       "evidence": "work/runs/202611060524/logs/system-test/E2E-189-202611060610.log",
@@ -3768,6 +3816,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "FR-1065 AC-363 の System Test を作成"
+        },
+        {
+          "at": "2026-11-08T09:28:35+09:00",
+          "by": "eabk-lite",
+          "change": "blocked",
+          "reason": "0.6.0 EABK Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/EABKUnnesessaryAnalyticsRepor.md §7）"
         }
       ]
     },
@@ -4481,7 +4535,7 @@
       "layer": "e2e",
       "command": "python -m pytest -q tests/system/test_parallel_run_ownership_system.py::test_concurrent_chats_each_own_the_run_they_started_ac407",
       "canary": true,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "30ae6c99",
       "last_run_at": "2026-11-06T06:17:50+09:00",
       "evidence": "work/runs/202611060524/logs/system-test/E2E-219-202611060609.log",
@@ -4491,6 +4545,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "AC-407 system ケースを作成"
+        },
+        {
+          "at": "2026-11-08T09:28:35+09:00",
+          "by": "eabk-lite",
+          "change": "blocked",
+          "reason": "0.6.0 EABK Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/EABKUnnesessaryAnalyticsRepor.md §7）"
         }
       ]
     },
@@ -4506,7 +4566,7 @@
       "layer": "e2e",
       "command": "python -m pytest -q tests/system/test_parallel_run_ownership_system.py::test_primary_tree_run_does_not_gate_other_chat_edits_ac413",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "30ae6c99",
       "last_run_at": "2026-11-06T06:17:50+09:00",
       "evidence": "work/runs/202611060524/logs/system-test/E2E-221-202611060610.log",
@@ -4516,6 +4576,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "AC-413 system ケースを作成"
+        },
+        {
+          "at": "2026-11-08T09:28:36+09:00",
+          "by": "eabk-lite",
+          "change": "blocked",
+          "reason": "0.6.0 EABK Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/EABKUnnesessaryAnalyticsRepor.md §7）"
         }
       ]
     },
@@ -4799,11 +4865,11 @@
       "ac_ids": [
         "AC-457"
       ],
-      "title": "定型文の自動付与（付与・無効化・/build template 除外・既定文の配布・書き換え反映）",
+      "title": "定型文の自動付与（付与・無効化・既定文の配布・書き換え反映）",
       "layer": "api",
       "command": "python -m pytest tests/system/test_prompt_prefix_system.py -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "30ae6c99",
       "last_run_at": "2026-11-06T06:17:50+09:00",
       "evidence": "work/runs/202611060524/logs/system-test/IT-059-202611060611.log",
@@ -4813,6 +4879,18 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-08T09:29:29+09:00",
+          "by": "eabk-lite",
+          "change": "title: '定型文の自動付与（付与・無効化・/build template 除外・既定文の配布・書き換え反映）' -> '定型文の自動付与（付与・無効化・既定文の配布・書き換え反映）'",
+          "reason": "0.6.0 EABK Lite: /build を廃止したため AC-455（/build template 除外）の assert を外した"
+        },
+        {
+          "at": "2026-11-08T10:57:40+09:00",
+          "by": "eabk-lite",
+          "change": "blocked",
+          "reason": "0.6.0 EABK Lite: hook（scripts/hooks/gate.py）を削除し、定型文の自動付与（FR-1081）を廃止したため、テストを撤去"
         }
       ]
     },
