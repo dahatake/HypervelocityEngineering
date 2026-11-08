@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""EABK Studio: local web viewer for the EABK data layer of any repository.
+"""HVE Studio: local web viewer for the EABK data layer of any repository.
 
-    python EABK-Studio/studio.py --repo <path-to-any-repo>   # with EABK: data layer; without: code mode
+    python HVE-Studio/studio.py --repo <path-to-any-repo>   # with EABK: data layer; without: code mode
 
 Only the Python standard library is needed. The server listens on 127.0.0.1.
 Normal viewing is read-only; an explicit maintenance confirmation can update
@@ -343,7 +343,7 @@ def pick_folder(initial: str) -> str | None:
 
 
 def format_report(report: dict) -> str:
-    lines = [f"EABK Studio {eabk_model.STUDIO_VERSION} --check", f"  repo: {report['root']}", "  data-layer files:"]
+    lines = [f"HVE Studio {eabk_model.STUDIO_VERSION} --check", f"  repo: {report['root']}", "  data-layer files:"]
     for item in report["files"]:
         lines.append(f"    [{'found' if item['exists'] else 'missing':7}] {item['key']:<16} {item['path']}")
     if report["boundaryFiles"]:
@@ -360,7 +360,7 @@ def format_report(report: dict) -> str:
                      f"requirement-docs={', '.join(d['requirementDocs']) or '-'} requirements={d['requirements']} "
                      f"linked-to-code={d['linkedRequirements']} code-files={d['codeFiles']} test-files={d['testFiles']} "
                      f"components={d['components']}")
-    lines.append("  result: OK - start the viewer with `python EABK-Studio/studio.py --repo <repo>`" if report["ok"]
+    lines.append("  result: OK - start the viewer with `python HVE-Studio/studio.py --repo <repo>`" if report["ok"]
                  else "  result: " + no_data_message(report["root"]))
     return "\n".join(lines)
 
@@ -373,7 +373,7 @@ def no_data_message(root) -> str:
 
 def main(argv=None) -> int:
     global STATE
-    ap = argparse.ArgumentParser(description="EABK Studio - viewer for the EABK data layer (or, without EABK, for the code and PRD)")
+    ap = argparse.ArgumentParser(description="HVE Studio (Hypervelocity Engineering Studio) - viewer for the EABK data layer (or, without EABK, for the code and PRD)")
     ap.add_argument("--repo", default=None, help="repository to view, with or without EABK (default: current directory)")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-open", action="store_true", help="do not open the browser")
@@ -406,7 +406,7 @@ def main(argv=None) -> int:
         print("no free port", file=sys.stderr)
         return 1
     url = f"http://127.0.0.1:{srv.server_address[1]}/" + (ROLE_ROUTES[args.role] if args.role else "")
-    print(f"EABK Studio {eabk_model.STUDIO_VERSION}\n  repo: {root}\n  url : {url}\n  (Ctrl+C to stop)")
+    print(f"HVE Studio {eabk_model.STUDIO_VERSION}\n  repo: {root}\n  url : {url}\n  (Ctrl+C to stop)")
     if not args.no_open:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
     try:

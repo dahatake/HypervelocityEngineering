@@ -1,4 +1,4 @@
-"""Tests for FR-1042 (external integration catalog browsing in Studio). Run: python -m pytest EABK-Studio/tests -q"""
+"""Tests for FR-1042 (external integration catalog browsing in Studio). Run: python -m pytest HVE-Studio/tests -q"""
 import json
 import re
 import sys

@@ -1,5 +1,5 @@
 @echo off
-rem Double-click to start EABK Studio (Windows). Repo = the folder containing this file.
+rem Double-click to start HVE Studio (Windows). Repo = the folder containing this file.
 setlocal
 set "HERE=%~dp0"
 set "PY="
@@ -10,6 +10,6 @@ if not defined PY (
   pause
   exit /b 1
 )
-"%PY%" "%HERE%EABK-Studio\studio.py" --repo "%HERE%." --port 8765 %*
+"%PY%" "%HERE%HVE-Studio\studio.py" --repo "%HERE%." --port 8765 %*
 if errorlevel 1 pause
 endlocal

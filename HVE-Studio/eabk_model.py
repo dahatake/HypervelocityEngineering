@@ -1,4 +1,4 @@
-"""EABK Studio: reads the EABK data layer of any repository and builds one model.
+"""HVE Studio: reads the EABK data layer of any repository and builds one model.
 
 Only the data layer is read (requirements definition, catalog, system-test ledger,
 ID registry). Source code is never opened; it is only *named* by the
@@ -1521,7 +1521,7 @@ def build_management_analysis(model: dict, docs: list[dict], cat_doc: dict | Non
         "components": [
             {"name": "PC", "runsAt": str(model["meta"]["repo"]), "data": "Studio ローカルプロセス", "source": "起動時実行環境"},
             {"name": "ブラウザー", "runsAt": "PC", "data": "APIから受け取った表示モデル（メモリ）", "source": "/api/model"},
-            {"name": "Studio サーバー", "runsAt": "PC / 127.0.0.1", "data": "管理データの解析結果（メモリ）", "source": "EABK-Studio/studio.py"},
+            {"name": "Studio サーバー", "runsAt": "PC / 127.0.0.1", "data": "管理データの解析結果（メモリ）", "source": "HVE-Studio/studio.py"},
             {"name": f"対象リポジトリ: {model['meta']['name']}", "runsAt": model["meta"]["repo"],
              "data": "管理データと実装ファイルの格納境界", "source": str(model["meta"]["repo"])},
             *management_nodes, *implementation_nodes,

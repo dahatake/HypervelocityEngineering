@@ -1,5 +1,5 @@
 """Integration / unit tests for FR-1070 (3D camera presets), FR-1071 (reduced motion, manual override), NFR-UX-015 (performance, no WebGL).
-Run: python -m pytest EABK-Studio/tests/test_camera3d_ui.py -q"""
+Run: python -m pytest HVE-Studio/tests/test_camera3d_ui.py -q"""
 import re
 import socket
 import subprocess

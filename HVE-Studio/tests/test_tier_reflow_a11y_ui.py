@@ -1,5 +1,5 @@
 """Integration tests for FR-1063 AC-355 (320px 幅・高い拡大率での上位層の表示), AC-352 (a11y の自動検査) と hier.js の層 id。
-Run: python -m pytest EABK-Studio/tests/test_tier_reflow_a11y_ui.py -q"""
+Run: python -m pytest HVE-Studio/tests/test_tier_reflow_a11y_ui.py -q"""
 import json
 
 import pytest

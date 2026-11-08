@@ -2,8 +2,8 @@
 
 # S8 データリファレンス（どの機能が、どのデータを読むか）
 
-EABK Studio の各画面・機能が、**どのファイルの、どの節・列・欄を読み**、**どう計算して**表示するかの一覧です。数字や図の根拠を確かめたいとき（「この 62% は何の割合か」）に使います。
-内容は実装（`EABK-Studio/eabk_model.py`、`studio.py`、`web/js/*.js`）から確認したものです。
+HVE Studio の各画面・機能が、**どのファイルの、どの節・列・欄を読み**、**どう計算して**表示するかの一覧です。数字や図の根拠を確かめたいとき（「この 62% は何の割合か」）に使います。
+内容は実装（`HVE-Studio/eabk_model.py`、`studio.py`、`web/js/*.js`）から確認したものです。
 
 - データ層があるリポジトリで読むのは**データ層のファイルだけ**です。ソースコードの中身は開きません。カタログと台帳に書かれた**パスの文字列**を、名前として使うだけです（S8.1・S8.8）。
 - データ層がない git リポジトリでは、コードのモードで読み取りだけのモデルを導出します（S8.1 の後の「コードのモード」）。
@@ -23,10 +23,10 @@ EABK Studio の各画面・機能が、**どのファイルの、どの節・列
 | `id_registry` | `docs/id-registry.md` | 表を解析（件数の集計と構造の判定） | ダッシュボード・構造 |
 | `manual_tests` | `docs/manual-tests.md` | **存在確認だけ**（中身は解析しません） | なし（`--check` の一覧と、モデルの `meta.files` のみ） |
 
-- 起動時に、`python EABK-Studio/studio.py --check` で「どのファイルが見つかったか・何件解析できたか」を確認できます（[04-troubleshooting.md](04-troubleshooting.md)）。
+- 起動時に、`python HVE-Studio/studio.py --check` で「どのファイルが見つかったか・何件解析できたか」を確認できます（[04-troubleshooting.md](04-troubleshooting.md)）。
 - 要求は「`docs/requirements-definition.md` と `docs/requirements/*.md`」の**両方**から集めます。同じ ID が 2 つ以上あるときは、先のものを使い、重複として構造画面に出します。
 - ファイルがないときの見え方は S8.7 にあります。
-- コードの中身を読まない根拠: テスト `test_nothing_outside_the_data_layer_is_read`（HVE のリポジトリの `EABK-Studio/tests/test_studio.py`）が、データ層があるリポジトリでは `src/` のファイルに書いた要求 ID が読まれないことを確認しています（`test_data_layer_wins_over_code_mode` も同じ）。
+- コードの中身を読まない根拠: テスト `test_nothing_outside_the_data_layer_is_read`（HVE のリポジトリの `HVE-Studio/tests/test_studio.py`）が、データ層があるリポジトリでは `src/` のファイルに書いた要求 ID が読まれないことを確認しています（`test_data_layer_wins_over_code_mode` も同じ）。
 
 ### コードのモード（データ層がない git リポジトリ。FR-1086）
 
@@ -349,7 +349,7 @@ Studio **自身**の動きを、読み込んだファイルから組み立てた
 
 | メソッド・パス | 内容 |
 |---|---|
-| `GET /` ・ `GET /<パス>` | `EABK-Studio/web/` の静的ファイル（外のパスは 404） |
+| `GET /` ・ `GET /<パス>` | `HVE-Studio/web/` の静的ファイル（外のパスは 404） |
 | `GET /api/model` | 解析した全データ（JSON）。更新時刻の指紋が同じなら、キャッシュを返す |
 | `GET /api/fingerprint` | 管理データの更新の指紋（リポジトリのパス ＋ 各ファイルの更新時刻・サイズ） |
 | `GET /api/repo` | 現在の対象リポジトリのパス |

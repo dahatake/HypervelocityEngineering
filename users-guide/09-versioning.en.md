@@ -78,7 +78,7 @@ The installed version is recorded in `version` in `.github/ebak-toolkit.json`.
 
 The installer has no migration code for older versions (no per-version removal list, no settings rewrite). When updating from an older version, do a clean install with `--clean`. It deletes every file recorded in the manifest as installed by the toolkit and then installs again, so the procedure is the same from any version.
 
-0.6.0 is an incompatible change from 0.5.x. It drops the orchestration (conductor and worker roles, worktree runs, `/build`, role gates) and keeps only the rules (AGENTS.md), the data layer, deterministic checks (`verify.py` and CI), milestone audits (rd-auditor), and EABK Studio. The formats of the managed data (requirements definition, catalog, ledger, ID ledger) do not change.
+0.6.0 is an incompatible change from 0.5.x. It drops the orchestration (conductor and worker roles, worktree runs, `/build`, role gates) and keeps only the rules (AGENTS.md), the data layer, deterministic checks (`verify.py` and CI), milestone audits (rd-auditor), and HVE Studio. The formats of the managed data (requirements definition, catalog, ledger, ID ledger) do not change.
 
 | What you used in 0.5.x | Replacement in 0.6.0 |
 |---|---|
@@ -92,7 +92,7 @@ The installer has no migration code for older versions (no per-version removal l
 | `--run`, `--strict`, `--strict-ledger`, `--no-strict-ledger` of `rdcheck.py check` and `verify.py`; CHK-21 | Removed (passing them is an argument error, exit 2). The only knob is the check profile (`checks.profile`, `--profile lite` / `full`). CHK-00, 09, and 13 (errors with `--strict`) and CHK-10 and 11 (errors with `--strict-ledger`) are WARN, visible with `--profile full --show-warnings`. `run=` was dropped from the summary line |
 | `rdfix.py --apply` refusing on worker branches (`work/<run-id>/<item>`) | Removed. Exit 2 now means only lock wait timeout, everything undone, or an internal error |
 | `work.retention_days` (14-day cleanup of `/work`) | Removed (`--clean` drops it from the settings). Delete `/work` by hand when you no longer need it |
-| The default `verify.commands` (`toolkit-unit`, `studio-ui` = `python -m pytest -q EABK-Studio/tests`) and `EABK-Studio/tests/` in targets | Dropped by `--clean`. Studio's tests are no longer installed into targets. New installs get an empty `verify.commands` (`[]`); register your own build and test commands |
+| The default `verify.commands` (`toolkit-unit`, `studio-ui` = `python -m pytest -q HVE-Studio/tests`) and `HVE-Studio/tests/` in targets | Dropped by `--clean`. Studio's tests are no longer installed into targets. New installs get an empty `verify.commands` (`[]`); register your own build and test commands |
 | `ledger.py run` writing results into the run directory | Results go to `work/system-test/results.json` (change with `--results`) |
 
 Steps:

@@ -2,8 +2,8 @@
 
 # S8 Data Reference (Which Feature Reads Which Data)
 
-This is a list of **which file, which section, column, or field** each EABK Studio screen and feature reads, and **how it calculates** what it displays. Use it when you want to check the basis of a number or diagram ("What is this 62% a percentage of?").
-The content was verified against the implementation (`EABK-Studio/eabk_model.py`, `studio.py`, `web/js/*.js`).
+This is a list of **which file, which section, column, or field** each HVE Studio screen and feature reads, and **how it calculates** what it displays. Use it when you want to check the basis of a number or diagram ("What is this 62% a percentage of?").
+The content was verified against the implementation (`HVE-Studio/eabk_model.py`, `studio.py`, `web/js/*.js`).
 
 - In a repository with a data layer, Studio reads **only data-layer files**. It does not open the contents of source code. It uses the **path strings** written in the catalog and the ledger merely as names (S8.1, S8.8).
 - In a git repository without a data layer, Studio derives a read-only model in code mode ("Code mode" after S8.1).
@@ -23,10 +23,10 @@ You can change the locations with `management_files` in the target repository's 
 | `id_registry` | `docs/id-registry.md` | Parses tables (counts and structure judgments) | Dashboard, Structure |
 | `manual_tests` | `docs/manual-tests.md` | **Existence check only** (the contents are not parsed) | None (only the `--check` listing and the model's `meta.files`) |
 
-- At startup, you can run `python EABK-Studio/studio.py --check` to see which files were found and how many items were parsed ([04-troubleshooting.en.md](04-troubleshooting.en.md)).
+- At startup, you can run `python HVE-Studio/studio.py --check` to see which files were found and how many items were parsed ([04-troubleshooting.en.md](04-troubleshooting.en.md)).
 - Requirements are collected from **both** `docs/requirements-definition.md` and `docs/requirements/*.md`. If the same ID appears two or more times, the first one is used, and the rest are reported as duplicates on the Structure screen.
 - How things look when a file is missing is described in S8.7.
-- Basis for not reading code contents: the test `test_nothing_outside_the_data_layer_is_read` (`EABK-Studio/tests/test_studio.py` in the HVE repository) verifies that, in a repository with a data layer, requirement IDs written in files under `src/` are not read (so does `test_data_layer_wins_over_code_mode`).
+- Basis for not reading code contents: the test `test_nothing_outside_the_data_layer_is_read` (`HVE-Studio/tests/test_studio.py` in the HVE repository) verifies that, in a repository with a data layer, requirement IDs written in files under `src/` are not read (so does `test_data_layer_wins_over_code_mode`).
 
 ### Code mode (a git repository without a data layer, FR-1086)
 
@@ -349,7 +349,7 @@ The only thing written is **`docs/catalog.md`**, when you press `確認して実
 
 | Method and path | Description |
 |---|---|
-| `GET /` and `GET /<path>` | Static files in `EABK-Studio/web/` (paths outside it return 404) |
+| `GET /` and `GET /<path>` | Static files in `HVE-Studio/web/` (paths outside it return 404) |
 | `GET /api/model` | All parsed data (JSON). If the modification-time fingerprint is the same, returns the cache |
 | `GET /api/fingerprint` | Modification fingerprint of the management data (repository path + modification time and size of each file) |
 | `GET /api/repo` | Path of the current target repository |

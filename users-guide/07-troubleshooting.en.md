@@ -70,11 +70,11 @@ EABK Lite has no hooks and no automatic preamble. The following symptoms appear 
 | Every tool call is denied, or a warning says a hook failed | A hook file from an older version (`.github/hooks/*.json`) remains and calls the deleted `scripts/hooks/gate.py`. Reinstall with `--clean`, or delete the file and reopen the Copilot session |
 | The preamble is no longer added | By design. `.github/ebak-prompt-prefix.md` and the `prompt_prefix` setting are no longer used. If you want a standing preamble, put it in your own Copilot instructions |
 
-## 7.6 EABK Studio
+## 7.6 HVE Studio
 
 | Symptom | What to do |
 |---|---|
-| It exits with code 1 without starting (`no EABK data layer … and nothing to show in code mode`) | The folder given in `--repo` has no data layer (requirements definition and so on), and code mode has nothing to show either. Code mode applies only to the root of a git repository; an empty or non-git folder is not shown. Check which files were read and the counts (in code mode, the `mode: code (...)` line) with `python EABK-Studio/studio.py --check --repo <path>` |
+| It exits with code 1 without starting (`no EABK data layer … and nothing to show in code mode`) | The folder given in `--repo` has no data layer (requirements definition and so on), and code mode has nothing to show either. Code mode applies only to the root of a git repository; an empty or non-git folder is not shown. Check which files were read and the counts (in code mode, the `mode: code (...)` line) with `python HVE-Studio/studio.py --check --repo <path>` |
 | The port is in use | If the default 8765 is in use, it listens on the next number. To pin it, pass `--port N` |
 | The screen shows old content | When data-layer files change, Studio reloads them within a few seconds. If reloading the browser does not help, restart Studio |
 

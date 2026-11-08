@@ -51,7 +51,7 @@ The Map and the 6 kinds of diagram (context diagram, goal tree, state transition
 
 ## Real screen examples
 
-The following are real screens captured through Playwright verification, reading the management data of the same commit.
+The following are real screens captured through Playwright verification, reading the same management-data revision. The manifest's `commit` is the base commit. Images marked `working_tree: true` were captured with uncommitted working-tree changes on top of that base.
 Capture conditions and SHA-256 are recorded in [screen-images.json](screen-images.json). The screen IDs (`map2d`, `map3d`, `placement`) remain valid as aliases of the old URLs.
 
 | Screen | Real screen |

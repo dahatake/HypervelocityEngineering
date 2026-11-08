@@ -243,7 +243,7 @@ python tools/install.py --version
 | `--allow-non-git` | Install into a directory that is not a git repository |
 | `--version` | Print the toolkit version and exit |
 
-What it does (idempotent): installs the distributed files (rd-auditor, skills, `ebak-verify.yml`, `scripts/*`, EABK-Studio; Studio's tests `EABK-Studio/tests/` are not installed) and updates them if unmodified. Management-data templates (requirements definition, catalog, external integration catalog, ID registry, ledger) are created only when missing. `scripts/ebak.config.json` gets new keys while your values are kept (a new install gets an empty `verify.commands`: `[]`). It adds `/work/` to `.gitignore` (header `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`), `docs/id-registry.md merge=union` to `.gitattributes`, and the rules block to `AGENTS.md` and `.github/copilot-instructions.md`, and records versions and hashes in `.github/ebak-toolkit.json`. Finally it runs `rdfix.py --full --apply` once (the requirements definition is never changed and the repair is not committed).
+What it does (idempotent): installs the distributed files (rd-auditor, skills, `ebak-verify.yml`, `scripts/*`, HVE-Studio; Studio's tests `HVE-Studio/tests/` are not installed) and updates them if unmodified. Management-data templates (requirements definition, catalog, external integration catalog, ID registry, ledger) are created only when missing. `scripts/ebak.config.json` gets new keys while your values are kept (a new install gets an empty `verify.commands`: `[]`). It adds `/work/` to `.gitignore` (header `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`), `docs/id-registry.md merge=union` to `.gitattributes`, and the rules block to `AGENTS.md` and `.github/copilot-instructions.md`, and records versions and hashes in `.github/ebak-toolkit.json`. Finally it runs `rdfix.py --full --apply` once (the requirements definition is never changed and the repair is not committed).
 
 An update handles only the files this version ships. Files an older version installed that this version no longer ships are not deleted; they stay in the manifest (so `--clean` can find them) and their count is shown as a note. There is no migration code for older versions (no per-version removal list, no settings rewrite). When updating from an older version (such as 0.5.x), use `--clean`. Even after `--clean`, data-layer files from older versions (such as `docs/run-history.md` from 0.5.x) and the worktrees and `run/*` branches left by 0.5.x runs remain. The worktrees and merged branches can be removed with `python tools/uninstall.py --target <repo> --runs`; delete the data-layer files by hand if you do not need them ([9.4](09-versioning.en.md#94-updating-from-an-older-version-clean-install)).
 
@@ -271,12 +271,12 @@ Decision: a file is removed if it is at a path some version shipped and its cont
 
 The catalog `tools/uninstall-catalog.json` is built by `tools/build-uninstall-catalog.py` from every version of `tools/install.py` (including versions that came in through merges) and the blobs each version shipped. `tools/bump-version.py` rebuilds it on every version bump, and `--check` tells whether it is stale. Installing and removing every version is verified with `tools/verify-uninstall-matrix.py` ([docs/manual-tests.en.md](../docs/manual-tests.en.md)).
 
-## EABK-Studio (data-layer viewer)
+## HVE-Studio (data-layer viewer)
 
-Installed into `EABK-Studio/` of the target repository. A local, read-only web app that shows the data layer (requirements definition, catalog, ledger) as diagrams, tables and search (Japanese and English). A git repository without EABK can also be viewed from an HVE clone with `python EABK-Studio/studio.py --repo <any-git-repo>` (code mode, FR-1086).
+Installed into `HVE-Studio/` of the target repository. A local, read-only web app that shows the data layer (requirements definition, catalog, ledger) as diagrams, tables and search (Japanese and English). A git repository without EABK can also be viewed from an HVE clone with `python HVE-Studio/studio.py --repo <any-git-repo>` (code mode, FR-1086).
 
 ```text
-python EABK-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--role pm|architect|swe] [--check]
+python HVE-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--role pm|architect|swe] [--check]
 ```
 
 | Option | Behavior |
@@ -287,7 +287,7 @@ python EABK-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--role pm|a
 | `--role pm\|architect\|swe` | First screen to open (dashboard / 2D map / table) |
 | `--check` | Print which management-data files exist, the parsed counts and warnings, then exit. Exit 0 if a data layer exists or code mode has something to show (a `mode: code (...) requirement-docs=… requirements=… linked-to-code=… code-files=… test-files=… components=…` line is printed), otherwise 1 |
 
-- Wrappers: `EABK-Studio/start.ps1 [-Repo DIR] [-Port N] [-Role …] [-Check] [-NoOpen]`, `EABK-Studio/start.sh [DIR] [PORT] [studio.py options…]`.
+- Wrappers: `HVE-Studio/start.ps1 [-Repo DIR] [-Port N] [-Role …] [-Check] [-NoOpen]`, `HVE-Studio/start.sh [DIR] [PORT] [studio.py options…]`.
 - In code mode it derives, read-only, requirement IDs (`FR-…`, `NFR-…`) from the first column of markdown tables and from headings (`docs/PRD.md` and the like first), the code and test files that mention each ID, and source files grouped into components. The ledger and acceptance criteria are empty. Only a git repository root is used; an empty or non-git folder exits 1.
 - With a data layer it never reads source code. It listens on 127.0.0.1 only. The only writes are catalog titles and decision states in `docs/catalog.md` that you confirm and run in "整合性保守" (consistency maintenance).
 - Role-based guides are in [studio/README.en.md](studio/README.en.md).

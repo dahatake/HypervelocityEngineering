@@ -70,7 +70,7 @@ FR-032: 却下（今期は対象外）
 回答を要求定義書に反映し、BLOCKED が外れた AC を実装してテストしてください。
 ```
 
-承認待ちと未回答の質問は、次のコマンドか [EABK Studio](studio/README.md) で確認できます。
+承認待ちと未回答の質問は、次のコマンドか [HVE Studio](studio/README.md) で確認できます。
 
 ```bash
 python scripts/rdcheck.py list --state 承認待ち

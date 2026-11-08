@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tests" / "system"))
 from entity_repo import DOC, make_large, make_zoom, snapshot  # noqa: E402
 
-STUDIO = ROOT / "EABK-Studio" / "studio.py"
+STUDIO = ROOT / "HVE-Studio" / "studio.py"
 SZ = '[data-testid="semantic-zoom"]'
 
 

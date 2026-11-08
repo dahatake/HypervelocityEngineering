@@ -243,7 +243,7 @@ python tools/install.py --version
 | `--allow-non-git` | git リポジトリでない場所にも導入する |
 | `--version` | toolkit の版を表示して終了する |
 
-行うこと（何度実行しても同じ結果）: 配布物（rd-auditor、skills、`ebak-verify.yml`、`scripts/*`、EABK-Studio。Studio のテスト `EABK-Studio/tests/` は入れません）を入れ、変更していなければ更新します。管理データのひな形（要求定義書・カタログ・外部連携カタログ・ID 台帳・台帳）は、ないときだけ作ります。`scripts/ebak.config.json` は新しいキーを足し、利用者の値を残します（新しい導入の `verify.commands` は空の `[]`）。`.gitignore` に `/work/`（見出し `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`）、`.gitattributes` に `docs/id-registry.md merge=union`、`AGENTS.md` と `.github/copilot-instructions.md` に規則のブロックを足し、`.github/ebak-toolkit.json` に版とハッシュを記録します。最後に `rdfix.py --full --apply` を 1 回実行します（要求定義書は変更せず、修復は commit しません）。
+行うこと（何度実行しても同じ結果）: 配布物（rd-auditor、skills、`ebak-verify.yml`、`scripts/*`、HVE-Studio。Studio のテスト `HVE-Studio/tests/` は入れません）を入れ、変更していなければ更新します。管理データのひな形（要求定義書・カタログ・外部連携カタログ・ID 台帳・台帳）は、ないときだけ作ります。`scripts/ebak.config.json` は新しいキーを足し、利用者の値を残します（新しい導入の `verify.commands` は空の `[]`）。`.gitignore` に `/work/`（見出し `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`）、`.gitattributes` に `docs/id-registry.md merge=union`、`AGENTS.md` と `.github/copilot-instructions.md` に規則のブロックを足し、`.github/ebak-toolkit.json` に版とハッシュを記録します。最後に `rdfix.py --full --apply` を 1 回実行します（要求定義書は変更せず、修復は commit しません）。
 
 更新は、この版が配布するファイルだけを扱います。旧版が入れて今の版が配布しないファイルは削除せず、マニフェストにも残し（`--clean` で見つけられるように）、件数を「注意」で表示します。旧版からの移行の処理（版ごとの削除リストや設定の書き換え）は持ちません。旧版（0.5.x など）から更新するときは `--clean` を使います。`--clean` の後も、旧版のデータ層のファイル（0.5.x の `docs/run-history.md` など）と、0.5.x の run が残した worktree・`run/*` ブランチは残ります。worktree と取り込み済みのブランチは `python tools/uninstall.py --target <導入先> --runs` で削除でき、データ層のファイルは不要なら手で削除します（[9.4](09-versioning.md#94-旧版から更新するクリーンインストール)）。
 
@@ -271,12 +271,12 @@ python tools/uninstall.py --target <導入先> --purge --runs     # 管理デー
 
 カタログ `tools/uninstall-catalog.json` は、`tools/build-uninstall-catalog.py` が `tools/install.py` のすべての版（merge で入った版を含む）と各版の配布物の blob から作ります。`tools/bump-version.py` が版の更新のたびに作り直し、`--check` で古くないかを確かめられます。すべての版の導入と削除は `tools/verify-uninstall-matrix.py` で確かめます（[docs/manual-tests.md](../docs/manual-tests.md)）。
 
-## EABK-Studio（データ層のビューアー）
+## HVE-Studio（データ層のビューアー）
 
-インストールすると、導入先の `EABK-Studio/` に入ります。データ層（要求定義書・カタログ・台帳）を図・表・検索で見る、ローカルの読み取り専用の Web アプリです（日本語・英語）。EABK を入れていない git リポジトリも、HVE の clone から `python EABK-Studio/studio.py --repo <任意の git リポジトリ>` で見られます（コードのモード。FR-1086）。
+インストールすると、導入先の `HVE-Studio/` に入ります。データ層（要求定義書・カタログ・台帳）を図・表・検索で見る、ローカルの読み取り専用の Web アプリです（日本語・英語）。EABK を入れていない git リポジトリも、HVE の clone から `python HVE-Studio/studio.py --repo <任意の git リポジトリ>` で見られます（コードのモード。FR-1086）。
 
 ```text
-python EABK-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--role pm|architect|swe] [--check]
+python HVE-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--role pm|architect|swe] [--check]
 ```
 
 | オプション | 動作 |
@@ -287,7 +287,7 @@ python EABK-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--role pm|a
 | `--role pm\|architect\|swe` | 最初に開く画面（ダッシュボード／2D マップ／表） |
 | `--check` | 管理データのファイルの有無と、解析できた件数・警告を表示して終了。データ層があるか、コードのモードで見られれば exit 0（`mode: code (...) requirement-docs=… requirements=… linked-to-code=… code-files=… test-files=… components=…` の行が出ます）、どちらでもなければ exit 1 |
 
-- ラッパー: `EABK-Studio/start.ps1 [-Repo DIR] [-Port N] [-Role …] [-Check] [-NoOpen]`、`EABK-Studio/start.sh [DIR] [PORT] [studio.py のオプション…]`。
+- ラッパー: `HVE-Studio/start.ps1 [-Repo DIR] [-Port N] [-Role …] [-Check] [-NoOpen]`、`HVE-Studio/start.sh [DIR] [PORT] [studio.py のオプション…]`。
 - コードのモードでは、Markdown の表の先頭の列と見出しにある要求 ID（`FR-…`・`NFR-…`。`docs/PRD.md` などを先に読む）、その ID を書いたコードとテスト、コンポーネントにまとめたソースを読み取りだけで導出します。台帳と受入基準は空です。対象は git リポジトリのルートだけで、空のフォルダーや git でないフォルダーは exit 1 です。
 - データ層があるときはソースコードを読まず、127.0.0.1 だけで待ち受けます。書き込むのは「整合性保守」で確認して実行した `docs/catalog.md` の題名・決定状態だけです。
 - 役割別のガイドは [studio/README.md](studio/README.md) にあります。

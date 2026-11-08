@@ -2,7 +2,7 @@
 
 Expected values come only from the acceptance criteria in docs/requirements-definition.md.  The implementation is NOT
 the oracle.  Widths are PARAM-048 = 1280 / 1024 / 800 / 600 / 320 CSS px (320 = PARAM-034; 改訂 2026-10-27: 複数段に折り返し、帯の横スクロールなし).  AC-393/394/396 are integration level
-(EABK-Studio/tests/test_header_row_ui.py).
+(HVE-Studio/tests/test_header_row_ui.py).
 
 CONTRACT (受入基準から独立に定義。実装に合わせて oracle を変更しない):
   - ヘッダー帯: <header class="top">。要素: ナビ #nav a（8）、表示モード切替 [data-testid="header-dim-toggle"] button（2D・3D・Graph。RPG は対象外）、

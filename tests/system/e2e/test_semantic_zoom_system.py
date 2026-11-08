@@ -24,7 +24,7 @@ from playwright.sync_api import expect
 from entity_repo import make_large, make_zoom
 
 ROOT = Path(__file__).resolve().parents[3]
-STUDIO = ROOT / "EABK-Studio" / "studio.py"
+STUDIO = ROOT / "HVE-Studio" / "studio.py"
 T_MID, T_DETAIL = 2, 8  # PARAM-017, PARAM-018
 ROUTES = ["entities", "map2d", "map3d"]
 ALL = {"注文", "顧客", "商品", "在庫"}
@@ -77,7 +77,7 @@ def _serve(repo):
         res = _serve_once(repo)
         if res:
             return res
-    raise RuntimeError("EABK Studio did not start")
+    raise RuntimeError("HVE Studio did not start")
 
 
 @pytest.fixture()

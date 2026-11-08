@@ -70,11 +70,11 @@ EABK Lite には hook も定型文の自動付与もありません。次は旧�
 | すべてのツールの呼び出しが拒否される・hook の失敗の警告が出る | 旧版の hook のファイル（`.github/hooks/*.json`）が残り、削除された `scripts/hooks/gate.py` を呼んでいます。`--clean` で入れ直すか、ファイルを削除してから Copilot のセッションを開き直します |
 | 定型文が付かなくなった | 仕様です。`.github/ebak-prompt-prefix.md` と設定の `prompt_prefix` はもう使いません。毎回伝えたい前提は、自分の Copilot の instructions に書きます |
 
-## 7.6 EABK Studio
+## 7.6 HVE Studio
 
 | 症状 | 対処 |
 |---|---|
-| 起動せずに終了コード 1 で終わる（`no EABK data layer … and nothing to show in code mode`） | `--repo` に指定したフォルダーにデータ層（要求定義書など）がなく、コードのモードでも表示するものがありません。コードのモードは git リポジトリのルートだけが対象で、空のフォルダーや git でないフォルダーは表示しません。`python EABK-Studio/studio.py --check --repo <パス>` で、読めたファイルと件数（コードのモードなら `mode: code (...)` の行）を確かめます |
+| 起動せずに終了コード 1 で終わる（`no EABK data layer … and nothing to show in code mode`） | `--repo` に指定したフォルダーにデータ層（要求定義書など）がなく、コードのモードでも表示するものがありません。コードのモードは git リポジトリのルートだけが対象で、空のフォルダーや git でないフォルダーは表示しません。`python HVE-Studio/studio.py --check --repo <パス>` で、読めたファイルと件数（コードのモードなら `mode: code (...)` の行）を確かめます |
 | ポートが使用中 | 既定の 8765 が使用中なら、次の番号で待ち受けます。固定したいときは `--port N` を指定します |
 | 画面の内容が古い | データ層のファイルを更新すると、数秒以内に自動で読み直します。ブラウザーを再読み込みしても変わらない場合は、Studio を起動し直します |
 

@@ -1,4 +1,4 @@
-"""System tests for FR-1040 AC-220, FR-1041 AC-226, FR-1042 AC-227 (EABK Studio).
+"""System tests for FR-1040 AC-220, FR-1041 AC-226, FR-1042 AC-227 (HVE Studio).
 
 Expected values come only from the acceptance criteria in docs/requirements-definition.md.  The
 implementation is NOT the oracle.

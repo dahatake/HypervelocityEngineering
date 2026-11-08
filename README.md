@@ -8,7 +8,7 @@ GitHub Copilot（VS Code・Copilot CLI・GitHub Copilot app・cloud agent）で�
 - リポジトリの `AGENTS.md` の規則に従って、振る舞いを変える変更の中で、要求定義書・カタログ・テストが同じ変更として更新されます。
 - 検査は LLM の判断に任せず、決定的スクリプト（LLM を使わず、同じ入力から常に同じ結果を返すスクリプト）で行います。手元では `python scripts/verify.py`、push・PR では CI の `ebak-verify` が同じ検査をします。
 - 意味の矛盾（要求どうしの衝突・目的とのずれ）は、節目に読み取り専用の監査役 `rd-auditor` に頼んで確かめます。
-- データ層は **EABK Studio**（ローカルの読み取り専用ビューアー）で図・表・検索で見られます。
+- データ層は **HVE Studio**（ローカルの読み取り専用ビューアー）で図・表・検索で見られます。
 - すでにソースコード・設計書があるアプリ（brownfield）にも使えます。まず `python scripts/adopt.py scan` で棚卸しします（[既存のアプリを導入する](users-guide/10-adopting-existing-apps.md)）。
 
 ### なぜ Lite か
@@ -33,7 +33,7 @@ GitHub Copilot（VS Code・Copilot CLI・GitHub Copilot app・cloud agent）で�
 - [インストール](#インストール)
 - [Quickstart](#quickstart)
 - [旧版からの更新（クリーンインストール）](#旧版からの更新クリーンインストール)
-- [EABK Studio（データ層のビューアー）](#eabk-studioデータ層のビューアー)
+- [HVE Studio（データ層のビューアー）](#hve-studioデータ層のビューアー)
 - [詳細ドキュメント](#詳細ドキュメント)
 - [用語](#用語)
 - [リポジトリの構成](#リポジトリの構成)
@@ -58,7 +58,7 @@ EABK Lite は、次の 5 つでこれらを防ぎます。
 | **データ層** | 要求定義書・カタログ・外部連携カタログ・ID 台帳・System Test の台帳を、決まったパスのファイルとして git で管理します。 |
 | **決定的な検査** | `scripts/verify.py`（手元）と CI の `ebak-verify` が、同じ検査をします。ID の採番（`next-id.py`）と台帳の更新（`ledger.py`）もスクリプトで行います。 |
 | **節目の手動監査** | 意味の矛盾は機械では見つけにくいので、節目に `rd-auditor` に監査を頼みます。毎回の依頼では動かしません。 |
-| **可視化** | EABK Studio で、要求・カタログ・試験の状態を図と表で見ます。 |
+| **可視化** | HVE Studio で、要求・カタログ・試験の状態を図と表で見ます。 |
 
 ### 規則（`AGENTS.md` に入るブロック）
 
@@ -88,7 +88,7 @@ scripts/         決定的スクリプト（Python 3.9 以上。標準ライブ�
   verify.py / verify.ps1 / verify.sh   データ層の検査（検査プロファイル）＋ビルド・テストのコマンド
   rdcheck.py  rdfix.py  next-id.py  ledger.py  summarize.py  adopt.py  entities.py  extpoints.py  ebaklib.py
   ebak.config.json 設定（検証コマンド、検査プロファイル、base_branch）
-EABK-Studio/     データ層のビューアー（ローカルの Web アプリ。読み取り専用）と、役割別ガイド・画面画像
+HVE-Studio/     データ層のビューアー（ローカルの Web アプリ。読み取り専用）と、役割別ガイド・画面画像
 docs/            永続のドキュメント（git で管理）
   requirements-definition.md  catalog.md  integrations.md  id-registry.md
 tests/system/ledger.json      System Test の台帳（永続）
@@ -201,7 +201,7 @@ python tools/install.py --target /path/to/your-repo
 
 | 種類 | ファイル | 再実行時の扱い |
 |---|---|---|
-| toolkit のファイル | `.github/agents/rd-auditor.agent.md`、`.github/skills/`（`requirement-definition`・`rd-audit`・`adopt-existing`）、`.github/workflows/ebak-verify.yml`、`scripts/*.py`・`verify.ps1`・`verify.sh`、`EABK-Studio/`（ビューアー本体。Studio のテストは入れません）、`EABK-docs/`（このリポジトリの `users-guide/` と同じ内容。EABK Studio のガイドは `EABK-docs/studio/`。導入先の `users-guide/` は触りません） | 変更していなければ新しいバージョンに更新します。ローカルで変更していれば**そのまま残します**（`KEEP-LOCAL`。`--force` で上書き） |
+| toolkit のファイル | `.github/agents/rd-auditor.agent.md`、`.github/skills/`（`requirement-definition`・`rd-audit`・`adopt-existing`）、`.github/workflows/ebak-verify.yml`、`scripts/*.py`・`verify.ps1`・`verify.sh`、`HVE-Studio/`（ビューアー本体。Studio のテストは入れません）、`EABK-docs/`（このリポジトリの `users-guide/` と同じ内容。HVE Studio のガイドは `EABK-docs/studio/`。導入先の `users-guide/` は触りません） | 変更していなければ新しいバージョンに更新します。ローカルで変更していれば**そのまま残します**（`KEEP-LOCAL`。`--force` で上書き） |
 | 管理データの雛形 | `docs/requirements-definition.md`、`docs/catalog.md`、`docs/integrations.md`（外部連携カタログ。任意）、`docs/id-registry.md`、`tests/system/ledger.json` | **存在しない場合だけ**作成します。既存のファイルは上書きしません |
 | 設定 | `scripts/ebak.config.json` | なければ作成します。あれば新しいキーだけを追加し、利用者が設定した値は変更しません |
 | 追記 | `.gitignore` に `/work/`（見出し `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`）、`.gitattributes` に `docs/id-registry.md merge=union` | 足りない行だけを追記します |
@@ -260,7 +260,18 @@ curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/m
 curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.sh | bash -s -- --purge
 ```
 
-toolkit を clone 済みの場合は `python tools/uninstall.py --target /path/to/your-repo`（または `--purge`）です。`python tools/install.py --target ... --uninstall`・`--purge`、`install.ps1 -Uninstall`、`install.sh --uninstall` も同じ実装を使います。
+**toolkit を clone 済みの場合**
+
+toolkit の clone のルートで実行します。`--target` にはアンインストール先のリポジトリのルートを指定します。
+
+```bash
+python tools/uninstall.py --target /path/to/your-repo --dry-run          # 削除内容を確認
+python tools/uninstall.py --target /path/to/your-repo                    # 管理データと設定を残して削除
+python tools/uninstall.py --target /path/to/your-repo --purge --dry-run  # 管理データなども含めて確認
+python tools/uninstall.py --target /path/to/your-repo --purge            # 管理データなども削除
+```
+
+`--purge` は管理データ・設定・`/work` なども削除します。変更した toolkit ファイルなどは既定では残ります（詳細は下の表）。`python tools/install.py --target ... --uninstall`・`--purge`、`install.ps1 -Uninstall`、`install.sh --uninstall` も同じ実装を使います。
 
 **どの版の EABK でも削除できます。** アンインストーラーは、`tools/install.py` のすべての版（旧名 hve の版を含む）が配布したファイルの内容のハッシュを git の履歴から集めたカタログ `tools/uninstall-catalog.json` で判定します。ダウンロードするのは `uninstall.py` とカタログの 2 ファイルだけで、toolkit の clone は要りません。マニフェストがない導入先でも、旧版のファイル（`hvelib.py`・`hve-verify.yml`・conductor など）、旧版のブロックの印（`hve-abk`・`hve-conductor`）、旧版の設定とマニフェスト（`scripts/hve.config.json`・`.github/hve-toolkit.json`）、`*.hve-backup-*` も削除します。
 
@@ -324,7 +335,7 @@ GitHub Copilot には、agents・skills・hooks をまとめて配布する標�
 2. **Copilot が規則に従って同じ変更で更新します**。`AGENTS.md` の規則に従い、要求定義書の要求と受入基準・カタログ・テスト・コードを同じ変更の中で更新し、`python scripts/verify.py` を exit 0 にします。新しい ID は `next-id.py`、台帳は `ledger.py` で更新します。差分を確認し、承認が必要な要求はチャットで承認します。
 3. **push・PR で CI が同じ検査をします**。`ebak-verify` が手元と同じ検査を実行します（検査だけで、修復の commit はしません）。データ層が不合格なら、手元で `python scripts/rdfix.py --full --apply` を実行して同じ変更に含めます。
 4. **節目に rd-auditor に監査を頼みます**。機能のまとまりが終わったとき・リリースの前などに、Agent に `rd-auditor` を選んで「差分を監査して」「全量を 3 回で監査して」などと頼みます。差分の既定は `base_branch`（既定 `main`）との差分です。サブエージェントを使えるクライアントでは指定の回数を並行して多数決します。結果は `work/audit/<日時>/report.md` に出ます。指摘を反映するかは利用者が判断し、別の変更で直します。
-5. **状況は EABK Studio で見ます**（任意）。`python EABK-Studio/studio.py --role pm` などで、要求・カタログ・試験の状態を図と表で確かめます（[EABK Studio](#eabk-studioデータ層のビューアー)）。
+5. **状況は HVE Studio で見ます**（任意）。`python HVE-Studio/studio.py --role pm` などで、要求・カタログ・試験の状態を図と表で確かめます（[HVE Studio](#hve-studioデータ層のビューアー)）。
 
 詳しくは [ふだんの進め方](users-guide/02-daily-workflow.md) と [依頼の書き方](users-guide/01-writing-requests.md) を参照してください。
 
@@ -375,15 +386,15 @@ PowerShell では `-Clean`、`install.sh` では `--clean` です。
 
 ---
 
-## EABK Studio（データ層のビューアー）
+## HVE Studio（データ層のビューアー）
 
-**EABK Studio**（`EABK-Studio/`）は、EABK が管理するデータ層（要求定義書・カタログ・System Test の台帳・ID 台帳）を、**図・表・検索**で見て回る、ローカル専用の Web アプリです。toolkit の一部として、インストールすると対象リポジトリに入ります。
+**HVE Studio**（Hypervelocity Engineering Studio、`HVE-Studio/`）は、EABK が管理するデータ層（要求定義書・カタログ・System Test の台帳・ID 台帳）を、**図・表・検索**で見て回る、ローカル専用の Web アプリです。toolkit の一部として、インストールすると対象リポジトリに入ります。
 
 - **読み取り専用**です。データ層があるリポジトリではソースコードの中身を読まず（下の「コードのモード」では、要求 ID を探すためにだけ読みます）、`127.0.0.1` だけで待ち受けます。唯一の書き込みは、「整合性保守」でプレビューを確認して実行した、`docs/catalog.md` の題名・決定状態だけです。
 - Python 3.9 以上の標準ライブラリだけで動きます（追加のインストールなし）。データ層のファイルを更新すると、数秒で画面が読み直されます。
 - 要求・カタログ・試験の状態を、人が理解し、判断するための窓です。要求や実装の変更は、Copilot に依頼します。
 
-![EABK Studio のダッシュボード](users-guide/studio/images/dashboard.png)
+![HVE Studio のダッシュボード](users-guide/studio/images/dashboard.png)
 
 | 役割 | 使い方 | ガイド |
 |---|---|---|
@@ -399,19 +410,19 @@ PowerShell では `-Clean`、`install.sh` では `--clean` です。
 toolkit を入れたリポジトリのルートで、次を実行します。
 
 ```bash
-python EABK-Studio/studio.py --check      # データ層が読めるか（見つかったファイルと解析できた件数）を確認
-python EABK-Studio/studio.py --role pm    # ブラウザーが開く。--role は pm / architect / swe
+python HVE-Studio/studio.py --check      # データ層が読めるか（見つかったファイルと解析できた件数）を確認
+python HVE-Studio/studio.py --role pm    # ブラウザーが開く。--role は pm / architect / swe
 ```
 
-Windows では `.\EABK-Studio\start.ps1 -Role pm`、macOS / Linux では `./EABK-Studio/start.sh . 8765 --role pm` でも起動できます。詳細は [EABK-Studio/README.md](EABK-Studio/README.md)、スクリプトのオプションは [スクリプトリファレンス](users-guide/05-scripts-reference.md) です。
+Windows では `.\HVE-Studio\start.ps1 -Role pm`、macOS / Linux では `./HVE-Studio/start.sh . 8765 --role pm` でも起動できます。詳細は [HVE-Studio/README.md](HVE-Studio/README.md)、スクリプトのオプションは [スクリプトリファレンス](users-guide/05-scripts-reference.md) です。
 
 ### EABK なしで Studio を使う（コードのモード）
 
 EABK を入れていない git リポジトリも見られます（FR-1086）。この toolkit（HVE）を clone したフォルダーから、対象のリポジトリのルートを `--repo` に指定します。
 
 ```bash
-python EABK-Studio/studio.py --repo <任意の git リポジトリ> --check   # mode: code (...) requirement-docs=… requirements=… linked-to-code=… code-files=… test-files=… components=…
-python EABK-Studio/studio.py --repo <任意の git リポジトリ>
+python HVE-Studio/studio.py --repo <任意の git リポジトリ> --check   # mode: code (...) requirement-docs=… requirements=… linked-to-code=… code-files=… test-files=… components=…
+python HVE-Studio/studio.py --repo <任意の git リポジトリ>
 ```
 
 - データ層があるリポジトリでは、従来どおりデータ層を読みます。
@@ -440,7 +451,7 @@ python EABK-Studio/studio.py --repo <任意の git リポジトリ>
 | 9 | [バージョンアップの手順](users-guide/09-versioning.md) | 版を上げる（配布元）、導入済みのリポジトリを更新する（利用者）。旧版からのクリーンインストール |
 | 10 | [既存のアプリを導入する](users-guide/10-adopting-existing-apps.md) | 既存のコード・設計書から、棚卸し → 逆生成の要求（承認待ち）→ 現状の挙動の固定でデータ層を整える |
 | 11 | [外部連携カタログ](users-guide/11-integration-catalog.md) | 外部アプリ・データとの連携を `docs/integrations.md`（任意）に記録する。追加・変更・廃止・検査の手順 |
-| 参考 | [EABK Studio のガイド](users-guide/studio/README.md) | データ層を図・表で見たい。役割別の手順と、各画面が読むデータを知りたい |
+| 参考 | [HVE Studio のガイド](users-guide/studio/README.md) | データ層を図・表で見たい。役割別の手順と、各画面が読むデータを知りたい |
 
 ## 用語
 
@@ -463,7 +474,7 @@ python EABK-Studio/studio.py --repo <任意の git リポジトリ>
 | 手順書（skills） | [.github/skills/](.github/skills/) |
 | 決定的スクリプト | [scripts/](scripts/) |
 | CI | [.github/workflows/](.github/workflows/) |
-| データ層のビューアー（EABK Studio） | [EABK-Studio/](EABK-Studio/README.md)、ガイドは [users-guide/studio/](users-guide/studio/README.md) |
+| データ層のビューアー（HVE Studio） | [HVE-Studio/](HVE-Studio/README.md)、ガイドは [users-guide/studio/](users-guide/studio/README.md) |
 | 管理データの雛形 | [docs/](docs/)、[tests/system/ledger.json](tests/system/ledger.json) |
 | インストールスクリプト | [tools/](tools/) |
 | toolkit のテスト | [tests/toolkit/](tests/toolkit/)（`python -m pytest tests/toolkit -q`） |

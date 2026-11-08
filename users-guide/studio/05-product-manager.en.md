@@ -24,9 +24,9 @@ Click `🎯 Product Manager` at the top right of the screen to open the dashboar
 
 1. **Launch** (about 1 minute). Run the following in the repository folder. A browser opens.
    ```powershell
-   python EABK-Studio/studio.py --role pm
+   python HVE-Studio/studio.py --role pm
    ```
-   If it does not open properly, first run `python EABK-Studio/studio.py --check` to confirm that the data layers are found.
+   If it does not open properly, first run `python HVE-Studio/studio.py --check` to confirm that the data layers are found.
 2. **Read the overall numbers** (2 minutes). Read the numbers in the top row of the dashboard from left to right.
 
    ![Dashboard](images/dashboard.png)
@@ -79,7 +79,7 @@ Open them by appending the following to the URL shown at launch (`http://127.0.0
 ## S5.5 Notes when reading
 
 - "Implementation registered" means whether a path is written in the catalog. It does not check whether the file actually exists or works. Judge whether it works by "test pass" and the result of `python scripts/verify.py`.
-- When `Test pass %` is 0, either there is no ledger or the cases are `not_run`. You can check whether the ledger is found with `python EABK-Studio/studio.py --check`.
+- When `Test pass %` is 0, either there is no ledger or the cases are `not_run`. You can check whether the ledger is found with `python HVE-Studio/studio.py --check`.
 - You cannot add or change requirements in Studio. Request them in Copilot chat ([Chapter 1](../01-writing-requests.en.md)).
 
 Next, proceed to [06-architect.en.md](06-architect.en.md) (view design consistency) or [08-data-reference.en.md](08-data-reference.en.md) (the basis for the numbers).

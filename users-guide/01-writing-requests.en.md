@@ -70,7 +70,7 @@ FR-032: reject (out of scope this term)
 Reflect the answers in the requirements definition, then implement and test the ACs that are no longer BLOCKED.
 ```
 
-Items awaiting approval and open questions can be listed with the command below or viewed in [EABK Studio](studio/README.en.md).
+Items awaiting approval and open questions can be listed with the command below or viewed in [HVE Studio](studio/README.en.md).
 
 ```bash
 python scripts/rdcheck.py list --state 承認待ち

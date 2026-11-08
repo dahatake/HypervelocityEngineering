@@ -25,7 +25,7 @@ def test_fresh_install_layout(empty_repo):
     # EABK Lite: no orchestration, no role gates
     for rel in (".github/agents/conductor.agent.md", ".github/agents/implementer.agent.md", ".github/skills/build/SKILL.md",
                 ".github/hooks", "scripts/hooks", ".github/ebak-prompt-prefix.md",
-                ".github/workflows/ebak-data-layer.yml", "EABK-Studio/tests",
+                ".github/workflows/ebak-data-layer.yml", "HVE-Studio/tests",
                 "scripts/run-state.py", "scripts/integrate.py", "scripts/clean-work.py"):
         assert not (empty_repo / rel).exists(), rel
     cfg = json.loads((empty_repo / "scripts/ebak.config.json").read_text(encoding="utf-8"))
@@ -129,6 +129,32 @@ def test_clean_safety_and_update_without_migration(empty_repo):
     assert "--clean" in proc.stdout and "WARN-" not in proc.stdout and "PRUNE" not in proc.stdout
     manifest = json.loads((empty_repo / ".github/ebak-toolkit.json").read_text(encoding="utf-8"))
     assert set(OLD_FILES) <= set(manifest["files"])
+
+
+# FR-011 AC-479: an update from before the rename installs HVE-Studio/, reports the old EABK-Studio/ as orphaned
+# (no migration), the checks ignore the leftover folder, and --clean removes it
+def test_update_from_eabk_studio_folder(empty_repo):
+    assert install(empty_repo).returncode == 0
+    manifest_p = empty_repo / ".github/ebak-toolkit.json"
+    manifest = json.loads(manifest_p.read_text(encoding="utf-8"))
+    shutil.move(str(empty_repo / "HVE-Studio"), str(empty_repo / "EABK-Studio"))
+    manifest["files"] = {(("EABK-Studio/" + rel[len("HVE-Studio/"):]) if rel.startswith("HVE-Studio/") else rel): h
+                         for rel, h in manifest["files"].items()}
+    manifest_p.write_text(json.dumps(manifest), encoding="utf-8")
+    (empty_repo / "EABK-Studio/web/js/legacy.js").write_text("// FR-999 AC-999 (product IDs of the old Studio)\n",
+                                                            encoding="utf-8")
+    git(empty_repo, "add", "-A")
+    git(empty_repo, "commit", "-q", "-m", "pre-rename version")
+    proc = install(empty_repo)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert (empty_repo / "HVE-Studio/studio.py").is_file() and (empty_repo / "EABK-Studio/studio.py").is_file()
+    assert "EABK-Studio/" in proc.stdout and "--clean" in proc.stdout
+    check = run([sys.executable, "scripts/rdcheck.py", "check"], empty_repo)
+    assert "rdcheck:" in check.stdout and "EABK-Studio" not in check.stdout + check.stderr
+    git(empty_repo, "add", "-A")
+    git(empty_repo, "commit", "-q", "-m", "update")
+    assert install(empty_repo, "--clean").returncode == 0
+    assert not (empty_repo / "EABK-Studio/studio.py").exists() and (empty_repo / "HVE-Studio/studio.py").is_file()
 
 
 def test_clean_refuses_non_git(tmp_path):

@@ -8,7 +8,7 @@ A toolkit that adds rules and checks to a repository developed with GitHub Copil
 - Following the rules in the repository's `AGENTS.md`, every change that alters behavior updates the requirements definition, the catalog, and the tests in the same change.
 - Checks are not left to LLM judgment; they run as deterministic scripts (scripts that use no LLM and always return the same result for the same input). Locally `python scripts/verify.py`, and on push / PR the CI workflow `ebak-verify`, run the same checks.
 - Semantic contradictions (conflicts between requirements, drift from goals) are checked at milestones by asking the read-only auditor `rd-auditor`.
-- The data layer can be browsed as diagrams, tables, and search in **EABK Studio** (a local, read-only viewer).
+- The data layer can be browsed as diagrams, tables, and search in **HVE Studio** (a local, read-only viewer).
 - It also works for applications that already have source code and design documents (brownfield). Start with an inventory: `python scripts/adopt.py scan` ([Adopting an existing app](users-guide/10-adopting-existing-apps.en.md)).
 
 ### Why Lite
@@ -33,7 +33,7 @@ If you are updating from an older version (such as 0.5.x), read [Updating from a
 - [Installation](#installation)
 - [Quickstart](#quickstart)
 - [Updating from an older version (clean install)](#updating-from-an-older-version-clean-install)
-- [EABK Studio (data-layer viewer)](#eabk-studio-data-layer-viewer)
+- [HVE Studio (data-layer viewer)](#hve-studio-data-layer-viewer)
 - [Detailed documentation](#detailed-documentation)
 - [Glossary](#glossary)
 - [Repository structure](#repository-structure)
@@ -58,7 +58,7 @@ EABK Lite prevents these with five means.
 | **Data layer** | The requirements definition, the catalog, the integration catalog, the ID registry, and the System Test ledger are files at fixed paths managed in git. |
 | **Deterministic checks** | `scripts/verify.py` (local) and the CI workflow `ebak-verify` run the same checks. ID assignment (`next-id.py`) and ledger updates (`ledger.py`) are also done by scripts. |
 | **Manual milestone audits** | Semantic contradictions are hard to find mechanically, so ask `rd-auditor` for an audit at milestones. It does not run on every request. |
-| **Visualization** | EABK Studio shows the state of requirements, the catalog, and tests as diagrams and tables. |
+| **Visualization** | HVE Studio shows the state of requirements, the catalog, and tests as diagrams and tables. |
 
 ### Rules (the block that goes into `AGENTS.md`)
 
@@ -88,7 +88,7 @@ scripts/         deterministic scripts (Python 3.9+, standard library only)
   verify.py / verify.ps1 / verify.sh   data-layer checks (check profile) + build / test commands
   rdcheck.py  rdfix.py  next-id.py  ledger.py  summarize.py  adopt.py  entities.py  extpoints.py  ebaklib.py
   ebak.config.json settings (verify commands, check profile, base_branch)
-EABK-Studio/     data-layer viewer (local web app, read-only), role guides, and screenshots
+HVE-Studio/     data-layer viewer (local web app, read-only), role guides, and screenshots
 docs/            persistent documents (managed in git)
   requirements-definition.md  catalog.md  integrations.md  id-registry.md
 tests/system/ledger.json      System Test ledger (persistent)
@@ -201,7 +201,7 @@ python tools/install.py --target /path/to/your-repo
 
 | Kind | Files | On re-run |
 |---|---|---|
-| Toolkit files | `.github/agents/rd-auditor.agent.md`, `.github/skills/` (`requirement-definition`, `rd-audit`, `adopt-existing`), `.github/workflows/ebak-verify.yml`, `scripts/*.py`, `verify.ps1`, `verify.sh`, `EABK-Studio/` (the viewer; Studio's tests are not installed), `EABK-docs/` (same content as this repository's `users-guide/`; the EABK Studio guide is `EABK-docs/studio/`; the target's own `users-guide/` is not touched) | Updated to the new version if unmodified. If modified locally, **left as is** (`KEEP-LOCAL`; `--force` overwrites) |
+| Toolkit files | `.github/agents/rd-auditor.agent.md`, `.github/skills/` (`requirement-definition`, `rd-audit`, `adopt-existing`), `.github/workflows/ebak-verify.yml`, `scripts/*.py`, `verify.ps1`, `verify.sh`, `HVE-Studio/` (the viewer; Studio's tests are not installed), `EABK-docs/` (same content as this repository's `users-guide/`; the HVE Studio guide is `EABK-docs/studio/`; the target's own `users-guide/` is not touched) | Updated to the new version if unmodified. If modified locally, **left as is** (`KEEP-LOCAL`; `--force` overwrites) |
 | Management data templates | `docs/requirements-definition.md`, `docs/catalog.md`, `docs/integrations.md` (integration catalog, optional), `docs/id-registry.md`, `tests/system/ledger.json` | Created **only if missing**. Existing files are never overwritten |
 | Settings | `scripts/ebak.config.json` | Created if missing. If present, only new keys are added; values you set are not changed |
 | Appended lines | `/work/` in `.gitignore` (header `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`); `docs/id-registry.md merge=union` in `.gitattributes` | Only missing lines are appended |
@@ -260,7 +260,18 @@ curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/m
 curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.sh | bash -s -- --purge
 ```
 
-If you have cloned the toolkit, use `python tools/uninstall.py --target /path/to/your-repo` (or add `--purge`). `python tools/install.py --target ... --uninstall` / `--purge`, `install.ps1 -Uninstall`, and `install.sh --uninstall` use the same implementation.
+**If you have cloned the toolkit**
+
+Run these commands from the root of the toolkit clone. Set `--target` to the root of the repository to uninstall from.
+
+```bash
+python tools/uninstall.py --target /path/to/your-repo --dry-run          # preview removal
+python tools/uninstall.py --target /path/to/your-repo                    # remove while keeping management data and settings
+python tools/uninstall.py --target /path/to/your-repo --purge --dry-run  # preview including management data
+python tools/uninstall.py --target /path/to/your-repo --purge            # also remove management data
+```
+
+`--purge` also removes management data, settings, `/work`, and more. Modified toolkit files and other items are kept by default (see the table below). `python tools/install.py --target ... --uninstall` / `--purge`, `install.ps1 -Uninstall`, and `install.sh --uninstall` use the same implementation.
 
 **It removes EABK installed by any version.** The uninstaller decides with `tools/uninstall-catalog.json`, a catalog of the content hashes of every file that any version of `tools/install.py` shipped (including the versions under the old name "hve"), collected from the git history. Only `uninstall.py` and the catalog are downloaded; no clone of the toolkit is needed. Even without a manifest it removes files of old versions (`hvelib.py`, `hve-verify.yml`, the conductor, etc.), the block markers of old versions (`hve-abk`, `hve-conductor`), the settings and manifests of old versions (`scripts/hve.config.json`, `.github/hve-toolkit.json`), and `*.hve-backup-*`.
 
@@ -324,7 +335,7 @@ So the customizations (`AGENTS.md`, `.github/`) and `scripts/` are placed direct
 2. **Copilot updates everything in the same change, following the rules.** Following the rules in `AGENTS.md`, it updates the requirements and acceptance criteria in the requirements definition, the catalog, the tests, and the code in the same change, and makes `python scripts/verify.py` exit 0. New IDs come from `next-id.py`; the ledger is updated with `ledger.py`. Review the diff and approve, in chat, any requirements that need approval.
 3. **On push / PR, CI runs the same checks.** `ebak-verify` runs the same checks as locally (check only; it never commits repairs). If the data layer fails, run `python scripts/rdfix.py --full --apply` locally and include the repair in the same change.
 4. **Ask rd-auditor for an audit at milestones.** When a group of features is done, before a release, and so on, choose `rd-auditor` as the agent and ask, for example, "audit the diff" or "audit everything 3 times". The diff defaults to the diff against `base_branch` (default `main`). On clients that support subagents, the requested number of runs execute in parallel and are decided by majority. Results go to `work/audit/<datetime>/report.md`. You decide whether to apply the findings, and fix them in a separate change.
-5. **Watch the status in EABK Studio** (optional). Use `python EABK-Studio/studio.py --role pm` and the like to see the state of requirements, the catalog, and tests as diagrams and tables ([EABK Studio](#eabk-studio-data-layer-viewer)).
+5. **Watch the status in HVE Studio** (optional). Use `python HVE-Studio/studio.py --role pm` and the like to see the state of requirements, the catalog, and tests as diagrams and tables ([HVE Studio](#hve-studio-data-layer-viewer)).
 
 For details, see [Daily workflow](users-guide/02-daily-workflow.en.md) and [Writing requests](users-guide/01-writing-requests.en.md).
 
@@ -375,15 +386,15 @@ For details, see [Version upgrades](users-guide/09-versioning.en.md) and [CHANGE
 
 ---
 
-## EABK Studio (data-layer viewer)
+## HVE Studio (data-layer viewer)
 
-**EABK Studio** (`EABK-Studio/`) is a local-only web app for browsing the data layer EABK manages (the requirements definition, the catalog, the System Test ledger, and the ID registry) through **diagrams, tables, and search**. It is part of the toolkit and is installed into the target repository.
+**HVE Studio** (Hypervelocity Engineering Studio, `HVE-Studio/`) is a local-only web app for browsing the data layer EABK manages (the requirements definition, the catalog, the System Test ledger, and the ID registry) through **diagrams, tables, and search**. It is part of the toolkit and is installed into the target repository.
 
 - It is **read-only**. In a repository with a data layer it does not read source code contents (in "code mode" below it reads them only to find requirement IDs), and it listens only on `127.0.0.1`. The only write is the title / decision state in `docs/catalog.md`, executed from "Consistency maintenance" after you check the preview.
 - It runs on the Python 3.9+ standard library alone (no extra installs). When data-layer files change, the screen reloads within seconds.
 - It is a window for people to understand and judge the state of requirements, the catalog, and tests. To change requirements or the implementation, ask Copilot.
 
-![EABK Studio dashboard](users-guide/studio/images/dashboard.png)
+![HVE Studio dashboard](users-guide/studio/images/dashboard.png)
 
 | Role | How to use it | Guide |
 |---|---|---|
@@ -399,19 +410,19 @@ The index is [users-guide/studio/](users-guide/studio/README.en.md).
 At the root of a repository where the toolkit is installed, run:
 
 ```bash
-python EABK-Studio/studio.py --check      # check that the data layer can be read (files found and items parsed)
-python EABK-Studio/studio.py --role pm    # opens the browser. --role is pm / architect / swe
+python HVE-Studio/studio.py --check      # check that the data layer can be read (files found and items parsed)
+python HVE-Studio/studio.py --role pm    # opens the browser. --role is pm / architect / swe
 ```
 
-On Windows you can also use `.\EABK-Studio\start.ps1 -Role pm`, and on macOS / Linux `./EABK-Studio/start.sh . 8765 --role pm`. Details are in [EABK-Studio/README.md](EABK-Studio/README.md); script options are in the [Scripts reference](users-guide/05-scripts-reference.en.md).
+On Windows you can also use `.\HVE-Studio\start.ps1 -Role pm`, and on macOS / Linux `./HVE-Studio/start.sh . 8765 --role pm`. Details are in [HVE-Studio/README.md](HVE-Studio/README.md); script options are in the [Scripts reference](users-guide/05-scripts-reference.en.md).
 
 ### Using Studio without EABK (code mode)
 
 Studio can also show a git repository without EABK (FR-1086). From a clone of this toolkit (HVE), pass the root of the target repository to `--repo`:
 
 ```bash
-python EABK-Studio/studio.py --repo <any-git-repo> --check   # mode: code (...) requirement-docs=… requirements=… linked-to-code=… code-files=… test-files=… components=…
-python EABK-Studio/studio.py --repo <any-git-repo>
+python HVE-Studio/studio.py --repo <any-git-repo> --check   # mode: code (...) requirement-docs=… requirements=… linked-to-code=… code-files=… test-files=… components=…
+python HVE-Studio/studio.py --repo <any-git-repo>
 ```
 
 - If the repository has a data layer, Studio reads it as before.
@@ -440,7 +451,7 @@ Details are in [users-guide/](users-guide/README.en.md).
 | 9 | [Version upgrades](users-guide/09-versioning.en.md) | Releasing a version (distributor), updating an installed repository (user), clean install from an older version |
 | 10 | [Adopting an existing app](users-guide/10-adopting-existing-apps.en.md) | Build the data layer from existing code and design documents: inventory → reverse-engineered requirements (pending approval) → pinning current behavior |
 | 11 | [Integration catalog](users-guide/11-integration-catalog.en.md) | Record integrations with external apps / data in `docs/integrations.md` (optional): adding, changing, retiring, and checking |
-| Reference | [EABK Studio guide](users-guide/studio/README.en.md) | You want to view the data layer as diagrams and tables, with per-role procedures and the data each screen reads |
+| Reference | [HVE Studio guide](users-guide/studio/README.en.md) | You want to view the data layer as diagrams and tables, with per-role procedures and the data each screen reads |
 
 ## Glossary
 
@@ -463,7 +474,7 @@ Details are in [users-guide/](users-guide/README.en.md).
 | Procedures (skills) | [.github/skills/](.github/skills/) |
 | Deterministic scripts | [scripts/](scripts/) |
 | CI | [.github/workflows/](.github/workflows/) |
-| Data-layer viewer (EABK Studio) | [EABK-Studio/](EABK-Studio/README.md), guide in [users-guide/studio/](users-guide/studio/README.en.md) |
+| Data-layer viewer (HVE Studio) | [HVE-Studio/](HVE-Studio/README.md), guide in [users-guide/studio/](users-guide/studio/README.en.md) |
 | Management data templates | [docs/](docs/), [tests/system/ledger.json](tests/system/ledger.json) |
 | Installation scripts | [tools/](tools/) |
 | Toolkit tests | [tests/toolkit/](tests/toolkit/) (`python -m pytest tests/toolkit -q`) |

@@ -1,5 +1,5 @@
 """Static wiring tests: the diagram 3D view (dgm3d.js) draws per-kind shapes, not sprites.
-FR-1068 / FR-1069 / FR-1070 / FR-1071. Run: python -m pytest EABK-Studio/tests/test_dgm3d_shapes.py -q"""
+FR-1068 / FR-1069 / FR-1070 / FR-1071. Run: python -m pytest HVE-Studio/tests/test_dgm3d_shapes.py -q"""
 import re
 from pathlib import Path
 

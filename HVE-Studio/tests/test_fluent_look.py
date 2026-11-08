@@ -1,9 +1,9 @@
-"""FR-1048 (AC-263..268) and NFR-PERF-006 (AC-275): the Fluent 2 look of EABK Studio (unit / integration).
+"""FR-1048 (AC-263..268) and NFR-PERF-006 (AC-275): the Fluent 2 look of HVE Studio (unit / integration).
 
 The static checks read the style sheets and scripts (no browser); the browser check reuses the `studio` fixture.
 Expected values come from the acceptance criteria and PARAM-032/039; the System Tests
 (tests/system/e2e/test_studio_fluent_appearance_system.py) check the same against the whole app.
-Run: python -m pytest EABK-Studio/tests -q
+Run: python -m pytest HVE-Studio/tests -q
 """
 import re
 from pathlib import Path

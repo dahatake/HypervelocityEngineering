@@ -3,7 +3,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-WEB = ROOT / "EABK-Studio" / "web"
+WEB = ROOT / "HVE-Studio" / "web"
 
 
 def js(name: str) -> str:
@@ -45,5 +45,5 @@ def test_keyboard_live_region_and_table_alternative_are_present():
 def test_install_manages_all_semantic_zoom_files():
     install = (ROOT / "tools" / "install.py").read_text(encoding="utf-8")
     for rel in ("web/js/semzoom.js", "web/js/sz2d.js", "web/js/sz3d.js", "web/js/entities.js", "web/sz.css"):
-        assert f"EABK-Studio/{rel}" in install, rel
+        assert f"HVE-Studio/{rel}" in install, rel
     assert 'href="sz.css"' in (WEB / "index.html").read_text(encoding="utf-8")

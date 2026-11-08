@@ -1,4 +1,4 @@
-"""System tests for NFR-UX-002 AC-015 / AC-041 and NFR-SEC-003 AC-042 (EABK Studio).
+"""System tests for NFR-UX-002 AC-015 / AC-041 and NFR-SEC-003 AC-042 (HVE Studio).
 
 Expected values come only from the acceptance criteria in docs/requirements-definition.md.  The
 implementation is NOT the oracle.

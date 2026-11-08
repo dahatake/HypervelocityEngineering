@@ -2,14 +2,14 @@
 
 # EABK Lite ユーザーガイド
 
-EABK Lite（Enterprise App Build Kit Lite、0.6.0）と **EABK Studio** は、1 つのアプリケーションです。このフォルダー `users-guide/` が、その唯一のユーザーガイドです。概要・インストール・Quickstart・用語は、リポジトリ直下の [README.md](../README.md) を先に読んでください。
+EABK Lite（Enterprise App Build Kit Lite、0.6.0）と **HVE Studio** は、1 つのアプリケーションです。このフォルダー `users-guide/` が、その唯一のユーザーガイドです。概要・インストール・Quickstart・用語は、リポジトリ直下の [README.md](../README.md) を先に読んでください。
 
 EABK Lite は、**規則（AGENTS.md）＋データ層（要求定義書・カタログ・System Test の台帳・ID 台帳）＋決定的な検査（`verify.py` と CI の `ebak-verify`）＋節目の監査（rd-auditor）** だけの構成です。利用者は、いつもの Copilot（既定のエージェント）にふだんどおり依頼します。振る舞いを変える変更では、AGENTS.md の規則に従って、要求定義書・カタログ・テストが同じ変更の中で更新され、push すると CI が同じ検査をします。
 
 | 部 | 対象 | 章の記号 | 場所 |
 |---|---|---|---|
 | 第 1 部 | **EABK Lite 本体**: 依頼の書き方、ふだんの進め方、管理データの書式と検査、節目の監査 | 1〜11 | このフォルダー直下 |
-| 第 2 部 | **EABK Studio**: 管理データ（データ層）を図・表・検索で見て回る、ローカル専用の閲覧アプリ | S1〜S8 | [studio/](studio/README.md) |
+| 第 2 部 | **HVE Studio**: 管理データ（データ層）を図・表・検索で見て回る、ローカル専用の閲覧アプリ | S1〜S8 | [studio/](studio/README.md) |
 
 2 つの部は、同じデータ層でつながっています。変更の中で Copilot（または人）がデータ層を書き、Studio が読みます。要求や実装を変えるときは、Studio ではなく Copilot のチャットで依頼します。
 
@@ -29,7 +29,7 @@ EABK Lite は、**規則（AGENTS.md）＋データ層（要求定義書・カ�
 | 10 | [既存のアプリを導入する](10-adopting-existing-apps.md) | 既存のコード・設計書から、棚卸し → 逆生成の要求（承認待ち）→ 現状の挙動の固定でデータ層を整える。方式の調査と適合の検証 |
 | 11 | [外部連携カタログ](11-integration-catalog.md) | API・ファイル・DB・イベントでの外部連携を `docs/integrations.md` に記録し、追加・変更・廃止・検査（`verify.py --docs-only`）の手順を知りたい |
 
-## 第 2 部: EABK Studio
+## 第 2 部: HVE Studio
 
 索引と起動の前提は [studio/README.md](studio/README.md) です。
 
@@ -75,7 +75,7 @@ EABK Lite は、**規則（AGENTS.md）＋データ層（要求定義書・カ�
 | 解決する問題と全体の構成 | [概要](../README.md#概要) |
 | インストール・更新・アンインストール | [インストール](../README.md#インストール) |
 | 最初の依頼の出し方と確認項目 | [Quickstart](../README.md#quickstart) |
-| EABK Studio の概要と起動 | [EABK Studio](../README.md#eabk-studioデータ層のビューアー) |
+| HVE Studio の概要と起動 | [HVE Studio](../README.md#hve-studioデータ層のビューアー) |
 | 用語 | [用語](../README.md#用語) |
 
 ## このガイドの書き方の約束

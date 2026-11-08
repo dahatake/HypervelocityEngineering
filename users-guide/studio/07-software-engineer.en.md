@@ -21,7 +21,7 @@ Click `💻 Software Engineer` at the top right of the screen to open the tables
 
 1. **Launch** (1 minute).
    ```powershell
-   python EABK-Studio/studio.py --role swe
+   python HVE-Studio/studio.py --role swe
    ```
 2. **Choose a requirement to work on** (2 minutes). Open `Tables` → `Requirements`. In the `status: all` filter choose `approved`, and in the `impl` filter choose `none` (implementation files empty) or `unlisted` (no row in the catalog). Look at priority starting from `MUST`.
 

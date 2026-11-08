@@ -42,8 +42,8 @@ def template(tmp_path_factory):
     for rel in ("tests/system/e2e/test_studio_system.py", "tests/system/e2e/test_judge_capabilities.py"):
         if (path / rel).exists():
             (path / rel).unlink()
-    if (path / "EABK-Studio").exists():
-        shutil.rmtree(path / "EABK-Studio")
+    if (path / "HVE-Studio").exists():
+        shutil.rmtree(path / "HVE-Studio")
     r.py("next-id.py", "--sync", "--adopt", check=True)
     r.py("ledger.py", "--by", "test-designer", "add", "--req", "FR-001", "--ac", "AC-001", "--title", "t",
          "--layer", "e2e", "--command", "python -c pass", check=True)

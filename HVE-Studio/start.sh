@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Usage: ./EABK-Studio/start.sh [repo-path] [port] [studio.py options...]   e.g. ./EABK-Studio/start.sh . 8765 --role pm
+# Usage: ./HVE-Studio/start.sh [repo-path] [port] [studio.py options...]   e.g. ./HVE-Studio/start.sh . 8765 --role pm
 here="$(cd "$(dirname "$0")" && pwd)"
 py="$(command -v python3 || command -v python)" || { echo "Python 3 is required." >&2; exit 1; }
 repo="${1:-.}"

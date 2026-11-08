@@ -51,7 +51,7 @@ EABK Lite には hook も定型文の自動付与もありません。毎回伝�
 | `lite_checks` | `CHK-01, CHK-02, CHK-03, CHK-05, CHK-09, CHK-12, CHK-17, CHK-19, CHK-24` | lite で報告する CHK。構造と追跡性（ID・参照・AC・テストのつながり）の検査です |
 | `ambiguous_words` | 適切、迅速、直感的 など | 曖昧な語のリスト（CHK-13。full のとき） |
 | `unit_pattern` | 秒・件・% などの正規表現 | 直書きの数値と単位とみなすパターン（CHK-14。full のとき） |
-| `id_scan_exclude` | `docs/**`、`scripts/**`、`EABK-Studio/**` など | コードから要求 ID を探すときに除くパス（CHK-17・CHK-19） |
+| `id_scan_exclude` | `docs/**`、`scripts/**`、`HVE-Studio/**` など | コードから要求 ID を探すときに除くパス（CHK-17・CHK-19） |
 | `test_path_pattern` | `tests/`、`*.test.*` など | テストコードとみなすパス（CHK-09） |
 | `temp_file_pattern` | `*.log`、`test-results/` など | commit してはいけない一時ファイル（CHK-23） |
 
@@ -133,7 +133,7 @@ toolkit の更新では、利用者が `scripts/*.py` に直接足した配線�
 | `prompt_prefix` | hook による定型文の自動付与 |
 | `work.retention_days` | `/work` の 14 日の清掃（もうありません） |
 | `verify.commands` の `toolkit-unit` | 撤去した `clean-work.py` のテスト |
-| `verify.commands` の `studio-ui`（`python -m pytest -q EABK-Studio/tests`） | EABK Studio のテスト。導入先には `EABK-Studio/tests/` を入れなくなりました |
+| `verify.commands` の `studio-ui`（`python -m pytest -q HVE-Studio/tests`） | HVE Studio のテスト。導入先には `HVE-Studio/tests/` を入れなくなりました |
 
 `.github/ebak-prompt-prefix.md` と hook のファイル（`.github/hooks/quality-gates.json`・`.github/hooks/prompt-prefix.json`・`scripts/hooks/gate.py`）は、もう読みません。旧版から更新するときは `--clean` を使うと、これらも削除されます。
 

@@ -1,4 +1,4 @@
-"""Tests for EABK Studio: the data-layer parser and the local server. Run: python -m pytest EABK-Studio/tests -q"""
+"""Tests for HVE Studio: the data-layer parser and the local server. Run: python -m pytest HVE-Studio/tests -q"""
 import json
 import shutil
 import hashlib
@@ -556,6 +556,20 @@ def test_pick_returns_path_cancel_or_501(server, monkeypatch):
     assert _pick(server, H) == (501, {"error": "picker-unavailable"})
 
 
+# FR-011 AC-479: the existing CLI entry point reports the new display name.
+def test_studio_name_in_help_and_check(repo, capsys):
+    with pytest.raises(SystemExit) as stopped:
+        studio.main(["--help"])
+    assert stopped.value.code == 0
+    help_text = capsys.readouterr().out
+    assert "HVE Studio (Hypervelocity Engineering Studio)" in help_text
+    assert "EABK Studio" not in help_text
+    assert studio.main(["--repo", str(repo), "--check"]) == 0
+    report = capsys.readouterr().out
+    assert report.startswith(f"HVE Studio {m.STUDIO_VERSION} --check")
+    assert "HVE-Studio/studio.py" in report
+
+
 def test_check_reports_found_and_missing_files(repo, capsys):
     assert studio.main(["--repo", str(repo), "--check"]) == 0
     out = capsys.readouterr().out
@@ -582,7 +596,9 @@ def test_role_sets_the_first_screen(repo, monkeypatch, capsys):
     monkeypatch.setattr(ThreadingHTTPServer, "serve_forever", fake_serve)
     for role, route in (("pm", "#/dashboard"), ("architect", "#/map2d"), ("swe", "#/tables")):
         assert studio.main(["--repo", str(repo), "--no-open", "--port", "0", "--role", role]) == 0
-        assert route in capsys.readouterr().out
+        output = capsys.readouterr().out
+        assert route in output
+        assert output.startswith(f"HVE Studio {m.STUDIO_VERSION}")
     with pytest.raises(SystemExit):
         studio.main(["--repo", str(repo), "--role", "ceo"])
 

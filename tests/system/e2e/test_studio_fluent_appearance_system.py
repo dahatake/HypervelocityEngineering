@@ -1,5 +1,5 @@
 """System tests for FR-1047 (AC-258..262), FR-1048 (AC-263..268), NFR-A11Y-001 (AC-269..274),
-NFR-PERF-006 (AC-275, AC-276): Fluent 2 appearance of EABK Studio.
+NFR-PERF-006 (AC-275, AC-276): Fluent 2 appearance of HVE Studio.
 
 Expected values come only from the acceptance criteria in docs/requirements-definition.md and
 PARAM-006/007/021/022/028..039.  The implementation is NOT the oracle.
@@ -7,7 +7,7 @@ AC-260 (Q-015 A 採用: テーマ名だけをブラウザーのローカル保�
 のケースは test_ac260_* 。AC-259 の既定テスト（新しい context でシステム連動）は「未選択」の確認として残る。
 
 PROVISIONAL CONTRACT (仮置き。実装者が確認し、食い違えば CONFLICT として返す。この oracle は実装に合わせて直さない):
-  - スタイル: EABK-Studio/web/*.css（index.html から読む全 CSS）。トークンは CSS カスタムプロパティで、
+  - スタイル: HVE-Studio/web/*.css（index.html から読む全 CSS）。トークンは CSS カスタムプロパティで、
     色は --color-*（前景 --color-fg-*、背景 --color-bg-*、罫線 --color-border-*、フォーカス --color-focus*、
     状態色 --color-status-<success|warning|danger|info>[-fg|-bg|-icon]）、
     余白 --space-*、角丸 --radius-*、影 --shadow-*、罫線の太さ --stroke-*、長さ --duration-*、緩急 --ease-*、
@@ -44,7 +44,7 @@ from entity_repo import make_large, make_zoom
 from test_studio_system import ROOT, _management_fingerprints, _repository_files, page, studio_url  # noqa: F401
 from test_studio_links_wrap_status_arch_system import _serve
 
-WEB = ROOT / "EABK-Studio" / "web"
+WEB = ROOT / "HVE-Studio" / "web"
 BASE = "80c7cc55"
 NAV = ["dashboard", "implstatus", "map", "diagrams", "entities", "integrations", "source", "tables", "maintenance"]
 P_BODY, P_SMALL, P_GRID, P_MOTION, P_RM = 14, 12, 4, 300, 1  # PARAM-035/036/030/032/037
@@ -699,7 +699,7 @@ def _git(*args):
 
 # NFR-PERF-006 AC-275
 def test_ac275_nav_items_and_legacy_urls_identical_to_baseline_commit(page):
-    base_app = _git("show", f"{BASE}:EABK-Studio/web/js/app.js")
+    base_app = _git("show", f"{BASE}:HVE-Studio/web/js/app.js")
     base_nav = re.search(r"const NAV = \[([^\]]*)\]", base_app).group(1)
     base_nav = re.findall(r"'([^']+)'", base_nav)
     assert base_nav == NAV

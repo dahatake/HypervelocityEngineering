@@ -1,4 +1,4 @@
-"""System tests for FR-1070 AC-381/AC-382, FR-1071 AC-385/AC-386, NFR-UX-015 AC-388 (EABK Studio 3D カメラのプリセット).
+"""System tests for FR-1070 AC-381/AC-382, FR-1071 AC-385/AC-386, NFR-UX-015 AC-388 (HVE Studio 3D カメラのプリセット).
 
 Expected values come only from the acceptance criteria in docs/requirements-definition.md.  The
 implementation is NOT the oracle.

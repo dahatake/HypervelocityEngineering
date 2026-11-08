@@ -1,5 +1,5 @@
-# Usage: .\EABK-Studio\start.ps1 [repo-path] [port] [-Role pm|architect|swe] [-Check] [-NoOpen]
-# Other studio.py options can follow, e.g. .\EABK-Studio\start.ps1 . 8765 --no-open
+# Usage: .\HVE-Studio\start.ps1 [repo-path] [port] [-Role pm|architect|swe] [-Check] [-NoOpen]
+# Other studio.py options can follow, e.g. .\HVE-Studio\start.ps1 . 8765 --no-open
 [CmdletBinding(PositionalBinding = $false)]
 param(
     [Parameter(Position = 0)][string]$Repo = ".",

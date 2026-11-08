@@ -1,4 +1,4 @@
-"""System tests for FR-010 AC-332..AC-336 (EABK Studio: repository switch by the OS folder dialog).
+"""System tests for FR-010 AC-332..AC-336 (HVE Studio: repository switch by the OS folder dialog).
 
 Expected values come only from the acceptance criteria in docs/requirements-definition.md.  The
 implementation is NOT the oracle.
@@ -28,7 +28,7 @@ from playwright.sync_api import expect
 from entity_repo import make_other, make_standard
 
 ROOT = Path(__file__).resolve().parents[3]
-STUDIO = ROOT / "EABK-Studio" / "studio.py"
+STUDIO = ROOT / "HVE-Studio" / "studio.py"
 HDR = {"X-EABK-Studio": "1", "Content-Type": "application/json"}
 
 
@@ -52,7 +52,7 @@ def _serve(repo, pick=None):
         except OSError:
             time.sleep(0.1)
     proc.kill()
-    raise RuntimeError("EABK Studio did not start")
+    raise RuntimeError("HVE Studio did not start")
 
 
 class Studio:

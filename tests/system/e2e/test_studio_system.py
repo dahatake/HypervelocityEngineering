@@ -1,4 +1,4 @@
-"""System-level E2E coverage for the approved EABK Studio acceptance criteria.
+"""System-level E2E coverage for the approved HVE Studio acceptance criteria.
 
 The assertions below are derived from docs/requirements-definition.md.  The
 application is used only to discover the browser entry points and controls.
@@ -22,7 +22,7 @@ from playwright.sync_api import expect
 
 
 ROOT = Path(__file__).resolve().parents[3]
-STUDIO = ROOT / "EABK-Studio" / "studio.py"
+STUDIO = ROOT / "HVE-Studio" / "studio.py"
 
 
 def _free_port():
@@ -49,7 +49,7 @@ def _launch_studio():
             time.sleep(0.1)
     else:
         proc.kill()
-        raise RuntimeError("EABK Studio did not start")
+        raise RuntimeError("HVE Studio did not start")
     return proc, f"http://127.0.0.1:{port}"
 
 
@@ -409,7 +409,7 @@ def test_configured_data_links_requirement_ac_catalog_case_and_source(page):
     page.get_by_text("FR-001", exact=True).first.click()
     drawer = page.locator("#drawer")
     expect(drawer).to_contain_text("AC-001")
-    expect(drawer).to_contain_text("EABK-Studio")
+    expect(drawer).to_contain_text("HVE-Studio")
     expect(drawer).to_contain_text("test")
     expect(drawer).to_contain_text("SRC-")
 

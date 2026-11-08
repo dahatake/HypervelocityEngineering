@@ -2,14 +2,14 @@
 
 # EABK Lite User Guide
 
-EABK Lite (Enterprise App Build Kit Lite, 0.6.0) and **EABK Studio** are a single application. This folder, `users-guide/`, is its one and only user guide. For the overview, installation, Quickstart, and terminology, read the top-level [README.en.md](../README.en.md) first.
+EABK Lite (Enterprise App Build Kit Lite, 0.6.0) and **HVE Studio** are a single application. This folder, `users-guide/`, is its one and only user guide. For the overview, installation, Quickstart, and terminology, read the top-level [README.en.md](../README.en.md) first.
 
 EABK Lite consists only of **rules (AGENTS.md) + the data layer (the requirements definition, the catalog, the System Test ledger, the ID ledger) + deterministic checks (`verify.py` and CI's `ebak-verify`) + milestone audits (rd-auditor)**. You make requests to your usual Copilot (the default agent) as usual. In a change that alters behavior, the rules in AGENTS.md have the requirements definition, catalog, and tests updated within the same change, and when you push, CI runs the same checks.
 
 | Part | Audience | Chapter labels | Location |
 |---|---|---|---|
 | Part 1 | **EABK Lite core**: how to write requests, the daily workflow, managed data formats and checks, milestone audits | 1–11 | Directly in this folder |
-| Part 2 | **EABK Studio**: a local-only viewer for browsing the managed data (the data layer) through diagrams, tables, and search | S1–S8 | [studio/](studio/README.en.md) |
+| Part 2 | **HVE Studio**: a local-only viewer for browsing the managed data (the data layer) through diagrams, tables, and search | S1–S8 | [studio/](studio/README.en.md) |
 
 The two parts are connected by the same data layer. Copilot (or a person) writes the data layer within a change, and Studio reads it. To change requirements or the implementation, make the request in Copilot chat, not in Studio.
 
@@ -29,7 +29,7 @@ The two parts are connected by the same data layer. Copilot (or a person) writes
 | 10 | [Adopting an existing app](10-adopting-existing-apps.en.md) | Prepare the data layer from existing code and design documents through inventory → reverse-generated requirements (pending approval) → pinning current behavior. Research on the approach and verification of its fit |
 | 11 | [Integration catalog](11-integration-catalog.en.md) | You want to record integrations with external systems (API, file, DB, event) in `docs/integrations.md` and learn how to add, change, retire, and check them (`verify.py --docs-only`) |
 
-## Part 2: EABK Studio
+## Part 2: HVE Studio
 
 For the index and the prerequisites for starting it, see [studio/README.en.md](studio/README.en.md).
 
@@ -75,7 +75,7 @@ In every case, first read "Introduction", "Installation", and "Quickstart" in [R
 | The problem it solves and the overall structure | [Overview](../README.en.md#overview) |
 | Installing, updating, and uninstalling | [Installation](../README.en.md#installation) |
 | How to make the first request and what to check | [Quickstart](../README.en.md#quickstart) |
-| Overview and launch of EABK Studio | [EABK Studio](../README.en.md#eabk-studio-data-layer-viewer) |
+| Overview and launch of HVE Studio | [HVE Studio](../README.en.md#hve-studio-data-layer-viewer) |
 | Terminology | [Glossary](../README.en.md#glossary) |
 
 ## Conventions used in this guide

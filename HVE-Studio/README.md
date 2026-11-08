@@ -1,4 +1,6 @@
-# EABK Studio
+# HVE Studio
+
+正式名称は **Hypervelocity Engineering Studio** です。旧名は EABK Studio です。フォルダーは `EABK-Studio/` から `HVE-Studio/` に、ルートの起動スクリプトは `start-eabk-studio.*` から `start-hve-studio.*` に変わりました。ブラウザーに保存した表示設定は引き続き使えます。
 
 EABK Lite のデータ層（要求定義書・カタログ・System Test の台帳・ID 台帳）を、Product Manager・Architect・Software Engineer の視点で見て回る、ローカル専用の Web アプリです。
 EABK を入れた**どのリポジトリでも**動きます（このリポジトリに依存しません）。EABK を使っていない git リポジトリも、コードと PRD から読み取りだけで導出して表示します（下の「EABK なしで使う（コードのモード）」）。UI は日本語・英語を右上の `JA | EN` で切り替えます。
@@ -12,11 +14,11 @@ EABK を入れた**どのリポジトリでも**動きます（このリポジ�
 Python 3.9 以上だけで動きます（追加のインストールなし。3D 用の three.js は `web/vendor/` に同梱）。
 
 ```powershell
-python EABK-Studio/studio.py --repo C:\path\to\your-repo      # ブラウザーが開きます
-python EABK-Studio/studio.py --role architect                  # 役割に合う画面から始める
-python EABK-Studio/studio.py --check                           # データ層が読めるかだけを確認（起動しない）
-.\EABK-Studio\start.ps1 C:\path\to\your-repo -Role pm          # 同じ（Windows）。-Check / -NoOpen も可
-./EABK-Studio/start.sh /path/to/your-repo 8765 --role swe      # 同じ（macOS / Linux）。第 3 引数以降は studio.py にそのまま渡す
+python HVE-Studio/studio.py --repo C:\path\to\your-repo      # ブラウザーが開きます
+python HVE-Studio/studio.py --role architect                  # 役割に合う画面から始める
+python HVE-Studio/studio.py --check                           # データ層が読めるかだけを確認（起動しない）
+.\HVE-Studio\start.ps1 C:\path\to\your-repo -Role pm          # 同じ（Windows）。-Check / -NoOpen も可
+./HVE-Studio/start.sh /path/to/your-repo 8765 --role swe      # 同じ（macOS / Linux）。第 3 引数以降は studio.py にそのまま渡す
 ```
 
 | オプション | 意味 |
@@ -34,8 +36,8 @@ python EABK-Studio/studio.py --check                           # データ層が
 EABK を入れていない git リポジトリも見られます（FR-1086）。HVE を clone したフォルダーから実行します。
 
 ```powershell
-python EABK-Studio/studio.py --repo C:\path\to\any-git-repo --check   # mode: code (...) の行で、導出できた件数を確認
-python EABK-Studio/studio.py --repo C:\path\to\any-git-repo
+python HVE-Studio/studio.py --repo C:\path\to\any-git-repo --check   # mode: code (...) の行で、導出できた件数を確認
+python HVE-Studio/studio.py --repo C:\path\to\any-git-repo
 ```
 
 - データ層があるリポジトリでは、従来どおりデータ層だけを読みます。
@@ -112,8 +114,7 @@ python EABK-Studio/studio.py --repo C:\path\to\any-git-repo
 
 ## 保守 / Maintenance
 
-- テスト（HVE のリポジトリだけ。`EABK-Studio/tests/` は導入先には入れません）: `python -m pytest EABK-Studio/tests -q`
+- テスト（HVE のリポジトリだけ。`HVE-Studio/tests/` は導入先には入れません）: `python -m pytest HVE-Studio/tests -q`
 - 整合性保守: `整合性保守 / Maintenance` → 対象要求 → プレビュー → `確認して実行`
 - 構成: `studio.py`（サーバー）、`eabk_model.py`（データ層の読み取りとグラフ化）、`web/`（画面。ビルド不要の ES モジュール。`web/vendor/three.module.min.js` は three.js・MIT）
 - 画面の文言は `web/js/i18n.js` の `ja` / `en` に追加します。
-

@@ -10,7 +10,7 @@ In EABK Lite, every change goes through the following five steps. All of them us
 3. Check locally           python scripts/verify.py exits 0
 4. Push / PR               CI ebak-verify runs the same checks (check only)
 5. Audit at milestones     before a release etc., rd-auditor audits the meaning of the requirements
-(any time)                 view the status in EABK Studio
+(any time)                 view the status in HVE Studio
 ```
 
 > Migrating from 0.5.x: runs, stages, integration branches, `run-report.md` and the automatic merge into main no longer exist. Changes are merged through ordinary branches and PRs. Worktrees and `work/*` branches left by 0.5.x runs are not removed automatically; check them with `git worktree list` and `git branch --list "work/*"` and delete them by hand ([9. Versioning](09-versioning.en.md)).
@@ -103,16 +103,16 @@ rd-auditor never changes files tracked by git. Results are written to `work/audi
 
 You decide what to do with the findings. To fix them, ask the default agent in a separate request and change (e.g. "Fix the 2 high-confidence findings in work/audit/20261108-1000/report.md").
 
-## 2.6 View the status (EABK Studio)
+## 2.6 View the status (HVE Studio)
 
-EABK Studio shows the requirements, acceptance criteria, catalog and System Test ledger as diagrams and tables. It is optional; work proceeds without it.
+HVE Studio shows the requirements, acceptance criteria, catalog and System Test ledger as diagrams and tables. It is optional; work proceeds without it.
 
 ```bash
-python EABK-Studio/studio.py          # opens a browser (listens on 127.0.0.1 only, read-only)
-python EABK-Studio/studio.py --check  # print the counts it can read, then exit
+python HVE-Studio/studio.py          # opens a browser (listens on 127.0.0.1 only, read-only)
+python HVE-Studio/studio.py --check  # print the counts it can read, then exit
 ```
 
-How to use each screen is in the [EABK Studio guide](studio/README.en.md).
+How to use each screen is in the [HVE Studio guide](studio/README.en.md).
 
 ## 2.7 Several people and several PCs
 

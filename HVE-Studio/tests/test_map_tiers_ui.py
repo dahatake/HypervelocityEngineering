@@ -1,5 +1,5 @@
 """Integration tests for FR-1063 AC-345 / AC-346 / AC-347 (2D・3D マップの上位層の表示).
-Run: python -m pytest EABK-Studio/tests/test_map_tiers_ui.py -q"""
+Run: python -m pytest HVE-Studio/tests/test_map_tiers_ui.py -q"""
 import json
 import re
 import socket

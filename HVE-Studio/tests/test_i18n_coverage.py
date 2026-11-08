@@ -19,6 +19,43 @@ def dicts():
     return S.load_dict()
 
 
+# FR-011 AC-479: the brand and both title dictionaries use the new name.
+def test_ac479_studio_brand_and_titles(dicts):
+    html = (S.WEB / "index.html").read_text(encoding="utf-8")
+    assert "<title>HVE Studio</title>" in html
+    assert "<span><b>HVE</b> Studio</span>" in html
+    assert 'title="HVE Studio (Hypervelocity Engineering Studio)"' in html
+    assert "EABK Studio" not in html
+    for lang in ("ja", "en"):
+        assert dicts[lang]["app.title"] == "HVE Studio"
+
+
+# FR-011 AC-479: renaming must not reset stored preferences or break callers.
+def test_ac479_compatibility_identifiers_are_unchanged():
+    for filename, key in (
+        ("i18n.js", "eabk-studio.lang"),
+        ("theme.js", "eabk-studio.theme"),
+        ("layout.js", "eabk-studio.layout"),
+        ("shapes3d.js", "eabk-studio.style3d"),
+    ):
+        assert f"'{key}'" in (S.WEB / "js" / filename).read_text(encoding="utf-8")
+    for filename in ("app.js", "insights.js"):
+        assert "'X-EABK-Studio': '1'" in (S.WEB / "js" / filename).read_text(encoding="utf-8")
+    server = (S.WEB.parent / "studio.py").read_text(encoding="utf-8")
+    assert 'os.environ.get("EABK_STUDIO_PICK_PATH")' in server
+
+
+# FR-011 AC-479: the folder and the root launchers carry the new name; shipped lists and the catalog follow it.
+def test_ac479_folder_and_launchers_are_renamed():
+    root = S.WEB.parent.parent
+    assert S.WEB.parent.name == "HVE-Studio" and not (root / "EABK-Studio").exists()
+    for old, new in (("start-eabk-studio.cmd", "start-hve-studio.cmd"), ("start-eabk-studio.command", "start-hve-studio.command")):
+        assert not (root / old).exists()
+        assert re.search(r"HVE-Studio[\\/]studio\.py", (root / new).read_text(encoding="utf-8"))
+    for rel in ("tools/install.py", "docs/catalog.md", "HVE-Studio/start.ps1", "HVE-Studio/start.sh", ".vscode/tasks.json"):
+        text = (root / rel).read_text(encoding="utf-8")
+        assert not re.search(r"(?<!X-)EABK-Studio|start-eabk-studio", text), rel
+
 # FR-011 AC-431: ja と en のキー集合が一致する。
 def test_ac431_ja_and_en_have_the_same_keys(dicts):
     ja, en = set(dicts["ja"]), set(dicts["en"])

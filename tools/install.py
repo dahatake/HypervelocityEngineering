@@ -12,7 +12,7 @@ From a local clone:
 
 What it does (idempotent) - EABK Lite: rules + data layer + deterministic checks, no orchestration:
   * copies the managed files (.github/agents/rd-auditor, .github/skills, .github/workflows/ebak-verify.yml (check only),
-    scripts/*, EABK-Studio/ = the read-only data-layer viewer with its role guides
+    scripts/*, HVE-Studio/ = the read-only data-layer viewer with its role guides
     and screenshots) and updates them on re-run unless you modified them locally;
   * keeps no migration code for older versions: `--clean` (clean install) deletes every file the toolkit installed
     (the manifest's records, this version's files, backups, the config, the marked blocks and appended lines) and
@@ -91,35 +91,35 @@ MANAGED = [
     "users-guide/11-integration-catalog.en.md",
     "users-guide/images/architecture-diagram.png",
     "users-guide/images/dashboard.png",
-    "EABK-Studio/eabk_model.py",
-    "EABK-Studio/README.md",
-    "EABK-Studio/start.ps1",
-    "EABK-Studio/start.sh",
-    "EABK-Studio/studio.py",
-    "EABK-Studio/web/app.css",
-    "EABK-Studio/web/sz.css",
-    "EABK-Studio/web/index.html",
-    "EABK-Studio/web/js/app.js",
-    "EABK-Studio/web/js/dashboard.js",
-    "EABK-Studio/web/js/diagrams.js",
-    "EABK-Studio/web/js/drawer.js",
-    "EABK-Studio/web/js/entities.js",
-    "EABK-Studio/web/js/hier.js",
-    "EABK-Studio/web/js/i18n.js",
-    "EABK-Studio/web/js/implstatus.js",
-    "EABK-Studio/web/js/insights.js",
-    "EABK-Studio/web/js/map2d.js",
-    "EABK-Studio/web/js/map3d.js",
-    "EABK-Studio/web/js/placement.js",
-    "EABK-Studio/web/js/semzoom.js",
-    "EABK-Studio/web/js/source.js",
-    "EABK-Studio/web/js/store.js",
-    "EABK-Studio/web/js/sz2d.js",
-    "EABK-Studio/web/js/sz3d.js",
-    "EABK-Studio/web/js/tables.js",
-    "EABK-Studio/web/js/ui.js",
-    "EABK-Studio/web/vendor/three.LICENSE",
-    "EABK-Studio/web/vendor/three.module.min.js",
+    "HVE-Studio/eabk_model.py",
+    "HVE-Studio/README.md",
+    "HVE-Studio/start.ps1",
+    "HVE-Studio/start.sh",
+    "HVE-Studio/studio.py",
+    "HVE-Studio/web/app.css",
+    "HVE-Studio/web/sz.css",
+    "HVE-Studio/web/index.html",
+    "HVE-Studio/web/js/app.js",
+    "HVE-Studio/web/js/dashboard.js",
+    "HVE-Studio/web/js/diagrams.js",
+    "HVE-Studio/web/js/drawer.js",
+    "HVE-Studio/web/js/entities.js",
+    "HVE-Studio/web/js/hier.js",
+    "HVE-Studio/web/js/i18n.js",
+    "HVE-Studio/web/js/implstatus.js",
+    "HVE-Studio/web/js/insights.js",
+    "HVE-Studio/web/js/map2d.js",
+    "HVE-Studio/web/js/map3d.js",
+    "HVE-Studio/web/js/placement.js",
+    "HVE-Studio/web/js/semzoom.js",
+    "HVE-Studio/web/js/source.js",
+    "HVE-Studio/web/js/store.js",
+    "HVE-Studio/web/js/sz2d.js",
+    "HVE-Studio/web/js/sz3d.js",
+    "HVE-Studio/web/js/tables.js",
+    "HVE-Studio/web/js/ui.js",
+    "HVE-Studio/web/vendor/three.LICENSE",
+    "HVE-Studio/web/vendor/three.module.min.js",
     "users-guide/studio/README.md",
     "users-guide/studio/01-first-steps.md",
     "users-guide/studio/02-screens.md",
@@ -163,7 +163,7 @@ TEMPLATES = [
 ]
 CONFIG = "scripts/ebak.config.json"
 MANIFEST = ".github/ebak-toolkit.json"
-EXECUTABLE = {"scripts/verify.sh", "EABK-Studio/start.sh"}
+EXECUTABLE = {"scripts/verify.sh", "HVE-Studio/start.sh"}
 BEGIN, END = "<!-- ebak-abk:begin -->", "<!-- ebak-abk:end -->"
 
 INSTRUCTIONS_BLOCK = """## Enterprise App Build Kit Lite（要求定義書・カタログ・System Test の一貫性）
@@ -176,7 +176,7 @@ INSTRUCTIONS_BLOCK = """## Enterprise App Build Kit Lite（要求定義書・カ
 - 一時ファイル（ログ・証跡・作業メモ）は `/work` に置きます（git の管理対象外）。"""
 GITIGNORE_LINES = ["/work/"]
 GITATTR_LINES = ["docs/id-registry.md merge=union",
-                 "scripts/*.sh text eol=lf", "EABK-Studio/*.sh text eol=lf"]
+                 "scripts/*.sh text eol=lf", "HVE-Studio/*.sh text eol=lf"]
 GITIGNORE_HEADER = "# Enterprise App Build Kit: temporary files (logs, evidence, notes)"
 GITATTR_HEADER = "# Enterprise App Build Kit: append-only records"
 # Management data paths (defaults of scripts/ebaklib.py DEFAULT_CONFIG["files"]). tools/build-uninstall-catalog.py
@@ -645,9 +645,9 @@ def main(argv=None) -> int:
     print("  3. いつもの Copilot（既定のエージェント）に、ふだんどおり依頼します。AGENTS.md の規則に従って、")
     print("     要求定義書・カタログ・テストが同じ変更の中で更新され、push すると CI の ebak-verify が同じ検査をします")
     print("     （節目には custom agent `rd-auditor` に意味の監査を頼めます。手順: EABK-docs/06-quality-gates.md）")
-    print("  4. （任意）要求・カタログ・試験を図と表で見るには、EABK Studio を起動します（読み取り専用。役割は pm / architect / swe）:")
-    print("     python EABK-Studio/studio.py --check            # データ層が読めるか確認")
-    print("     python EABK-Studio/studio.py --role pm          # ブラウザーが開きます。ガイド: EABK-docs/studio/README.md")
+    print("  4. （任意）要求・カタログ・試験を図と表で見るには、HVE Studio を起動します（読み取り専用。役割は pm / architect / swe）:")
+    print("     python HVE-Studio/studio.py --check            # データ層が読めるか確認")
+    print("     python HVE-Studio/studio.py --role pm          # ブラウザーが開きます。ガイド: EABK-docs/studio/README.md")
     return 0
 
 

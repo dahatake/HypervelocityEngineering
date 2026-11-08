@@ -63,7 +63,7 @@ ENTRY_NAMES = {"main.py", "__main__.py", "app.py", "wsgi.py", "asgi.py", "manage
 SKIP_DIRS = {"node_modules", "vendor", "dist", "build", "target", "bin", "obj", "__pycache__", ".venv", "venv",
              ".git", "site-packages", ".idea", ".vscode", "coverage"}
 GENERIC_DIRS = {"src", "lib", "app", "apps", "main", "java", "source", "pkg", "internal", "cmd", "packages", "services"}
-TOOLKIT_PREFIXES = ("scripts/hooks/", "tools/templates/", ".github/agents/", ".github/skills/", ".github/hooks/", ".github/workflows/ebak-", "EABK-Studio/",
+TOOLKIT_PREFIXES = ("scripts/hooks/", "tools/templates/", ".github/agents/", ".github/skills/", ".github/hooks/", ".github/workflows/ebak-", "HVE-Studio/", "EABK-Studio/",
                     "tests/system/", "tests/toolkit/", "work/", f"{BASELINE}/")
 TOOLKIT_FILES = {"AGENTS.md", ".github/copilot-instructions.md", ".github/ebak-toolkit.json", "docs/catalog.md",
                  "docs/id-registry.md", "docs/requirements-definition.md"}

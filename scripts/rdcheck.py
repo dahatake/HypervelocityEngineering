@@ -1544,10 +1544,10 @@ def cmd_digest(args, root, cfg) -> int:
 
 
 def cmd_hierarchy(args, root, cfg) -> int:
-    """FR-1062: 種類→区分→領域→項目の階層。導出の実体は EABK-Studio/eabk_model.py（1 か所）。都度生成し、保存しない。"""
-    studio = Path(__file__).resolve().parent.parent / "EABK-Studio"
+    """FR-1062: 種類→区分→領域→項目の階層。導出の実体は HVE-Studio/eabk_model.py（1 か所）。都度生成し、保存しない。"""
+    studio = Path(__file__).resolve().parent.parent / "HVE-Studio"
     if not (studio / "eabk_model.py").is_file():
-        studio = root / "EABK-Studio"
+        studio = root / "HVE-Studio"
     sys.path.insert(0, str(studio))
     sd = sys.dont_write_bytecode
     sys.dont_write_bytecode = True

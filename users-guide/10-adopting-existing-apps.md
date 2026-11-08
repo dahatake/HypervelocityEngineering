@@ -4,7 +4,7 @@
 
 ソースコード・設計書・テストがすでにあるアプリで、この toolkit を使うための手順と、その方式を選んだ根拠です。新規開発（要求から作る）と違い、**要求の正本がまだない**ので、データ層（要求定義書・カタログ・System Test の台帳）を先に整えます。
 
-> 導入の前に様子を見るだけなら、toolkit を入れずに EABK Studio のコードのモードが使えます。HVE の clone から `python EABK-Studio/studio.py --repo <既存のリポジトリ>` を実行すると、`docs/PRD.md` などの要求 ID・それを書いたコードとテスト・コンポーネントを読み取りだけで表示します（[README](../README.md#eabk-なしで-studio-を使うコードのモード)）。
+> 導入の前に様子を見るだけなら、toolkit を入れずに HVE Studio のコードのモードが使えます。HVE の clone から `python HVE-Studio/studio.py --repo <既存のリポジトリ>` を実行すると、`docs/PRD.md` などの要求 ID・それを書いたコードとテスト・コンポーネントを読み取りだけで表示します（[README](../README.md#eabk-なしで-studio-を使うコードのモード)）。
 
 ## 10.1 結論（最短の使い方）
 

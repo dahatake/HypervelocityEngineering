@@ -24,9 +24,9 @@
 
 1. **起動します**（約 1 分）。リポジトリのフォルダーで次を実行します。ブラウザーが開きます。
    ```powershell
-   python EABK-Studio/studio.py --role pm
+   python HVE-Studio/studio.py --role pm
    ```
-   うまく開かないときは、先に `python EABK-Studio/studio.py --check` で、データ層が見つかっているかを確認します。
+   うまく開かないときは、先に `python HVE-Studio/studio.py --check` で、データ層が見つかっているかを確認します。
 2. **全体の数字を読みます**（2 分）。ダッシュボードの上段の数字を、左から読みます。
 
    ![ダッシュボード](images/dashboard.png)
@@ -79,7 +79,7 @@
 ## S5.5 読むときの注意
 
 - 「実装登録」は、カタログに書かれたパスの有無です。ファイルが実在するか、動くかは見ていません。動くかは「試験合格」と、`python scripts/verify.py` の結果で判断します。
-- `試験合格 %` が 0 のときは、台帳がない・ケースが `not_run` のどちらかです。`python EABK-Studio/studio.py --check` で台帳が見つかっているかを確認できます。
+- `試験合格 %` が 0 のときは、台帳がない・ケースが `not_run` のどちらかです。`python HVE-Studio/studio.py --check` で台帳が見つかっているかを確認できます。
 - 要求の追加・変更は Studio ではできません。Copilot のチャットで依頼します（[1 章](../01-writing-requests.md)）。
 
 次は [06-architect.md](06-architect.md)（設計の整合を見る）か、[08-data-reference.md](08-data-reference.md)（数字の根拠）へ進んでください。

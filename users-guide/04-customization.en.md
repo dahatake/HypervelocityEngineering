@@ -51,7 +51,7 @@ You can change these to match your directory layout. After changing them, run `p
 | `lite_checks` | `CHK-01, CHK-02, CHK-03, CHK-05, CHK-09, CHK-12, CHK-17, CHK-19, CHK-24` | The CHKs reported in lite: structure and traceability (IDs, references, links between ACs and tests) |
 | `ambiguous_words` | 適切, 迅速, 直感的, and so on | List of ambiguous words (CHK-13, full only) |
 | `unit_pattern` | A regular expression for seconds, counts, %, and so on | Pattern treated as a hard-coded number and unit (CHK-14, full only) |
-| `id_scan_exclude` | `docs/**`, `scripts/**`, `EABK-Studio/**`, and so on | Paths excluded when searching code for requirement IDs (CHK-17, CHK-19) |
+| `id_scan_exclude` | `docs/**`, `scripts/**`, `HVE-Studio/**`, and so on | Paths excluded when searching code for requirement IDs (CHK-17, CHK-19) |
 | `test_path_pattern` | `tests/`, `*.test.*`, and so on | Paths treated as test code (CHK-09) |
 | `temp_file_pattern` | `*.log`, `test-results/`, and so on | Temporary files that must not be committed (CHK-23) |
 
@@ -133,7 +133,7 @@ In 0.6.0 (EABK Lite), the following run- and hook-based keys are gone. The insta
 | `prompt_prefix` | Automatic preamble added by a hook |
 | `work.retention_days` | The 14-day cleanup of `/work` (no longer exists) |
 | `toolkit-unit` in `verify.commands` | Test of the removed `clean-work.py` |
-| `studio-ui` in `verify.commands` (`python -m pytest -q EABK-Studio/tests`) | EABK Studio's tests. `EABK-Studio/tests/` is no longer installed into targets |
+| `studio-ui` in `verify.commands` (`python -m pytest -q HVE-Studio/tests`) | HVE Studio's tests. `HVE-Studio/tests/` is no longer installed into targets |
 
 `.github/ebak-prompt-prefix.md` and the hook files (`.github/hooks/quality-gates.json`, `.github/hooks/prompt-prefix.json`, `scripts/hooks/gate.py`) are no longer read. When updating from an older version, `--clean` deletes them too.
 

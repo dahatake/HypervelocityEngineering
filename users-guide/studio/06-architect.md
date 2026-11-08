@@ -22,7 +22,7 @@
 
 1. **起動します**（1 分）。
    ```powershell
-   python EABK-Studio/studio.py --role architect
+   python HVE-Studio/studio.py --role architect
    ```
 2. **全体を俯瞰します**（2 分）。2D マップは、左から「目的 → 要求 → データ・共通部品・API・テーブル → ソースファイル → 試験ケース」の順です。ホイールで拡大し、ドラッグで動かします。ダブルクリックか `鳥観図` で全体に戻ります。
 

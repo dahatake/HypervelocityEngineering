@@ -16,7 +16,7 @@ from playwright.sync_api import expect
 from entity_repo import make_other, make_standard
 
 ROOT = Path(__file__).resolve().parents[3]
-STUDIO = ROOT / "EABK-Studio" / "studio.py"
+STUDIO = ROOT / "HVE-Studio" / "studio.py"
 
 
 def _serve(repo):
@@ -35,7 +35,7 @@ def _serve(repo):
         except OSError:
             time.sleep(0.1)
     proc.kill()
-    raise RuntimeError("EABK Studio did not start")
+    raise RuntimeError("HVE Studio did not start")
 
 
 @pytest.fixture()

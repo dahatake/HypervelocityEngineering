@@ -43,7 +43,7 @@
     "commands": [
       {
         "name": "studio-ui",
-        "run": "python -m pytest -q EABK-Studio/tests",
+        "run": "python -m pytest -q HVE-Studio/tests",
         "slow": true
       }
     ]

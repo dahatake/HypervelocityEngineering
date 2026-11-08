@@ -1,4 +1,4 @@
-/* EABK Studio のスタイル。色・書体・余白・角丸・影・動きは tokens.css の名前付きトークンだけを参照し、直値を持たない（FR-1047 AC-258）。 */
+/* HVE Studio のスタイル。色・書体・余白・角丸・影・動きは tokens.css の名前付きトークンだけを参照し、直値を持たない（FR-1047 AC-258）。 */
 *{box-sizing:border-box}
 html.snapshot *,html.snapshot *::before,html.snapshot *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
 html.snapshot *{caret-color:transparent!important}

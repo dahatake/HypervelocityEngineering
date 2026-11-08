@@ -78,7 +78,7 @@ Enterprise App Build Kit の版の付け方と、版を上げる手順（配布�
 
 インストーラは旧版からの移行の処理（版ごとの削除リストや設定の書き換え）を持ちません。旧版から更新するときは `--clean` でクリーンインストールします。マニフェストに記録された「toolkit が入れたファイル」をすべて消してから入れ直すので、どの版からでも同じ手順です。
 
-0.6.0 は 0.5.x と互換性のない変更です。オーケストレーション（conductor と作業役、worktree の run、`/build`、役割のゲート）をやめ、規則（AGENTS.md）・データ層・決定的な検査（`verify.py` と CI）・節目の監査（rd-auditor）・EABK Studio だけを残しました。管理データ（要求定義書・カタログ・台帳・ID 台帳）の書式は変わりません。
+0.6.0 は 0.5.x と互換性のない変更です。オーケストレーション（conductor と作業役、worktree の run、`/build`、役割のゲート）をやめ、規則（AGENTS.md）・データ層・決定的な検査（`verify.py` と CI）・節目の監査（rd-auditor）・HVE Studio だけを残しました。管理データ（要求定義書・カタログ・台帳・ID 台帳）の書式は変わりません。
 
 | 0.5.x で使っていたもの | 0.6.0 での代わり |
 |---|---|
@@ -92,7 +92,7 @@ Enterprise App Build Kit の版の付け方と、版を上げる手順（配布�
 | `rdcheck.py check`・`verify.py` の `--run`・`--strict`・`--strict-ledger`・`--no-strict-ledger`、CHK-21 | 撤去しました（付けると引数のエラーで exit 2）。つまみは検査プロファイル（`checks.profile`・`--profile lite`／`full`）だけです。`--strict` で error になっていた CHK-00・09・13 と、`--strict-ledger` の CHK-10・11 は WARN で、`--profile full --show-warnings` で見られます。要約行から `run=` を外しました |
 | `rdfix.py --apply` の作業役のブランチ（`work/<run-id>/<item>`）での拒否 | 撤去しました。exit 2 は、排他の待ち時間切れ・すべての取り消し・内部エラーだけです |
 | `work.retention_days`（`/work` の 14 日の清掃） | 撤去しました（`--clean` で設定から消えます）。`/work` は不要になったら手で削除します |
-| 既定の `verify.commands`（`toolkit-unit`・`studio-ui` = `python -m pytest -q EABK-Studio/tests`）と、導入先の `EABK-Studio/tests/` | `--clean` で消えます。導入先には Studio のテストを入れません。新しい導入の `verify.commands` は空（`[]`）なので、自分のビルド・テストのコマンドを登録します |
+| 既定の `verify.commands`（`toolkit-unit`・`studio-ui` = `python -m pytest -q HVE-Studio/tests`）と、導入先の `HVE-Studio/tests/` | `--clean` で消えます。導入先には Studio のテストを入れません。新しい導入の `verify.commands` は空（`[]`）なので、自分のビルド・テストのコマンドを登録します |
 | `ledger.py run` の結果を run のフォルダーに書く | 結果は `work/system-test/results.json` に書きます（`--results` で変更できます） |
 
 手順:

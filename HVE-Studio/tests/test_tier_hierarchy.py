@@ -1,4 +1,4 @@
-"""Integration tests for FR-1062 (種類→区分→領域→項目の階層の導出). Run: python -m pytest EABK-Studio/tests/test_hierarchy.py -q"""
+"""Integration tests for FR-1062 (種類→区分→領域→項目の階層の導出). Run: python -m pytest HVE-Studio/tests/test_hierarchy.py -q"""
 import re
 import sys
 from collections import Counter

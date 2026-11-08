@@ -5,6 +5,13 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+### HVE Studio への改称（FR-011）
+
+- EABK Studio の表示名を **HVE Studio**、正式名称を **Hypervelocity Engineering Studio** に変更しました。画面のブランド・JA/EN の文書タイトル・CLI・起動ラベル・配布時の案内・ユーザーガイドを合わせています。
+- **フォルダー名・ファイル名も変更しました（互換性に影響あり）**: `EABK-Studio/` は `HVE-Studio/` に、ルートの起動スクリプト `start-eabk-studio.cmd`／`start-eabk-studio.command` は `start-hve-studio.cmd`／`start-hve-studio.command` に変わりました。起動は `python HVE-Studio/studio.py` です。
+- 旧版から更新したリポジトリでは、旧 `EABK-Studio/` が孤立ファイルとしてディスクに残り、インストーラーがそれを報告します。`--clean`（クリーンインストール）かアンインストールで削除できます。削除されるまでの間も、ID の検査と既存アプリの導入時の判定は旧フォルダーを toolkit のファイルとして扱います。
+- `eabk-studio.*` の保存設定キー、`X-EABK-Studio` の通信ヘッダー、`EABK_STUDIO_PICK_PATH`、`eabk_model.py`（EABK のデータ層のモデル）は変更せず、既存の設定を維持します。過去の変更履歴・出典・ID 台帳の旧名称は当時の記録として残します。
+
 ### アンインストーラー（FR-1087）
 
 - **どの版の EABK でも削除できる `tools/uninstall.py` を追加しました。** `tools/install.py` のすべての版（旧名 hve の版、merge で入った版を含む 91 版）が配布したファイルの内容のハッシュを、git の履歴から集めたカタログ `tools/uninstall-catalog.json` で判定します。マニフェストがない導入先でも、旧版のファイル・ブロックの印（`hve-abk`・`hve-conductor`）・設定とマニフェスト（`hve.config.json`・`hve-toolkit.json`）・`*.hve-backup-*`・すべての版の `.gitignore`／`.gitattributes` の追記を削除します。どの版とも内容が違うファイルは残します（`KEEP-LOCAL`・`KEEP-UNKNOWN`）。
@@ -29,7 +36,7 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 - **自動修復のワークフローを撤去**: `.github/workflows/ebak-data-layer.yml`（PR・push・毎週の自動修復の commit と Issue 化）を配布しない。CI は検査だけの `ebak-verify`（読み取り権限）にし、修復は手元で `python scripts/rdfix.py --full --apply` を実行して同じ変更に含める。bot が他人の PR のブランチへ push すると、複数の人・PC のブランチが食い違うため。FR-1017・FR-1018・FR-1019・NFR-SEC-004・NFR-OPS-006 は廃止。
 - **run を前提とするつまみを撤去**: `rdcheck.py check`・`verify.py` の `--run`・`--strict`・`--strict-ledger`・`--no-strict-ledger` と CHK-21。つまみは検査の範囲（`checks.profile`・`--profile`）だけになり、要約行から `run=` を外した。`rdfix.py --apply` の作業役のブランチでの拒否も撤去。
 - **使われなくなった内部を削除**: `scripts/ebaklib.py` の run・worktree・start-claim・heartbeat・時間予算・依存の共有・CPU の配分（`MAKEFLAGS`・`VITEST_MAX_WORKERS` などを全コア数で上書きしていた `apply_resource_env`）。`ebaklib.py` は 64 KB → 47 KB。`ledger.py run` の結果は `work/system-test/results.json` に置く。
-- **導入先に配らないもの**: `EABK-Studio/tests`（導入先は Studio を開発しない）と、既定の `verify.commands`（このリポジトリの Studio のテスト）。新規の導入では `verify.commands` を空にする（旧版の `toolkit-unit`・`studio-ui` と `work.retention_days` は `--clean` で設定ごと消える）。新規の導入の `.gitattributes` に run-history の行を入れない。
+- **導入先に配らないもの**: `HVE-Studio/tests`（導入先は Studio を開発しない）と、既定の `verify.commands`（このリポジトリの Studio のテスト）。新規の導入では `verify.commands` を空にする（旧版の `toolkit-unit`・`studio-ui` と `work.retention_days` は `--clean` で設定ごと消える）。新規の導入の `.gitattributes` に run-history の行を入れない。
 - **EABK Studio を EABK なしで使える（コードのモード、FR-1086）**: データ層のない git リポジトリでは、Markdown の要求の ID（PRD.md の表の先頭の列・見出し）、その ID を書いたコードとテスト、コンポーネントにまとめたソースを読み取りだけで導出し、既存の画面で表示する。`python EABK-Studio/studio.py --repo <任意の git リポジトリ>`。データ層があるリポジトリでは従来どおりデータ層だけを読む。
 - **実行履歴（`docs/run-history.md`）の扱いをすべて削除（0.5.x との互換性は持たない）**: run を廃止したので書く人がいない。CHK-23 の run-id の重複検査、`rdfix.py` の `history` の修復対象（対象は ID 台帳・カタログ・System Test の台帳・`.gitignore` の 4 種類）、設定の `management_files.run_history`、配布の雛形と `.gitattributes` の `merge=union` の行、`adopt.py` の除外、EABK Studio の表示（ダッシュボードのチップ・表のビュー・データ層の構造判定）、インストーラの旧版の行の判定（`OLD_GITATTR_LINES`・`OLD_GITIGNORE_HEADERS`）。導入先に残った `docs/run-history.md` は何にも読まれないので、手で消してよい。旧版からの更新は `--clean` で行う（上のインストーラの項）。
 - 利用者ガイド: `users-guide/02-during-and-after-run.md` を `02-daily-workflow.md` に改名し、日々の進め方として書き直し。README・01〜11 を EABK Lite に合わせて改訂。

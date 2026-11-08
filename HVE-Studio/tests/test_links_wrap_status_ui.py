@@ -1,4 +1,4 @@
-"""Integration tests for FR-1031 / FR-1032 / FR-1033 (EABK Studio UI). Run: python -m pytest EABK-Studio/tests -q"""
+"""Integration tests for FR-1031 / FR-1032 / FR-1033 (HVE Studio UI). Run: python -m pytest HVE-Studio/tests -q"""
 import re
 import socket
 import subprocess

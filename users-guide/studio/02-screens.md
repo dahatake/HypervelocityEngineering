@@ -51,7 +51,7 @@
 
 ## 実画面の例
 
-以下は同じコミットの管理データを読み取り、Playwright 検証で保存した実画面です。
+以下は同じ検証対象の管理データを読み取り、Playwright 検証で保存した実画面です。manifest の `commit` は基点のコミットです。`working_tree: true` の画像は、その基点に未コミットの変更を加えた作業ツリーから取得しています。
 採取条件と SHA-256 は [screen-images.json](screen-images.json) に記録しています。画面 ID（`map2d`・`map3d`・`placement`）は旧 URL の別名として有効です。
 
 | 画面 | 実画面 |

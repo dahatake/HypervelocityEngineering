@@ -22,7 +22,7 @@ Click `🏗️ Architect` at the top right of the screen to open the 2D map. Lau
 
 1. **Launch** (1 minute).
    ```powershell
-   python EABK-Studio/studio.py --role architect
+   python HVE-Studio/studio.py --role architect
    ```
 2. **Get an overview** (2 minutes). The 2D map runs from left to right: "goal → requirement → data, shared components, APIs, tables → source files → test cases." Zoom with the wheel and pan by dragging. Double-click or use `Bird's-eye view` to return to the whole view.
 

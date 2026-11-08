@@ -1,6 +1,6 @@
 """FR-1080 / NFR-UX-018: 動的な可視化の小部品（js/viz.js）を、Graph・マップ 2D・図式以外の可視化要素（ダッシュボード・表・実装状態・インサイト）で確かめる。
 AC-445 / AC-447 は検証レベル integration なので、system test（tests/system/e2e/test_studio_dynamic_viz_system.py）から移して置く。
-Run: python -m pytest EABK-Studio/tests/test_dynamic_viz_ui.py -q
+Run: python -m pytest HVE-Studio/tests/test_dynamic_viz_ui.py -q
 """
 import re
 import sys

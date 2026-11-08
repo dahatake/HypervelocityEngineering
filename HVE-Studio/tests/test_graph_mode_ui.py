@@ -1,5 +1,5 @@
 """Integration tests for FR-1079 (Graph display mode) and FR-1066 (header switch has Graph).
-Run: python -m pytest EABK-Studio/tests/test_graph_mode_ui.py -q"""
+Run: python -m pytest HVE-Studio/tests/test_graph_mode_ui.py -q"""
 import socket
 import subprocess
 import sys

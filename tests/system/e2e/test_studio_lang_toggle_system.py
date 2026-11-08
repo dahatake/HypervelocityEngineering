@@ -65,6 +65,34 @@ def _chrome(page):
     return page.evaluate(JS_CHROME)
 
 
+# FR-011 AC-479 (integration): real JA/EN titles, brand, and saved preferences survive the rename.
+def test_ac479_studio_brand_titles_and_saved_preferences(browser, zurl):
+    ctx = browser.new_context(viewport={"width": 1280, "height": 800})
+    ctx.add_init_script(
+        "localStorage.setItem('eabk-studio.lang', 'en');"
+        "localStorage.setItem('eabk-studio.theme', 'dark');"
+    )
+    page = ctx.new_page()
+    try:
+        page.goto(zurl.split("#")[0] + "#/dashboard")
+        page.wait_for_load_state("networkidle")
+        brand = page.locator("header.top .brand")
+        assert brand.inner_text().strip() == "HVE Studio"
+        assert brand.get_attribute("title") == "HVE Studio (Hypervelocity Engineering Studio)"
+        assert page.locator("html").get_attribute("lang") == "en"
+        assert page.locator("html").get_attribute("data-theme") == "dark"
+        for word in ("JA", "EN"):
+            _pick(page, word).click()
+            page.wait_for_function("document.title.startsWith('HVE Studio · ')")
+            assert "EABK Studio" not in page.title()
+        page.reload()
+        page.wait_for_load_state("networkidle")
+        assert page.title().startswith("HVE Studio · ")
+        assert page.evaluate("localStorage.getItem('eabk-studio.theme')") == "dark"
+    finally:
+        ctx.close()
+
+
 # FR-011 AC-430: 現在の言語が状態と語で分かり、キーボードで操作でき、再読込なしで全文言が切り替わり、
 # 他方の言語が残らず、選択は再読込後も保持される。異常系: 切替直後に別画面へ移っても他方の言語が混ざらない。
 @pytest.mark.parametrize("route", ROUTES)

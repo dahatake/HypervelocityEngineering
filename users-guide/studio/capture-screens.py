@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Capture reproducible EABK Studio user-guide screens for the current commit."""
+"""Capture reproducible HVE Studio user-guide screens for the current commit."""
 
 import argparse
 import hashlib
@@ -48,7 +48,7 @@ REQUIRED = {
               ("視点を変更できる表示", ("text", "側面"))],
     "diagrams": [("図式の種別", ("text", "状態遷移図")), ("ノード", ("svg", "g")), ("関係", ("svg", "path, line")),
                  ("根拠ID", ("re", r"G-00\d"))],
-    "placement": [("ファイルまたはディレクトリ", ("text", "EABK-Studio")), ("配置関係", ("sel", "#view table tr")), *DRAWER[1:]],
+    "placement": [("ファイルまたはディレクトリ", ("text", "HVE-Studio")), ("配置関係", ("sel", "#view table tr")), *DRAWER[1:]],
     "source": [("管理データID", ("re", r"FR-001")), ("対応する実装ファイル", ("text", "eabk_model.py")), *DRAWER[1:]],
     "tables": [("対象種別", ("text", "受入基準")), ("検索", ("sel", "#view input")), ("絞込み", ("text", "決定状態:")),
                ("行一覧", ("sel", "#view table tbody tr")), *DRAWER[1:]],
@@ -58,7 +58,7 @@ REQUIRED = {
     "runtime": [("実行環境の配置", ("text", "STUDIO サーバー")), ("ブラウザー", ("text", "ブラウザー")), ("対象リポジトリ", ("text", "対象リポジトリ"))],
     "cases": [("試験ケース", ("text", "試験ケース")), ("行一覧", ("sel", "#view table tbody tr")), *DRAWER[1:]],
     "states": [("図式の種別", ("text", "状態遷移図")), ("状態", ("svg", "g")), ("遷移", ("svg", "path, line"))],
-    "header": [("EABK Studio", ("text", "EABK Studio"))],
+    "header": [("HVE Studio", ("text", "HVE Studio"))],
 }
 
 
@@ -93,10 +93,14 @@ def main():
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     if args.commit != head:
         raise SystemExit(f"--commit {args.commit} does not match HEAD {head}")
+    working_tree = bool(subprocess.check_output(
+        ["git", "status", "--porcelain", "--", "HVE-Studio", "docs", "tests/system/ledger.json"],
+        cwd=ROOT, text=True,
+    ).strip())
 
     port = free_port()
     process = subprocess.Popen(
-        [sys.executable, str(ROOT / "EABK-Studio" / "studio.py"), "--repo", str(ROOT),
+        [sys.executable, str(ROOT / "HVE-Studio" / "studio.py"), "--repo", str(ROOT),
          "--port", str(port), "--no-open"],
         cwd=ROOT,
     )
@@ -108,7 +112,7 @@ def main():
             except OSError:
                 time.sleep(0.1)
         else:
-            raise RuntimeError("EABK Studio did not start")
+            raise RuntimeError("HVE Studio did not start")
 
         image_dir = GUIDE / "images"
         image_dir.mkdir(exist_ok=True)
@@ -121,8 +125,12 @@ def main():
             repo_name = page.evaluate("fetch('/api/model').then(r => r.json()).then(m => m.meta.name)")
 
             def shoot(image_id, route, query="", select="FR-001", full_page=False):
-                page.goto(f"http://127.0.0.1:{port}/#/{route}?select={select}{query}&snapshot=1")
-                expect(page.locator("#view")).to_contain_text(f"Snapshot ready: {route}")
+                ready_route = "diagrams" if route == "placement" else route
+                if route == "placement":
+                    view = "runtime" if query == "&kind=runtime" else "matrix"
+                    query = f"&kind=layers&view={view}"
+                page.goto(f"http://127.0.0.1:{port}/#/{ready_route}?select={select}{query}&snapshot=1")
+                expect(page.locator("#view")).to_contain_text(f"Snapshot ready: {ready_route}")
                 if select:
                     expect(page.locator("#drawer")).to_be_visible()
                     expect(page.locator("#drawer")).to_contain_text(select)
@@ -137,7 +145,7 @@ def main():
                 shoot(image_id, route, query, select="FR-001" if image_id in DETAIL_EXTRA else "")
             # Header (tabs, search, persona bar) is hidden in snapshot links, so capture it from a normal link.
             page.goto(f"http://127.0.0.1:{port}/#/dashboard")
-            expect(page.locator("#repoBtn")).to_contain_text("📁")
+            expect(page.locator("#repoBtn")).to_contain_text(repo_name)
             verify_elements(page, "header", repo_name)
             page.add_style_tag(content="#modelTime{visibility:hidden}")
             page.locator("header.top").screenshot(path=str(image_dir / "header.png"))
@@ -148,12 +156,14 @@ def main():
         screens = [(r, r) for r in ROUTES] + [(i, r) for i, r, _ in EXTRA] + [("header", "dashboard")]
         for image_id, route in screens:
             image = image_dir / f"{image_id}.png"
+            command = f"python users-guide/studio/capture-screens.py --commit {head}"
             rows.append({
                 "screen_id": image_id,
                 "image": f"images/{image_id}.png",
                 "sha256": hashlib.sha256(image.read_bytes()).hexdigest(),
                 "commit": head,
-                "capture_command": f"python users-guide/studio/capture-screens.py --commit {head}",
+                "working_tree": working_tree,
+                "capture_command": command,
                 "required_elements": [label for label, _ in REQUIRED[image_id]],
             })
         (GUIDE / "screen-images.json").write_text(

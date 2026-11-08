@@ -2,7 +2,7 @@
 
 期待値は要求定義書の受入基準だけから決める。AC-446 は manual（フレームレートは人が測る）なのでここでは扱わない。
 AC-445 / AC-447 は検証レベル=integration だが、test-designer が変更できるのは tests/system/ のみのため
-（hook G-5）、test_studio_header_row_integration.py と同じ流儀でここに置く。実装者が EABK-Studio/tests へ移してよい。
+（hook G-5）、test_studio_header_row_integration.py と同じ流儀でここに置く。実装者が HVE-Studio/tests へ移してよい。
 パラメータ: PARAM-058=600ms（トランジション上限）、PARAM-037=1ms（動きの軽減時の切替上限）、PARAM-056=150（Graph の描画ノード数目安）。
 Run: python -m pytest tests/system/e2e/test_studio_dynamic_viz_system.py -q
 """
@@ -13,10 +13,10 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO / "EABK-Studio" / "tests"))
+sys.path.insert(0, str(REPO / "HVE-Studio" / "tests"))
 from test_links_wrap_status_ui import studio, _open, sync_api  # noqa: E402,F401
 
-JS_DIR = REPO / "EABK-Studio" / "web" / "js"
+JS_DIR = REPO / "HVE-Studio" / "web" / "js"
 P058 = 600
 P037 = 1
 VIZ_ROUTES = ["dashboard", "implstatus", "map2d", "diagrams", "mapgraph"]  # insights は dashboard / tables 内。ルートは下の ROOTS で確認
@@ -238,7 +238,7 @@ def test_ac444_reduced_motion_switches_immediately_with_same_information(studio)
 
 # NFR-UX-018 AC-445: d3 を同梱・追加せず、外部ネットワーク要求が 0 件。
 def test_ac445_no_d3_no_new_dependency_no_external_requests(studio):
-    web = REPO / "EABK-Studio" / "web"
+    web = REPO / "HVE-Studio" / "web"
     files = [p for p in web.rglob("*") if p.is_file()]
     assert not [p for p in files if re.search(r"(^|[-_.])d3([-_.]|$)", p.name.lower())]
     assert not [p for p in files if p.name in {"package.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bower.json", "importmap.json"}]

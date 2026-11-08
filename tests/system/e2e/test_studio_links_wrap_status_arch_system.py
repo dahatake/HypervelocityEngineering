@@ -48,7 +48,7 @@ def _serve(repo):
         except OSError:
             time.sleep(0.1)
     proc.kill()
-    raise RuntimeError("EABK Studio did not start")
+    raise RuntimeError("HVE Studio did not start")
 
 
 def _placement_section():

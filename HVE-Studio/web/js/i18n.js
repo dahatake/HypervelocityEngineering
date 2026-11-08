@@ -108,7 +108,7 @@ const D = {
         'sz.from': '元', 'sz.to': '先', 'sz.kind': '種別', 'sz.src': '出典', 'sz.sel': '選択中', 'sz.none': '選択なし', 'sz.hint': 'ホイール／＋−キーで拡大縮小、ドラッグ／矢印キーで移動、0 で全体、Enter で選択、Esc で解除',
         'sz.to2d': '2D で見る', 'arch.storage': '保存先', 'arch.locations': '実行場所', 'arch.kind': '種別', 'arch.place': '場所', 'arch.apps': 'アプリ', 'arch.data': 'データ', 'arch.links': '通信（方向）', 'arch.toentity': 'エンティティ図へ', 'arch.toarch': 'アーキテクチャ図へ', 'sz.to3d': '3D で見る', 'sz.graph': '関係グラフ（従来）', 'sz.entview': 'エンティティ表示', 'sz.rot': '回転', 'sz.mismatch': '補完と食い違い', 'sz.supp': '補完（DDL・スキーマ）',
         'sz.goto': '参照先へ移動', 'sz.badge.selected': '選択', 'sz.badge.related': '関係先', 'sz.use': '使用', 'sz.nowebgl': 'この環境では 3D を描画できないため、2D で表示しています。',
-        'app.title': 'EABK Studio', 'skip.main': 'メインコンテンツへ移動', 'search.aria': 'プロジェクトのデータを検索', 'model.time': 'モデルの測定時刻', 'persona.group': '役割', 'persona.pm': 'Product Manager', 'persona.arch': 'Architect', 'persona.swe': 'Software Engineer', 'persona.view': '{name} の見方', 'persona.suffix': 'の見方',
+        'app.title': 'HVE Studio', 'skip.main': 'メインコンテンツへ移動', 'search.aria': 'プロジェクトのデータを検索', 'model.time': 'モデルの測定時刻', 'persona.group': '役割', 'persona.pm': 'Product Manager', 'persona.arch': 'Architect', 'persona.swe': 'Software Engineer', 'persona.view': '{name} の見方', 'persona.suffix': 'の見方',
         'lang.group': '言語', 'search.hits': '{n} 件', 'search.hlall': 'すべて図で強調', 'cmd.implsel': '実装状態の区間を選択: ', 'cmd.implclear': '実装状態の絞り込みを解除',
                 'cam3d.keys': 'camera カメラ', 'cam3d.keys.stop': '停止', 'tier.shown': '表示 {n} 件', 'tier.tree': 'データの階層',
                 'tier.n.unclassified': '未分類', 'tier.n.goals': '目的', 'tier.n.reqs': '要求', 'tier.n.acs': '受入基準', 'tier.n.cases': '試験ケース', 'tier.n.catalog': 'カタログ', 'tier.n.entities': 'エンティティ', 'tier.n.questions': '質問', 'tier.n.sources': '出典', 'tier.n.params': 'パラメータ', 'tier.n.audit': '監査指摘', 'tier.n.integrations': '外部連携',
@@ -247,7 +247,7 @@ const D = {
         'sz.from': 'From', 'sz.to': 'To', 'sz.kind': 'Kind', 'sz.src': 'Source', 'sz.sel': 'Selected', 'sz.none': 'Nothing selected', 'sz.hint': 'Wheel / + - keys zoom, drag / arrow keys pan, 0 fits, Enter selects, Esc clears',
         'sz.to2d': 'View in 2D', 'arch.storage': 'Stored at', 'arch.locations': 'Execution locations', 'arch.kind': 'Kind', 'arch.place': 'Place', 'arch.apps': 'Apps', 'arch.data': 'Data', 'arch.links': 'Links (direction)', 'arch.toentity': 'To entity model', 'arch.toarch': 'To architecture', 'sz.to3d': 'View in 3D', 'sz.graph': 'Relation graph (classic)', 'sz.entview': 'Entity view', 'sz.rot': 'Rotate', 'sz.mismatch': 'differs from the DDL / schema', 'sz.supp': 'Supplement (DDL / schema)',
         'sz.goto': 'Go to referenced column', 'sz.badge.selected': 'selected', 'sz.badge.related': 'related', 'sz.use': 'uses', 'sz.nowebgl': '3D cannot be drawn in this environment, so 2D is shown.',
-        'app.title': 'EABK Studio', 'skip.main': 'Skip to main content', 'search.aria': 'Search project data', 'model.time': 'Model timestamp', 'persona.group': 'Role', 'persona.pm': 'Product Manager', 'persona.arch': 'Architect', 'persona.swe': 'Software Engineer', 'persona.view': '{name} view', 'persona.suffix': 'view',
+        'app.title': 'HVE Studio', 'skip.main': 'Skip to main content', 'search.aria': 'Search project data', 'model.time': 'Model timestamp', 'persona.group': 'Role', 'persona.pm': 'Product Manager', 'persona.arch': 'Architect', 'persona.swe': 'Software Engineer', 'persona.view': '{name} view', 'persona.suffix': 'view',
         'lang.group': 'Language', 'search.hits': '{n} hits', 'search.hlall': 'Highlight all', 'cmd.implsel': 'Select impl-status segment: ', 'cmd.implclear': 'Clear impl-status filter',
                 'cam3d.keys': 'camera', 'cam3d.keys.stop': 'stop', 'tier.shown': '{n} shown', 'tier.tree': 'Data hierarchy',
                 'tier.n.unclassified': 'Unclassified', 'tier.n.goals': 'Goals', 'tier.n.reqs': 'Requirements', 'tier.n.acs': 'Acceptance criteria', 'tier.n.cases': 'Test cases', 'tier.n.catalog': 'Catalog', 'tier.n.entities': 'Entities', 'tier.n.questions': 'Questions', 'tier.n.sources': 'Sources', 'tier.n.params': 'Parameters', 'tier.n.audit': 'Audit findings', 'tier.n.integrations': 'External integrations',
@@ -303,7 +303,7 @@ export function setLang(l) {
 }
 let docName = '';
 const docTitle = () => (docName ? `${t('app.title')} · ${docName}` : t('app.title'));
-/** The document title is "EABK Studio · <project name>"; the project name is managed data and is never translated. */
+/** The document title is "HVE Studio · <project name>"; the project name is managed data and is never translated. */
 export function setDocName(name) { docName = name || ''; document.title = docTitle(); }
 export function applyI18n(root) {
   root.querySelectorAll('[data-i18n-ph]').forEach((e) => (e.placeholder = t(e.dataset.i18nPh)));

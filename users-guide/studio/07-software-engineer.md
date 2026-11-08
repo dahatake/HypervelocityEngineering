@@ -21,7 +21,7 @@
 
 1. **起動します**（1 分）。
    ```powershell
-   python EABK-Studio/studio.py --role swe
+   python HVE-Studio/studio.py --role swe
    ```
 2. **作業する要求を選びます**（2 分）。`表` → `要求` を開きます。`status: すべて` の絞り込みで `approved`（承認済み）を、`impl` の絞り込みで `none`（実装ファイルが空）か `unlisted`（カタログに行がない）を選びます。優先度は `MUST` から見ます。
 

@@ -1,8 +1,8 @@
 """Integration-level tests (draft) for FR-1072 AC-393 and NFR-UX-016 AC-394 / AC-396 (run 202610192312).
 
-置き場の注記: test-designer は tests/system/ 以外を変更できない（hook G-5）ため、EABK-Studio/tests/test_*_ui.py の流儀
+置き場の注記: test-designer は tests/system/ 以外を変更できない（hook G-5）ため、HVE-Studio/tests/test_*_ui.py の流儀
 （test_links_wrap_status_ui.py の studio fixture / _open）をそのまま使う形でここに置く。実装者が
-EABK-Studio/tests/test_header_row_ui.py へ移してよい（移すときは sys.path の 3 行と import を元の流儀に戻す）。
+HVE-Studio/tests/test_header_row_ui.py へ移してよい（移すときは sys.path の 3 行と import を元の流儀に戻す）。
 期待値は要求定義書の受入基準だけから決める。幅は PARAM-048 = 1280 / 1024 / 800 / 600 / 320 CSS px（320 = PARAM-034。ヘッダー帯の横スクロール可）。
 Run: python -m pytest tests/system/e2e/test_studio_header_row_integration.py -q
 """

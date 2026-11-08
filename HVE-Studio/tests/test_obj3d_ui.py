@@ -1,5 +1,5 @@
 """Integration / unit tests for FR-1068 (3D object per kind + legend) and FR-1069 (3D style toggle).
-Run: python -m pytest EABK-Studio/tests/test_obj3d_ui.py -q"""
+Run: python -m pytest HVE-Studio/tests/test_obj3d_ui.py -q"""
 import re
 import socket
 import subprocess

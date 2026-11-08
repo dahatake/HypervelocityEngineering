@@ -201,7 +201,7 @@ def test_ac319_adding_optional_fields_changes_only_those_lines(repo):
 def test_ac320_field_name_list_is_not_duplicated_outside_definition():
     names = ["エンティティの使い方", "利用シナリオ", "関係する状態", "参照パラメータ", "関連する既存資産"]
     holders = {}
-    for base in (SOURCE / "scripts", SOURCE / "EABK-Studio"):
+    for base in (SOURCE / "scripts", SOURCE / "HVE-Studio"):
         if not base.exists():
             continue
         for p in base.rglob("*.py"):

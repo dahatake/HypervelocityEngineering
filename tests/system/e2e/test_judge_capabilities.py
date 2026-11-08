@@ -21,7 +21,7 @@ from playwright.sync_api import expect
 
 
 ROOT = Path(__file__).resolve().parents[3]
-STUDIO = ROOT / "EABK-Studio" / "studio.py"
+STUDIO = ROOT / "HVE-Studio" / "studio.py"
 ROUTES = {
     "dashboard": ("ダッシュボード", ("目的", "進捗", "要求")),
     "map2d": ("2D マップ", ("ノード", "関係", "詳細")),
@@ -102,7 +102,7 @@ def studio_page(browser):
             time.sleep(0.1)
     else:
         proc.kill()
-        raise RuntimeError("EABK Studio did not start")
+        raise RuntimeError("HVE Studio did not start")
     context = browser.new_context(viewport={"width": 1440, "height": 1000})
     page = context.new_page()
     page.goto(f"http://127.0.0.1:{port}")
@@ -526,8 +526,8 @@ def test_repository_precedence_is_explicit_then_cwd_then_studio_placement(tmp_pa
     placement = _write_repo(
         tmp_path, "placement-repo", "# Placement\n- 目的 G-PLACEMENT: placement marker\n"
     )
-    shutil.copytree(ROOT / "EABK-Studio", placement / "EABK-Studio")
-    script = placement / "EABK-Studio" / "studio.py"
+    shutil.copytree(ROOT / "HVE-Studio", placement / "HVE-Studio")
+    script = placement / "HVE-Studio" / "studio.py"
     scenarios = (
         (_model_for_start(script, current, explicit), explicit, "G-EXPLICIT"),
         (_model_for_start(script, current), current, "G-CURRENT"),

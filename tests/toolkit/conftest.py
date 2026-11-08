@@ -209,8 +209,8 @@ def _build_sample(path: Path) -> Path:
         copied = repo.path / rel
         if copied.exists():
             copied.unlink()
-    # EABK-Studio ships product sources that cite product requirement IDs.
-    studio = repo.path / "EABK-Studio"
+    # HVE-Studio ships product sources that cite product requirement IDs.
+    studio = repo.path / "HVE-Studio"
     if studio.exists():
         shutil.rmtree(studio)
     repo.py("next-id.py", "--sync", "--adopt", check=True)

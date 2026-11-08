@@ -10,7 +10,7 @@ EABK Lite の 1 回の変更は、次の 5 段階で進みます。どれも、�
 3. 手元で検査する       python scripts/verify.py が exit 0
 4. push / PR           CI の ebak-verify が同じ検査をする（検査だけ）
 5. 節目に監査する       リリース前などに rd-auditor で要求の意味を監査する
-（いつでも）           状況は EABK Studio で見る
+（いつでも）           状況は HVE Studio で見る
 ```
 
 > 0.5.x から移行した方へ: run・工程・統合ブランチ・`run-report.md`・自動の main への取り込みはありません。変更はふつうのブランチと PR で取り込みます。0.5.x の run が残した worktree と `work/*` ブランチは自動では消えません。`git worktree list` と `git branch --list "work/*"` で確かめて、手で削除します（[9. 版の管理](09-versioning.md)）。
@@ -103,16 +103,16 @@ rd-auditor は git で管理するファイルを変更しません。結果は 
 
 指摘をどう扱うかは利用者が判断し、直すときは別の依頼・別の変更として既定のエージェントに頼みます（例: 「work/audit/20261108-1000/report.md の確度高の指摘 2 件を直して」）。
 
-## 2.6 状況を見る（EABK Studio）
+## 2.6 状況を見る（HVE Studio）
 
-要求・受入基準・カタログ・System Test の台帳の状態は、EABK Studio で図と表として見られます。任意のツールで、なくても作業は進みます。
+要求・受入基準・カタログ・System Test の台帳の状態は、HVE Studio で図と表として見られます。任意のツールで、なくても作業は進みます。
 
 ```bash
-python EABK-Studio/studio.py          # ブラウザーで開く（127.0.0.1 だけで待ち受け、読み取り専用）
-python EABK-Studio/studio.py --check  # 読み込める件数だけを表示して終了
+python HVE-Studio/studio.py          # ブラウザーで開く（127.0.0.1 だけで待ち受け、読み取り専用）
+python HVE-Studio/studio.py --check  # 読み込める件数だけを表示して終了
 ```
 
-画面ごとの使い方は [EABK Studio のガイド](studio/README.md) にあります。
+画面ごとの使い方は [HVE Studio のガイド](studio/README.md) にあります。
 
 ## 2.7 複数の人・複数の PC で使う
 
