@@ -5,6 +5,15 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+### アンインストーラー（FR-1087）
+
+- **どの版の EABK でも削除できる `tools/uninstall.py` を追加しました。** `tools/install.py` のすべての版（旧名 hve の版、merge で入った版を含む 91 版）が配布したファイルの内容のハッシュを、git の履歴から集めたカタログ `tools/uninstall-catalog.json` で判定します。マニフェストがない導入先でも、旧版のファイル・ブロックの印（`hve-abk`・`hve-conductor`）・設定とマニフェスト（`hve.config.json`・`hve-toolkit.json`）・`*.hve-backup-*`・すべての版の `.gitignore`／`.gitattributes` の追記を削除します。どの版とも内容が違うファイルは残します（`KEEP-LOCAL`・`KEEP-UNKNOWN`）。
+- `tools/uninstall.ps1`・`tools/uninstall.sh` は `uninstall.py` とカタログの 2 ファイルだけをダウンロードして実行します（toolkit の clone は不要）。`install.py --uninstall`・`--purge`・`--clean` は同じ実装を使います。
+- `--runs`: 旧版の conductor の worktree と、取り込み済みの `run/*` ブランチを削除します（既定は表示だけ。リンクはたどりません）。
+- 終了コード: 0 は残りなし、1 は残りあり（`RESIDUE` の一覧）、2 は誤り。git のリポジトリの最上位でなければ実行しません。
+- 修正: インストーラーが利用者の CRLF の `AGENTS.md`・`.gitignore` を LF に書き換えていました。改行コードを保つようにし、導入してから `--purge` するとバイト単位で導入前に戻ります。
+- 保守: 配布物を変えたら `python tools/build-uninstall-catalog.py` でカタログを作り直します（`tools/bump-version.py` も作り直します。`tests/toolkit/test_uninstall.py` が古いカタログを検出します）。すべての版の導入と削除は `python tools/verify-uninstall-matrix.py --all` で確かめます。
+
 ## [0.6.0]
 
 ### EABK Lite（互換性のない変更）

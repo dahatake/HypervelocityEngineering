@@ -1,7 +1,10 @@
 import hashlib
 import json
 import re
+import shutil
 import sys
+
+import pytest
 
 from conftest import SOURCE, git, init_git, run
 
@@ -242,13 +245,27 @@ def test_purge_removes_everything_the_toolkit_added(empty_repo):
     assert install(empty_repo).returncode == 0 and (empty_repo / ".github/ebak-toolkit.json").exists()
 
 
+# FR-1087 AC-478: the wrappers run tools/uninstall.py with its catalog (local clone or the two downloaded files)
 def test_uninstall_wrappers_pass_uninstall():
     ps1 = (SOURCE / "tools/uninstall.ps1").read_text(encoding="utf-8")
-    assert "Uninstall = $true" in ps1 and "Purge" in ps1 and "install.ps1" in ps1
-    sh = (SOURCE / "tools/uninstall.sh").read_text(encoding="utf-8")
-    assert "install.sh\" --uninstall \"$@\"" in sh and "bash -s -- --uninstall \"$@\"" in sh
+    for s in ("uninstall.py", "uninstall-catalog.json", "[switch]$Purge", "[switch]$Runs", "'--runs'", "'--purge'", "'--dry-run'"):
+        assert s in ps1, s
+    sh = (SOURCE / "tools/uninstall.sh").read_bytes()
+    assert b"\r\n" not in sh
+    for s in (b"uninstall.py", b"uninstall-catalog.json", b'"$PY" "$DIR/uninstall.py" "$@"'):
+        assert s in sh, s
     ps = (SOURCE / "tools/install.ps1").read_text(encoding="utf-8")
     assert "[switch]$Purge" in ps and "[switch]$Clean" in ps and "'--clean'" in ps
+
+
+@pytest.mark.skipif(not shutil.which("powershell") and not shutil.which("pwsh"), reason="PowerShell がありません")
+def test_uninstall_ps1_runs_local_uninstaller(empty_repo):
+    assert install(empty_repo).returncode == 0
+    shell = shutil.which("pwsh") or shutil.which("powershell")
+    proc = run([shell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(SOURCE / "tools/uninstall.ps1"),
+                "-Target", str(empty_repo), "-Purge"], empty_repo)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "installer versions" in proc.stdout and not (empty_repo / ".github/ebak-toolkit.json").exists()
 
 
 def test_refuses_non_git_and_self(tmp_path):

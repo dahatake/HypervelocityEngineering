@@ -17,6 +17,7 @@
 | `scripts/summarize.py` | 長いログの要約 | なし |
 | `scripts/adopt.py` | 既存アプリの導入 | `docs/baseline/`・`tests/system/golden/`・`work/import/` |
 | `tools/install.py` | 導入・更新・削除 | 導入先のリポジトリ |
+| `tools/uninstall.py` | どの版の EABK でも削除する（`install.py --uninstall`・`--purge` の実体） | 導入先のリポジトリ |
 
 ## ebaklib.py（共通ライブラリ）
 
@@ -238,13 +239,37 @@ python tools/install.py --version
 | `--no-ci` | `.github/workflows/ebak-verify.yml` を入れない |
 | `--no-repair` | 導入後の自動修復をせず、`rdfix.py --full` で検査と修復の計画だけを表示する。PowerShell のラッパーでは `-NoRepair` |
 | `--skip-verify` | 導入後のデータ層の検査も修復も行わない |
-| `--uninstall` / `--purge` | 削除（上の例を参照） |
+| `--uninstall` / `--purge` | 削除（上の例を参照）。`tools/uninstall.py` に `--target`・`--purge`・`--force`・`--dry-run`・`--allow-non-git` を渡して実行する |
 | `--allow-non-git` | git リポジトリでない場所にも導入する |
 | `--version` | toolkit の版を表示して終了する |
 
 行うこと（何度実行しても同じ結果）: 配布物（rd-auditor、skills、`ebak-verify.yml`、`scripts/*`、EABK-Studio。Studio のテスト `EABK-Studio/tests/` は入れません）を入れ、変更していなければ更新します。管理データのひな形（要求定義書・カタログ・外部連携カタログ・ID 台帳・台帳）は、ないときだけ作ります。`scripts/ebak.config.json` は新しいキーを足し、利用者の値を残します（新しい導入の `verify.commands` は空の `[]`）。`.gitignore` に `/work/`（見出し `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`）、`.gitattributes` に `docs/id-registry.md merge=union`、`AGENTS.md` と `.github/copilot-instructions.md` に規則のブロックを足し、`.github/ebak-toolkit.json` に版とハッシュを記録します。最後に `rdfix.py --full --apply` を 1 回実行します（要求定義書は変更せず、修復は commit しません）。
 
-更新は、この版が配布するファイルだけを扱います。旧版が入れて今の版が配布しないファイルは削除せず、マニフェストにも残し（`--clean` で見つけられるように）、件数を「注意」で表示します。旧版からの移行の処理（版ごとの削除リストや設定の書き換え）は持ちません。旧版（0.5.x など）から更新するときは `--clean` を使います。`--clean` の後も、旧版のデータ層のファイル（0.5.x の `docs/run-history.md` など）と、0.5.x の run が残した worktree・`work/*` ブランチは残るので、不要なら手で削除します（[9.4](09-versioning.md#94-旧版から更新するクリーンインストール)）。
+更新は、この版が配布するファイルだけを扱います。旧版が入れて今の版が配布しないファイルは削除せず、マニフェストにも残し（`--clean` で見つけられるように）、件数を「注意」で表示します。旧版からの移行の処理（版ごとの削除リストや設定の書き換え）は持ちません。旧版（0.5.x など）から更新するときは `--clean` を使います。`--clean` の後も、旧版のデータ層のファイル（0.5.x の `docs/run-history.md` など）と、0.5.x の run が残した worktree・`run/*` ブランチは残ります。worktree と取り込み済みのブランチは `python tools/uninstall.py --target <導入先> --runs` で削除でき、データ層のファイルは不要なら手で削除します（[9.4](09-versioning.md#94-旧版から更新するクリーンインストール)）。
+
+## tools/uninstall.py（どの版でも削除する）
+
+導入先には入りません。ふつうは `tools/uninstall.ps1`・`tools/uninstall.sh`（`uninstall.py` とカタログの 2 ファイルだけを取得して実行する 1 コマンド。[README](../README.md#アンインストールクリーンアップ)）から使います。
+
+```bash
+python tools/uninstall.py --target <導入先> --dry-run          # 行う操作の一覧（何も変えない）
+python tools/uninstall.py --target <導入先>                    # toolkit のファイル・ブロック・マニフェストを削除
+python tools/uninstall.py --target <導入先> --purge --runs     # 管理データ・設定・/work・追記・バックアップ・旧版の run も削除
+```
+
+| オプション | 動作 |
+|---|---|
+| `--target DIR` | 導入先（git のリポジトリの最上位。既定: カレントディレクトリ） |
+| `--catalog FILE` | カタログ（既定: スクリプトの隣の `uninstall-catalog.json`） |
+| `--dry-run` | 書き込まずに、行う操作だけを表示する（exit 0） |
+| `--purge` | 管理データ・設定（`ebak`・`hve`）・`/work`・`.gitignore` と `.gitattributes` の追記・`*.ebak-backup-*`・`*.hve-backup-*` も削除する |
+| `--force` | 変更された toolkit のファイルも削除する（マニフェストに記録されたパスか、この版が配布するパスだけ） |
+| `--runs` | 旧版の conductor の worktree と、HEAD に取り込み済みの `run/*` ブランチを削除する（既定は表示だけ。リンクはたどらない） |
+| `--allow-non-git` | git のリポジトリの最上位でなくても実行する |
+
+判定: どれかの版が配布したパスにあり、内容（改行の違いは無視）がその版のどれかの内容か、マニフェストに記録されたハッシュと一致するファイルを削除します。旧版だけが使ったパスで一致しないファイルは利用者のものとして残します（`KEEP-UNKNOWN`）。表示: `REMOVE`・`UNBLOCK`・`UNAPPEND`・`KEEP-LOCAL` など 1 行 1 件と、最後の `changes=N`。終了コード: 0 は選んだ範囲に EABK が残っていない、1 は残っている（`RESIDUE` の一覧）、2 は誤り。
+
+カタログ `tools/uninstall-catalog.json` は、`tools/build-uninstall-catalog.py` が `tools/install.py` のすべての版（merge で入った版を含む）と各版の配布物の blob から作ります。`tools/bump-version.py` が版の更新のたびに作り直し、`--check` で古くないかを確かめられます。すべての版の導入と削除は `tools/verify-uninstall-matrix.py` で確かめます（[docs/manual-tests.md](../docs/manual-tests.md)）。
 
 ## EABK-Studio（データ層のビューアー）
 

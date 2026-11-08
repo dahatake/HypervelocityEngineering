@@ -15,4 +15,5 @@
 
 - toolkit のテスト: `python -m pytest tests/toolkit -q`
 - 配布物の一覧は `tools/install.py` の `MANAGED` / `TEMPLATES` にあります。ファイルを追加・改名したら、ここと `users-guide/` を合わせて直します。
+- 配布物（`MANAGED`・`TEMPLATES` の一覧か、配布するファイルの内容。`users-guide/` も配布物）を変えたら `python tools/build-uninstall-catalog.py` でアンインストーラーのカタログ `tools/uninstall-catalog.json` を作り直します（古いと `tests/toolkit/test_uninstall.py` が失敗します）。
 - 版は `scripts/ebaklib.py` の `TOOLKIT_VERSION` で管理します。

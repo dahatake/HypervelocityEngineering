@@ -51,6 +51,9 @@ def main(argv=None) -> int:
         marker = "## [Unreleased]\n"
         if marker in text:
             CHANGELOG.write_text(text.replace(marker, f"{marker}\n## [{new}]\n", 1), encoding="utf-8")
+    # the uninstaller's catalog records the version and the content of every shipped file: regenerate it for the release
+    import subprocess
+    subprocess.run([sys.executable, str(ROOT / "tools" / "build-uninstall-catalog.py")], cwd=str(ROOT), check=True)
     print(f"{old} -> {new}")
     return 0
 

@@ -260,21 +260,31 @@ curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/m
 curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.sh | bash -s -- --purge
 ```
 
-If you have cloned the toolkit, use `python tools/install.py --target /path/to/your-repo --uninstall` (or `--purge`). `install.ps1 -Uninstall` and `install.sh --uninstall` do the same.
+If you have cloned the toolkit, use `python tools/uninstall.py --target /path/to/your-repo` (or add `--purge`). `python tools/install.py --target ... --uninstall` / `--purge`, `install.ps1 -Uninstall`, and `install.sh --uninstall` use the same implementation.
+
+**It removes EABK installed by any version.** The uninstaller decides with `tools/uninstall-catalog.json`, a catalog of the content hashes of every file that any version of `tools/install.py` shipped (including the versions under the old name "hve"), collected from the git history. Only `uninstall.py` and the catalog are downloaded; no clone of the toolkit is needed. Even without a manifest it removes files of old versions (`hvelib.py`, `hve-verify.yml`, the conductor, etc.), the block markers of old versions (`hve-abk`, `hve-conductor`), the settings and manifests of old versions (`scripts/hve.config.json`, `.github/hve-toolkit.json`), and `*.hve-backup-*`.
+
+| Option (PowerShell) | Effect |
+|---|---|
+| `--dry-run` (`-DryRun`) | Lists what would be done without changing anything |
+| `--purge` (`-Purge`) | Also removes management data, settings, `/work`, the appended lines, and backups (table below) |
+| `--force` (`-Force`) | Also removes toolkit files you modified (only at paths recorded in a manifest or shipped by this version) |
+| `--runs` (`-Runs`) | Also removes the worktrees the old conductor created (`<repo-name>-run-*`, `work/worktrees/*`) and the `run/*` branches already merged into HEAD. Dependency links inside a worktree are unlinked only. Without it, these are only listed |
 
 | Target | `--uninstall` | `--purge` |
 |---|---|---|
-| Toolkit files (`.github/agents`, `skills`, `workflows/ebak-*.yml`, `scripts/*.py`, etc.) and files of older versions | Removed if unmodified (kept as `KEEP-LOCAL` if modified; `--force` removes) | Same |
-| Blocks in `AGENTS.md` / `.github/copilot-instructions.md` | Only the block is removed (the file is removed if nothing else remains) | Same |
-| Manifest `.github/ebak-toolkit.json`, emptied folders, `__pycache__` of removed `.py` | Removed | Removed |
-| Management data (`docs/requirements-definition.md`, `catalog.md`, `integrations.md`, `id-registry.md`, `manual-tests.md`, `docs/requirements/`, `tests/system/ledger.json`). Paths follow `management_files` in `scripts/ebak.config.json` | Kept | Removed |
-| `scripts/ebak.config.json`, `/work`, `*.ebak-backup-*` | Kept | Removed |
-| `/work/` in `.gitignore`, `merge=union` lines in `.gitattributes` | Kept | Only the appended lines are removed (the file is removed if empty) |
+| Toolkit files of any version (`.github/agents`, `skills`, `workflows`, `scripts/*.py`, etc.) | Removed if identical to the content of some version (kept as `KEEP-LOCAL` if modified; `--force` removes) | Same |
+| A file at a path only old versions used whose content matches no version (e.g. your own `users-guide/README.md`) | Kept as your file (`KEEP-UNKNOWN`; not removed even with `--force`) | Same |
+| Blocks in `AGENTS.md` / `.github/copilot-instructions.md` (markers of every version) | Only the block is removed (the file is removed if nothing else remains) | Same |
+| Manifests (`.github/ebak-toolkit.json`, `.github/hve-toolkit.json`), emptied folders, `__pycache__` of removed `.py` | Removed | Removed |
+| Management data (`docs/requirements-definition.md`, `catalog.md`, `integrations.md`, `id-registry.md`, `manual-tests.md`, `docs/requirements/`, `tests/system/ledger.json`, etc., including the `management_files` paths in the settings) | Kept | Removed |
+| Settings (`scripts/ebak.config.json`, `scripts/hve.config.json`), `/work`, `*.ebak-backup-*`, `*.hve-backup-*` | Kept | Removed |
+| Sections appended to `.gitignore` / `.gitattributes` (headings of every version) | Kept | Only the appended lines are removed (the file is removed if empty) |
 | System Test code (other than the ledger in `tests/system/`), app code, other documents in `docs/` | Kept | Kept |
 
-- If the manifest is lost, only files identical to this toolkit version are removed (`WARN` is shown).
-- Removal happens in the git working tree. Check with `git status` before committing (`git restore` can undo it; `/work` is not tracked by git and cannot be restored).
-- Safe to run any number of times (the second run shows `changes=0`).
+- Removal happens in the git working tree. Check with `git status` before committing (`git restore` can undo it; `/work` is not tracked by git and cannot be restored). It refuses to run unless the target is the top of a git repository (`--allow-non-git` to continue).
+- Exit code: `0` = nothing of EABK remains in the chosen scope, `1` = something remains (listed under `RESIDUE`), `2` = error. Safe to run any number of times (the second run shows `changes=0`).
+- After `--purge`, your files (CRLF line endings included) are byte for byte as before the install and `git status --porcelain --ignored` is empty. Installers before 0.6.0, however, rewrote a CRLF `AGENTS.md` / `.gitignore` as LF; that difference remains in `git status` (undo it with `git restore`).
 
 ### Why we use an installer instead of a plugin
 

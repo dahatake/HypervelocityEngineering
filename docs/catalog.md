@@ -117,6 +117,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1083 | toolkit 更新時の利用側の配線の脱落警告 | 承認済み | `tools/install.py`、`users-guide/04-customization.md`、`users-guide/04-customization.en.md` | `tests/integration/test_extension_points_it.py` | 配布同期対象 |
 | FR-1084 | EABK Lite の検査プロファイル（lite／full） | 承認済み | `scripts/rdcheck.py`、`scripts/verify.py`、`scripts/rdfix.py` | `tests/toolkit/test_lite.py` | - |
 | FR-1085 | オーケストレーションを持たない配布と旧版からの移行 | 承認済み | `tools/install.py` | `tests/toolkit/test_install.py` | - |
+| FR-1087 | 全版に対応したアンインストール | 承認済み | `tools/uninstall.py`、`tools/uninstall-catalog.json`、`tools/build-uninstall-catalog.py`、`tools/uninstall.ps1`、`tools/uninstall.sh` | `tests/toolkit/test_uninstall.py`、`tools/verify-uninstall-matrix.py`、`docs/manual-tests.md` | - |
 | FR-1086 | EABK を導入していないリポジトリの表示（コードのモード） | 承認済み | `EABK-Studio/eabk_model.py`、`EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | - |
 
 

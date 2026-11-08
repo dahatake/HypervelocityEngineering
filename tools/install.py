@@ -179,9 +179,8 @@ GITATTR_LINES = ["docs/id-registry.md merge=union",
                  "scripts/*.sh text eol=lf", "EABK-Studio/*.sh text eol=lf"]
 GITIGNORE_HEADER = "# Enterprise App Build Kit: temporary files (logs, evidence, notes)"
 GITATTR_HEADER = "# Enterprise App Build Kit: append-only records"
-# Every header the toolkit has ever written starts with this; --clean / --purge remove such a header and its lines.
-TOOLKIT_HEADER_PREFIX = "# Enterprise App Build Kit"
-# Management data paths (defaults of scripts/ebaklib.py DEFAULT_CONFIG["files"]); --purge also honours the target's config.
+# Management data paths (defaults of scripts/ebaklib.py DEFAULT_CONFIG["files"]). tools/build-uninstall-catalog.py
+# reads this (and the other constants above, in every committed version) so that --purge removes them.
 DEFAULT_FILES = {
     "requirements": "docs/requirements-definition.md",
     "requirements_dir": "docs/requirements",
@@ -432,9 +431,16 @@ class Installer:
         else:
             self.note("SAME", CONFIG)
 
-    def ensure_lines(self, rel: str, lines: List[str], header: str) -> None:
+    def read_text_eol(self, rel: str) -> Tuple[str, str]:
+        """The file's text with LF line ends, and the line end it uses (kept on write, so that the uninstaller can
+        give the file back byte for byte)."""
         p = self.target / rel
-        text = p.read_text(encoding="utf-8") if p.exists() else ""
+        raw = p.read_bytes() if p.exists() else b""
+        eol = "\r\n" if b"\r\n" in raw else "\n"
+        return raw.decode("utf-8").replace("\r\n", "\n"), eol
+
+    def ensure_lines(self, rel: str, lines: List[str], header: str) -> None:
+        text, eol = self.read_text_eol(rel)
         existing = {l.strip() for l in text.splitlines()}
         missing = [l for l in lines if l not in existing and not (l == "/work/" and existing & {"work/", "/work", "work"})]
         if not missing:
@@ -444,11 +450,10 @@ class Installer:
         if text and not text.endswith("\n"):
             text += "\n"
         text += ("\n" if text else "") + header + "\n" + "\n".join(missing) + "\n"
-        self.write_bytes(rel, text.encode("utf-8"))
+        self.write_bytes(rel, text.replace("\n", eol).encode("utf-8"))
 
     def ensure_block(self, rel: str, title: str) -> None:
-        p = self.target / rel
-        text = p.read_text(encoding="utf-8") if p.exists() else ""
+        text, eol = self.read_text_eol(rel)
         block = f"{BEGIN}\n{INSTRUCTIONS_BLOCK}\n{END}"
         if BEGIN in text and END in text:
             pre, rest = text.split(BEGIN, 1)
@@ -460,7 +465,7 @@ class Installer:
             self.note("SAME", rel)
             return
         self.note("BLOCK", rel)
-        self.write_bytes(rel, new.encode("utf-8"))
+        self.write_bytes(rel, new.replace("\n", eol).encode("utf-8"))
 
     def write_manifest(self, version: str) -> None:
         data = {
@@ -473,161 +478,30 @@ class Installer:
         self.note("MANIFEST", MANIFEST)
         self.write_bytes(MANIFEST, (json.dumps(data, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
 
-    # ---- uninstall / cleanup -------------------------------------------------------------------
-
-    def remove_path(self, rel: str, kind: str = "REMOVE") -> None:
-        """Delete a file or directory under the target and prune the directories it leaves empty."""
-        p = self.target / rel
-        self.note(kind, rel)
-        if self.dry:
-            return
-        if p.is_dir() and not p.is_symlink():
-            shutil.rmtree(p, ignore_errors=True)
-        else:
-            p.unlink(missing_ok=True)
-        if p.suffix == ".py":
-            cache = p.parent / "__pycache__"
-            for pyc in cache.glob(p.stem + ".*.pyc"):
-                pyc.unlink(missing_ok=True)
-            self.prune_dirs(cache)
-        self.prune_dirs(p.parent)
-
-    def prune_dirs(self, d: Path) -> None:
-        root = self.target.resolve()
-        d = d.resolve()
-        while d != root and root in d.parents:
-            try:
-                d.rmdir()
-            except OSError:
-                return
-            d = d.parent
-
-    def uninstall_files(self) -> None:
-        recorded = self.manifest.get("files", {})
-        if recorded:
-            candidates = dict(recorded)
-        else:
-            # No manifest (deleted or never written): treat a file as unmodified when it equals this toolkit's copy.
-            candidates = {dest_of(rel): (sha(self.source / rel) if (self.source / rel).exists() else None) for rel in MANAGED}
-            if any((self.target / rel).exists() for rel in candidates):
-                self.note("WARN", f"{MANIFEST} がないため、この版の toolkit と同じ内容のファイルだけを削除します")
-        for rel, h in candidates.items():
-            p = self.target / rel
-            if not p.is_file():
-                continue
-            if self.force or (h is not None and is_recorded(p, h)):
-                self.remove_path(rel)
-            else:
-                self.note("KEEP-LOCAL", rel)
-
-    def remove_backups(self) -> None:
-        for rel in sorted({dest_of(r) for r in MANAGED} | set(self.manifest.get("files", {})) | {CONFIG}):
-            d = (self.target / rel).parent
-            if d.is_dir():
-                for b in sorted(d.glob(Path(rel).name + ".ebak-backup-*")):
-                    self.remove_path(b.relative_to(self.target).as_posix())
-
-    def remove_blocks(self) -> None:
-        for rel, title in (("AGENTS.md", "# AGENTS.md"), (".github/copilot-instructions.md", "# Copilot instructions")):
-            p = self.target / rel
-            if not p.is_file():
-                continue
-            text = p.read_text(encoding="utf-8")
-            changed = False
-            while BEGIN in text and END in text.split(BEGIN, 1)[1]:
-                pre, rest = text.split(BEGIN, 1)
-                text = pre.rstrip() + "\n\n" + rest.split(END, 1)[1].lstrip("\n")
-                changed = True
-            if not changed:
-                continue
-            text = text.strip() + "\n"
-            if text.strip() in ("", title):
-                self.remove_path(rel, "UNBLOCK")
-            else:
-                self.note("UNBLOCK", rel)
-                self.write_bytes(rel, text.encode("utf-8"))
-
-    def remove_lines(self, rel: str, lines: List[str], header: str) -> None:
-        p = self.target / rel
-        if not p.is_file():
-            return
-        text = p.read_text(encoding="utf-8")
-        drop = set(lines) | {header}
-        kept: List[str] = []
-        in_section = False
-        for l in text.splitlines():
-            if l.strip() == header or l.strip().startswith(TOOLKIT_HEADER_PREFIX):
-                in_section = True
-                continue
-            if in_section and l.strip():
-                continue  # every line the toolkit appended under its header, whatever version wrote it
-            in_section = False
-            if l.strip() not in drop:
-                kept.append(l)
-        if len(kept) == len(text.splitlines()):
-            return
-        out: List[str] = []
-        for l in kept:
-            if not l.strip() and (not out or not out[-1].strip()):
-                continue
-            out.append(l)
-        while out and not out[-1].strip():
-            out.pop()
-        if not out:
-            self.remove_path(rel, "UNAPPEND")
-            return
-        self.note("UNAPPEND", rel)
-        self.write_bytes(rel, ("\n".join(out) + "\n").encode("utf-8"))
-
-    def purge_data(self) -> None:
-        """Remove the management data, config and run files that the toolkit created (--purge)."""
-        cfg = dict(DEFAULT_FILES)
-        work_dir = "work"
-        try:
-            data = json.loads((self.target / CONFIG).read_text(encoding="utf-8"))
-            cfg.update({k: v for k, v in (data.get("files") or {}).items() if isinstance(v, str) and v})
-            work_dir = (data.get("work") or {}).get("dir") or work_dir
-        except (OSError, json.JSONDecodeError, AttributeError):
-            pass
-        rels = list(dict.fromkeys(TEMPLATES + [v for v in cfg.values()] + [work_dir, CONFIG]))
-        root = self.target.resolve()
-        for rel in rels:
-            p = (self.target / rel).resolve()
-            if p == root or root not in p.parents:
-                self.note("SKIP(outside repo)", rel)
-                continue
-            if p.exists():
-                self.remove_path(rel)
+    # ---- clean install ---------------------------------------------------------------------------
 
     def clean(self) -> None:
-        """--clean: delete every file the toolkit installed, whatever version and whether modified, so that the
-        install that follows starts from scratch. Kept: the management data (docs/*, the ledger), /work, your code."""
-        for rel in sorted(set(self.manifest.get("files", {})) | {dest_of(r) for r in MANAGED}):
-            if (self.target / rel).is_file():
-                self.remove_path(rel, "CLEAN")
-        self.remove_backups()
-        if (self.target / CONFIG).is_file():
-            self.remove_path(CONFIG, "CLEAN")
-        self.remove_blocks()
-        self.remove_lines(".gitignore", GITIGNORE_LINES, GITIGNORE_HEADER)
-        self.remove_lines(".gitattributes", GITATTR_LINES, GITATTR_HEADER)
-        if (self.target / MANIFEST).is_file():
-            self.remove_path(MANIFEST, "CLEAN")
+        """--clean: delete every file the toolkit installed, whatever version (tools/uninstall-catalog.json knows every
+        version, also without a manifest) and whether modified, so that the install that follows starts from scratch.
+        Kept: the management data (docs/*, the ledger), /work, your code."""
+        mod = load_uninstaller(self.source)
+        u = mod.Uninstaller(self.target, mod.load_catalog(None), self.dry, force=True, label="CLEAN")
+        u.recorded.update(self.manifest.get("files", {}))
+        u.clean()
+        self.actions.extend(u.actions)
         self.manifest = {"files": {}}
 
-    def uninstall(self, purge: bool = False) -> None:
-        self.uninstall_files()
-        self.remove_blocks()
-        if purge:
-            self.remove_backups()
-            self.purge_data()
-            self.remove_lines(".gitignore", GITIGNORE_LINES, GITIGNORE_HEADER)
-            self.remove_lines(".gitattributes", GITATTR_LINES, GITATTR_HEADER)
-        if (self.target / MANIFEST).exists():
-            self.remove_path(MANIFEST)
-        if not purge:
-            self.note("KEEP", "docs/*, tests/system/ledger.json, scripts/ebak.config.json, /work, .gitignore, .gitattributes"
-                              "（管理データと設定は残します。すべて削除するには --purge）")
+
+def load_uninstaller(source: Path):
+    """tools/uninstall.py of the toolkit source: the one implementation of uninstall / purge / clean."""
+    import importlib.util
+    path = source / "tools" / "uninstall.py"
+    if not path.is_file():
+        raise SystemExit(f"ERROR install: {path} がありません（toolkit のソースを最新にします）")
+    spec = importlib.util.spec_from_file_location("ebak_uninstall", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    return mod
 
 
 def run_data_layer(target: Path, apply: bool) -> int:
@@ -688,8 +562,17 @@ def main(argv=None) -> int:
 
     dry = args.dry_run or args.check
     uninstalling = args.uninstall or args.purge
+    if uninstalling:
+        if args.clean or args.check:
+            raise SystemExit("ERROR install: --uninstall・--purge は --clean・--check と同時に指定できません")
+        argv2 = ["--target", str(target)]
+        for flag, on in (("--purge", args.purge), ("--force", args.force), ("--dry-run", args.dry_run),
+                         ("--allow-non-git", args.allow_non_git)):
+            if on:
+                argv2.append(flag)
+        return load_uninstaller(source).main(argv2)
     if args.clean:
-        if uninstalling or args.check:
+        if args.check:
             raise SystemExit("ERROR install: --clean は --uninstall・--purge・--check と同時に指定できません")
         if not (target / ".git").exists():
             raise SystemExit("ERROR install: --clean は git リポジトリでだけ使えます（消したファイルを git から戻せるようにするため）")
@@ -698,34 +581,28 @@ def main(argv=None) -> int:
             raise SystemExit("ERROR install: --clean の前に、未 commit の変更を commit するか退避します（git status）")
     ins = Installer(source, target, dry, args.force, args.no_ci)
     version = toolkit_version(source)
-    if uninstalling:
-        ins.uninstall(purge=args.purge)
+    if args.clean:
+        ins.clean()
+    if args.clean and dry:
+        ins.note("INSTALL", "（削除のあとに、新規の導入と同じようにすべてを入れ直します）")
     else:
-        if args.clean:
-            ins.clean()
-        if args.clean and dry:
-            ins.note("INSTALL", "（削除のあとに、新規の導入と同じようにすべてを入れ直します）")
-        else:
-            ins.install_managed()
-            ins.keep_orphans()
-            ins.install_templates()
-            ins.install_config()
-            ins.ensure_lines(".gitignore", GITIGNORE_LINES, GITIGNORE_HEADER)
-            ins.ensure_lines(".gitattributes", GITATTR_LINES, GITATTR_HEADER)
-            ins.ensure_block("AGENTS.md", "# AGENTS.md\n\n")
-            ins.ensure_block(".github/copilot-instructions.md", "# Copilot instructions\n\n")
-            if ins.manifest.get("version") != version or any(k not in ("SAME", "EXISTS", "KEEP-LOCAL") for k, _ in ins.actions):
-                ins.write_manifest(version)
+        ins.install_managed()
+        ins.keep_orphans()
+        ins.install_templates()
+        ins.install_config()
+        ins.ensure_lines(".gitignore", GITIGNORE_LINES, GITIGNORE_HEADER)
+        ins.ensure_lines(".gitattributes", GITATTR_LINES, GITATTR_HEADER)
+        ins.ensure_block("AGENTS.md", "# AGENTS.md\n\n")
+        ins.ensure_block(".github/copilot-instructions.md", "# Copilot instructions\n\n")
+        if ins.manifest.get("version") != version or any(k not in ("SAME", "EXISTS", "KEEP-LOCAL") for k, _ in ins.actions):
+            ins.write_manifest(version)
 
     width = max((len(k) for k, _ in ins.actions), default=4)
     for kind, rel in ins.actions:
         print(f"{kind.ljust(width)}  {rel}")
     pending = [a for a in ins.actions if a[0] not in ("SAME", "EXISTS", "KEEP-LOCAL", "KEEP", "WARN")]
     kept = [rel for k, rel in ins.actions if k == "KEEP-LOCAL"]
-    if uninstalling:
-        mode = ("purge" if args.purge else "uninstall") + (" (dry-run)" if dry else "")
-    else:
-        mode = ("clean " if args.clean else "") + ("check" if args.check else ("dry-run" if args.dry_run else "install"))
+    mode = ("clean " if args.clean else "") + ("check" if args.check else ("dry-run" if args.dry_run else "install"))
     print(f"\nEnterprise App Build Kit {version}: {mode} {target}  changes={len(pending)}")
     orphans = getattr(ins, "orphans", [])
     if orphans:
@@ -743,19 +620,9 @@ def main(argv=None) -> int:
               "scripts/ebak.config.json の extensions.checks に {\"module\": \"…\", \"function\": \"…\", \"target\": \"rdcheck\"} を足すか、"
               "scripts/ext/ に置きます。toolkit のファイルは編集しません（users-guide/04-customization.md の「検査の拡張」）。")
     if kept:
-        if uninstalling:
-            print(f"注意: ローカルで変更されたファイルは削除していません（{len(kept)} 件）。削除するには --force。")
-        else:
-            print(f"注意: ローカルで変更されたファイルは更新していません（{len(kept)} 件）。上書きするには --force（バックアップを残します）。")
+        print(f"注意: ローカルで変更されたファイルは更新していません（{len(kept)} 件）。上書きするには --force（バックアップを残します）。")
     if args.check:
         return 1 if pending else 0
-    if uninstalling:
-        if not dry:
-            print("\n次の手順:")
-            print("  1. 変更を確認して commit します: git status && git add -A && git commit -m \"Remove Enterprise App Build Kit\"")
-            if not args.purge:
-                print("  2. 管理データ・設定・/work も消すには --purge で再実行します（先に --dry-run で確認できます）")
-        return 0
     if dry:
         return 0
     preflight()

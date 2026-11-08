@@ -17,6 +17,7 @@ All scripts run on the Python 3.9+ standard library only. They can be run from a
 | `scripts/summarize.py` | Summary of long logs | Nothing |
 | `scripts/adopt.py` | Adopting an existing app | `docs/baseline/`, `tests/system/golden/`, `work/import/` |
 | `tools/install.py` | Install, update, uninstall | The target repository |
+| `tools/uninstall.py` | Remove EABK installed by any version (what `install.py --uninstall` / `--purge` run) | The target repository |
 
 ## ebaklib.py (shared library)
 
@@ -238,13 +239,37 @@ python tools/install.py --version
 | `--no-ci` | Do not install `.github/workflows/ebak-verify.yml` |
 | `--no-repair` | Do not repair after installing; print only the check and repair plan with `rdfix.py --full`. `-NoRepair` in the PowerShell wrapper |
 | `--skip-verify` | Neither check nor repair the data layer after installing |
-| `--uninstall` / `--purge` | Remove (see the examples above) |
+| `--uninstall` / `--purge` | Remove (see the examples above). Runs `tools/uninstall.py` with `--target`, `--purge`, `--force`, `--dry-run`, `--allow-non-git` |
 | `--allow-non-git` | Install into a directory that is not a git repository |
 | `--version` | Print the toolkit version and exit |
 
 What it does (idempotent): installs the distributed files (rd-auditor, skills, `ebak-verify.yml`, `scripts/*`, EABK-Studio; Studio's tests `EABK-Studio/tests/` are not installed) and updates them if unmodified. Management-data templates (requirements definition, catalog, external integration catalog, ID registry, ledger) are created only when missing. `scripts/ebak.config.json` gets new keys while your values are kept (a new install gets an empty `verify.commands`: `[]`). It adds `/work/` to `.gitignore` (header `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`), `docs/id-registry.md merge=union` to `.gitattributes`, and the rules block to `AGENTS.md` and `.github/copilot-instructions.md`, and records versions and hashes in `.github/ebak-toolkit.json`. Finally it runs `rdfix.py --full --apply` once (the requirements definition is never changed and the repair is not committed).
 
-An update handles only the files this version ships. Files an older version installed that this version no longer ships are not deleted; they stay in the manifest (so `--clean` can find them) and their count is shown as a note. There is no migration code for older versions (no per-version removal list, no settings rewrite). When updating from an older version (such as 0.5.x), use `--clean`. Even after `--clean`, data-layer files from older versions (such as `docs/run-history.md` from 0.5.x) and the worktrees and `work/*` branches left by 0.5.x runs remain; delete them by hand if you do not need them ([9.4](09-versioning.en.md#94-updating-from-an-older-version-clean-install)).
+An update handles only the files this version ships. Files an older version installed that this version no longer ships are not deleted; they stay in the manifest (so `--clean` can find them) and their count is shown as a note. There is no migration code for older versions (no per-version removal list, no settings rewrite). When updating from an older version (such as 0.5.x), use `--clean`. Even after `--clean`, data-layer files from older versions (such as `docs/run-history.md` from 0.5.x) and the worktrees and `run/*` branches left by 0.5.x runs remain. The worktrees and merged branches can be removed with `python tools/uninstall.py --target <repo> --runs`; delete the data-layer files by hand if you do not need them ([9.4](09-versioning.en.md#94-updating-from-an-older-version-clean-install)).
+
+## tools/uninstall.py (remove any version)
+
+Not installed into the target. Usually used through `tools/uninstall.ps1` / `tools/uninstall.sh` (one command that fetches only `uninstall.py` and the catalog and runs it; see the [README](../README.en.md#uninstalling-and-cleaning-up)).
+
+```bash
+python tools/uninstall.py --target <repo> --dry-run          # list what would be done (changes nothing)
+python tools/uninstall.py --target <repo>                    # remove toolkit files, blocks, and manifests
+python tools/uninstall.py --target <repo> --purge --runs     # also management data, settings, /work, appended lines, backups, old runs
+```
+
+| Option | Behavior |
+|---|---|
+| `--target DIR` | The target (top of a git repository; default: current directory) |
+| `--catalog FILE` | The catalog (default: `uninstall-catalog.json` next to the script) |
+| `--dry-run` | Print the operations without writing (exit 0) |
+| `--purge` | Also remove management data, settings (`ebak` and `hve`), `/work`, the lines appended to `.gitignore` / `.gitattributes`, `*.ebak-backup-*`, `*.hve-backup-*` |
+| `--force` | Also remove modified toolkit files (only at paths recorded in a manifest or shipped by this version) |
+| `--runs` | Remove the old conductor's worktrees and the `run/*` branches merged into HEAD (default: list only; links are never followed) |
+| `--allow-non-git` | Run even if the target is not the top of a git repository |
+
+Decision: a file is removed if it is at a path some version shipped and its content (ignoring line-ending differences) matches some version's content at that path or a hash recorded in a manifest. A non-matching file at a path only old versions used is kept as yours (`KEEP-UNKNOWN`). Output: one line per item (`REMOVE`, `UNBLOCK`, `UNAPPEND`, `KEEP-LOCAL`, ...) and a final `changes=N`. Exit code: 0 = nothing of EABK remains in the chosen scope, 1 = something remains (listed under `RESIDUE`), 2 = error.
+
+The catalog `tools/uninstall-catalog.json` is built by `tools/build-uninstall-catalog.py` from every version of `tools/install.py` (including versions that came in through merges) and the blobs each version shipped. `tools/bump-version.py` rebuilds it on every version bump, and `--check` tells whether it is stale. Installing and removing every version is verified with `tools/verify-uninstall-matrix.py` ([docs/manual-tests.en.md](../docs/manual-tests.en.md)).
 
 ## EABK-Studio (data-layer viewer)
 

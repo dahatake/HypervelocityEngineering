@@ -15,6 +15,7 @@ ID（FR・NFR・AC・Q・PARAM）は `python scripts/next-id.py <種別>` でだ
 
 | 日付 | 依頼の要約 | 行き先（要求 ID・Q・不採用の理由） | 反映した回答 | 監査で直した不整合 |
 |---|---|---|---|---|
+| 2026-11-08 | EABK のアンインストーラーを作り、旧版も含めて完全に削除でき、他のリポジトリでも使えるようにする | 新規: FR-1087、AC-475〜AC-478。出典 SRC-044 | なし（依頼による承認） | なし |
 | 2026-11-08 | 旧版からの移行の処理をやめ、すべての既存のファイルを削除して導入し直すクリーンインストール（`--clean`）で代替する | 変更: FR-1085（題名と要求の本文）、AC-468（`--clean` の削除と導入の範囲・冪等）、AC-469（`--clean` の安全の条件・dry-run・通常の更新の案内）、AC-473（0.5.x の更新の文を削除）、G-010 の成功指標の文。新規・廃止の ID なし。出典 SRC-043 | なし（依頼による承認） | なし |
 | 2026-11-08 | 旧版（0.5.x）との互換性を捨て、実行履歴（`docs/run-history.md`）の扱いをすべて削除する | 変更: PARAM-026（修復の対象を 4 種類に）、FR-1085 の AC-473（`.gitattributes` の文言を削除）、EABK Studio の FR・AC（AC-043・AC-051・AC-191・AC-225・AC-280、データ層の構造判定表）から実行履歴を除く。新規・廃止の ID なし。出典 SRC-043 | なし（依頼による承認） | なし |
 | 2026-11-08 | EABK を EABK Lite に作り替える（work/EABKUnnesessaryAnalyticsRepor.md §7） | 新規 G-010、FR-1084（AC-465・AC-466）、FR-1085（AC-467〜AC-469・AC-473・AC-474）、FR-1086（AC-470〜AC-472。EABK Studio のコードのモード）、SRC-043、領域「EABK Lite の配布と検査」。廃止: FR-1015、FR-1081、FR-1017、FR-1018、FR-1019、NFR-SEC-004、NFR-OPS-006、FR-1009、FR-1010、FR-1016、FR-1064、FR-1065、FR-1074、FR-1075、FR-1076、FR-1077、NFR-OPS-005、NFR-OPS-008、NFR-OPS-009、NFR-OPS-010、NFR-COMPAT-001（conductor・worktree の run・/build・watch・並行 run の所有・run の清掃・hook と定型文の付与・データ層を修復するワークフローを撤去）。変更: FR-010（既定と切替の対象にコードのモードを加える）、FR-1044（AC-235・AC-236 からワークフローを外す）、NFR-PERF-003（worktree への証跡の配置の AC-452 を削除）、FR-1039（題名と本文の rd-author を手順書に）。台帳: 撤去したテストのケース E2E-026・027・029・031・033〜035・075・189・219・221 ・IT-059 を block | なし（依頼による承認） | なし |
@@ -656,6 +657,21 @@ G-008（並列 run の持ち主）の PARAM は次のとおり。
 - 受入基準 AC-474: `rdcheck.py check` と `verify.py` は run を前提とする `--run`・`--strict`・`--strict-ledger` を受け付けず（引数の誤りとして exit 2）、CHK-21 を報告せず、`ledger.py run` は結果を `work/system-test/results.json` に記録する。
   - 検証レベル: integration
 
+#### FR-1087 全版に対応したアンインストール
+- 要求: EABK の利用者は、どの版の EABK を導入したリポジトリからでも（旧名 hve の版・manifest がない導入先を含む）、1 つのコマンドで EABK が入れたものを削除し、`--purge` では導入前のリポジトリに戻せる。アンインストーラーは toolkit のリポジトリを clone せず、スクリプトと、全版の配布物の内容のハッシュを git の履歴から作ったカタログの 2 ファイルだけで動く。利用者のファイルと利用者が変更したファイルは削除しない。
+- 決定状態: 承認済み（依頼 2026-11-08）　出自: 依頼原文　優先度: MUST（旧版の導入先は manifest と現行の配布物の一覧だけでは削除しきれず、旧名のファイル・ブロック・設定が残っていたため）
+- 上位: G-010　出典: SRC-044　領域: EABK Lite の配布と検査
+- 対象エンティティ: なし　関係する状態: なし　参照パラメータ: なし
+- 関連する既存資産: `tools/uninstall.py`、`tools/uninstall-catalog.json`、`tools/build-uninstall-catalog.py`、`tools/uninstall.ps1`・`tools/uninstall.sh`、`tools/install.py` の `--uninstall`・`--purge`・`--clean`
+- 受入基準 AC-475: manifest がない導入先でも、どれかの版が配布したパスにあり、内容がその版のどれかの内容（または manifest に記録されたハッシュ）と一致するファイル、すべての版のブロックの印（`ebak-abk`・`hve-abk`・`hve-conductor`）で囲まれたブロック、manifest（`.github/ebak-toolkit.json`・`.github/hve-toolkit.json`）を削除し、`--purge` では設定（`scripts/ebak.config.json`・`scripts/hve.config.json`）と設定が示す管理データ・`/work`・`.gitignore` と `.gitattributes` のすべての版の見出しの節・`.ebak-backup-*`・`.hve-backup-*` も削除する。どの版の内容とも一致しないファイルは残し、この版が配布するか manifest に記録されたパスのものだけを `--force` で削除する。旧版だけが使ったパスの利用者のファイル（例: 利用者自身の `users-guide/README.md`）は `--force` でも削除しない。シンボリックリンクとジャンクションはたどらない。
+  - 検証レベル: integration
+- 受入基準 AC-476: カタログは `tools/install.py` のすべての commit された版（merge で入った版を含む）の配布物・テンプレート・manifest・設定・ブロックの印・追記の見出しと行を、版ごとのパスの対応（`GUIDE_SRC`→`GUIDE_DEST`）を含めて git の履歴から生成し、この版の配布物のすべてのパスと版を含む。版の更新（`tools/bump-version.py`）でカタログを作り直す。
+  - 検証レベル: integration
+- 受入基準 AC-477: 旧版の conductor が作った worktree（`<リポジトリ名>-run-*`・`work/worktrees/*`・`run/*` のブランチの worktree）と `run/*` のブランチは、既定では一覧を示すだけで変えない。`--runs` では、worktree の中の依存のリンクをリンクだけ外して（リンク先は変えない）worktree を削除し、HEAD に取り込み済みの `run/*` のブランチだけを削除し、取り込まれていないブランチは残して残存として示す。
+  - 検証レベル: integration
+- 受入基準 AC-478: 利用者のファイルを commit したリポジトリに導入してから `--purge` を実行すると、`git status --porcelain --ignored` が空になる（AGENTS.md・`.gitignore` の改行コード CRLF を含めてバイト単位で導入前に戻る）。`--dry-run` は何も変えずに exit 0 で一覧を示し、続けてもう一度実行しても何も変えない。終了コードは、選んだ範囲に EABK が残らなければ 0、残れば 1（RESIDUE の一覧を示す）、誤りは 2。`tools/uninstall.ps1`・`tools/uninstall.sh` は toolkit の clone の中ではその 2 ファイルを、それ以外では 2 ファイルだけをダウンロードして実行し、`install.py --uninstall`・`--purge` は同じ実装を使う。
+  - 検証レベル: integration
+
 ### 6.2 非機能要求
 
 #### NFR-SEC-004  データ層ワークフローの最小権限と書き込みの安全性
@@ -834,6 +850,7 @@ G-008（並列 run の持ち主）の PARAM は次のとおり。
 
 | 日付 | 対象 ID | 決定 | 根拠（依頼・Q・承認依頼・包括承認） | run-id |
 |---|---|---|---|---|
+| 2026-11-08 | FR-1087、AC-475〜AC-478 | 旧版を含めて EABK を完全に削除できるアンインストーラーを、git の履歴から生成した全版の内容のハッシュのカタログで判定する方式で作る。判定は内容の一致で行い、旧版だけが使ったパスの一致しないファイルは利用者のものとして残す。旧版の conductor の worktree とブランチは既定で表示だけとし、`--runs` で取り込み済みのものだけを削除する。インストーラーは利用者のファイルの改行コードを保つ（バイト単位で戻せるように） | 依頼（2026-11-08）、SRC-044 | - |
 | 2026-11-08 | G-010、FR-1084、FR-1085、AC-465〜AC-474、FR-1086、FR-1015、FR-1081、FR-1017〜FR-1019、NFR-SEC-004、NFR-OPS-006、FR-1009、FR-1010、FR-1016、FR-1064、FR-1065、FR-1074、FR-1075、FR-1076、FR-1077、NFR-OPS-005、NFR-OPS-008、NFR-OPS-009、NFR-OPS-010、NFR-COMPAT-001、AC-452 | EABK Lite: オーケストレーション（conductor・作業役・worktree の run・/build）と hook（役割のゲート・定型文の付与）を撤去し、規則（AGENTS.md）・データ層・決定的な検査（既定 lite。プロファイルは検査と修復のすべてに同じように効く）・節目の手動監査・EABK Studio を残す。CI は検査だけ（読み取り権限）とし、自動修復のワークフローを撤去する。run を前提とする検査のつまみ（`--run`・`--strict`・`--strict-ledger`・CHK-21）を撤去する。EABK Studio は EABK のないリポジトリをコードのモードで表示する。撤去した機能の要求は廃止し、ケースは block する | 依頼（2026-11-08）、分析 SRC-043 | - |
 | 2026-11-06 | FR-1082、FR-1083、NFR-PERF-003、AC-458〜AC-464 | 明示依頼の4点を既存要求へ反映し承認。extensions は check 互換のまま list・trace と宣言的修復を追加、installer は配線検出と明示オプションによる判定不能の非0、share は改行だけの同一視とする。実装はこの3境界に限定する。許可範囲の拡大はしないため、保護された外部連携カタログの自動作成は含めない。既存の検査・修復の安全条件と、既定の配布挙動を維持する | 承認済み（依頼 2026-11-06・SRC-042）。包括承認の追加なし。構成・関数属性・宣言的修復は明示された互換条件の具体化 | 202611060711 |
 | 2026-11-02 | FR-1053〜FR-1055、NFR-UX-012、FR-1063、FR-1066、FR-1067 | RPG 削除は依頼による承認（包括承認なし）。既存要求・ACの本文は変更せず、新規要求・ACも作らない。前回 BLOCKED は RPG コード統合、reviewer 承認、integration 16/16・System Tests pass、AC-391/E2E-216 同期後の確認で解消した（32a19a34、e5b4fec2。テスト機構修正 2b85230e）。監査 CAT-001 の現行カタログ参照は解消済み。監査の既存 URL 安全境界および NFR-UX-009 等は今回範囲外で、既存記録を維持 | 利用者依頼（run 202611020515）。包括承認なし | 202611020515 |
@@ -863,7 +880,7 @@ G-008（並列 run の持ち主）の PARAM は次のとおり。
 | 運用・run の監視 | G-007 | 0 |
 | 運用・run の並列実行 | G-008 | 0 |
 | 利用者 Prompt の補助 | G-009 | 0 |
-| EABK Lite の配布と検査 | G-010 | 2 |
+| EABK Lite の配布と検査 | G-010 | 3 |
 | データ層の検査・修復 | G-005 | 13 |
 | 管理データの構造化 | G-005 | 7 |
 | 企業データカタログ整合 | G-005 | 3 |
@@ -886,6 +903,7 @@ G-008（並列 run の持ち主）の PARAM は次のとおり。
 | FR-1082 | データ層の検査・修復 |
 | FR-1084 | EABK Lite の配布と検査 |
 | FR-1085 | EABK Lite の配布と検査 |
+| FR-1087 | EABK Lite の配布と検査 |
 | FR-1083 | データ層の検査・修復 |
 | NFR-REL-002 | データ層の検査・修復 |
 | NFR-REL-003 | データ層の検査・修復 |
@@ -2485,6 +2503,7 @@ EABK の要求定義書、カタログ、System Test 台帳、ID 台帳は、複
 | SRC-041 | 利用者依頼（run 202611060524）「toolkit 更新（scripts/*.py の上書き）で、rdcheck.py・rdfix.py・metadata.json に足したプロジェクト固有の検査（integration_catalog.py、entity_classes.py）の呼び出し配線が脱落する」（要望: 拡張点、更新時の警告、verify の 1 行表示。受入: 更新後も呼ばれる、登録を消して更新すると警告）、現状の `tools/install.py`（`install_managed` の `.ebak-backup-*`、`install_config` のマージ）、`scripts/ebak.config.json`、`rdcheck.py similar` | 2026-11-06 | 依頼全文。similar で同目的の既存要求なし。コードは概観のみ（実装工程で詳細を読む）。外部確認未実施・社内情報未確認 | 2026-11-06 | 本文 |
 | SRC-042 | 利用者依頼（run 202611060711）4点と読取専用一次資料。利用側 `C:\GitHub\BusinessAnalyticsStudio\scripts\ext\project_checks.py`（apply の argv 判定と直接書込）、`scripts/entity_classification.json`（独立定義）、`scripts/rdcheck.py` の list 1158行以降・trace 1559行以降（import integration_catalog／ic.*）、`scripts/integration_catalog.py` の parse・trace、`tests/system/integration-catalog/tooling.test.mjs` および support.mjs の基点比較。本体 `scripts/extpoints.py`、`scripts/rdcheck.py`、`scripts/rdfix.py`、`scripts/ebaklib.py` の share_dirs、`tools/install.py` の find_dropped_wiring／check_wiring、`tests/toolkit/test_time_limits.py`、既存の拡張 integration／system テスト、`users-guide/04-customization.md` | 2026-11-06 | 依頼全文と対象コード・テストの該当箇所を読取。現状はcheck専用登録、利用側のlist／trace直接配線、argvでの書込、manifest等のバイト比較。89件のNodeテストは依頼の申告で、この要求編集では利用側テスト・CLI移行・OS別リンクを未実行。新しい外部連携の要求やカタログ内容の整理は範囲外 | 2026-11-06 | 本文・該当箇所 |
 | SRC-043 | 利用者依頼「EABK を EABK Lite に大規模修正する」と、その根拠の分析 `work/EABKUnnesessaryAnalyticsRepor.md`（VideoCreator・HubRadio-MovieCreator・HypervelocityEngineering の git 履歴、セッションの記録、run-history、verify の結果） | 2026-11-08 | §0 結論、§4 コスト・失敗例、§5 複数の人・PC、§6 Studio、§7 残すもの・やめるもの | 2026-11-08 | 本文 |
+| SRC-044 | 利用者依頼「EABK のアンインストーラーを作成する。旧版も含めて完全削除できるようにし、他のリポジトリでも使えるようにする」と、その一次資料の `tools/install.py` の全版（`git log --full-history -m` で merge を含む 91 版）の `MANAGED`・`TEMPLATES`・manifest・設定・ブロックの印・追記の見出し、各版の配布物の blob | 2026-11-08 | 依頼全文と全版の installer。各版の installer を実際に動かして導入し、削除後の `git status --porcelain --ignored` を確かめた | 2026-11-08 | 本文・git の履歴 |
 | SRC-037 | 利用者依頼（run 202610222228）「複数 chat で conductor（/build）を同時に動かしたときの hook の誤拒否（残存リスク）を起こさない」と、調査レポート `work/202610222225-PararellTaskExecution-Report.md`（§5 R1〜R9、§6 の改善案）、`scripts/run-state.py`（take_start_claim）、`scripts/hooks/gate.py`（record_start_claim・bind_sibling_run・on_user_prompt） | 依頼 2026-10-22・作業ツリー run/202610222228 | 依頼全文とレポートの記述（R1・R2 claim の FIFO とロックなし、R3 所有者なし run の救済、R4 主ツリー運用の run_active、R6 template 状態の共有、R9 auto の再配分なし）。コードの詳細な読込は実装工程で行う。外部確認未実施・社内情報未確認 | 2026-10-22 | 本文 |
 | SRC-038 | 利用者依頼（run 202610250847）「ヘッダーの 2D/3D/RPG に Graph を追加」と、文献: Ghoniem ら (2004) node-link と隣接行列の比較、Shneiderman (1996) Overview first、Herman ら (2000) グラフ可視化サーベイ、Purchase (1997) 辺の交差、Sugiyama ら (1981) 階層レイアウト、Fruchterman & Reingold (1991) 力学モデル、Cleland-Huang ら (2012) Traceability、Chen (1976)、Harel (1987)、Microsoft Fluent 2 / Fluent UI System Icons（MIT）、`EABK-Studio/web/js/dim.js`・`app.js`・`diagrams.js`・`entities.js`・`ui.js` | 2026-10-25 | 依頼の調査材料（conductor の references）。文献の原文は未取得で書誌情報による。社内情報未確認 | 2026-10-25 | 本文 |
 | SRC-033 | 利用者依頼（run 202610171423）「EABK Studio の表現に『RPG 風』を追加」、`EABK-Studio/web/js/dim.js`・`map2d.js`・`app.js`（2D/3D 切替と既定 2D）、FR-1040・FR-1041 | 2026-10-17 | 依頼全文（2D 既定を保つ、ファミコンの 2 次元 RPG の世界観、音楽・SE・キャラクターを外部アセットなしで生成、既存著作物の複製なし、ファミコン風の操作）。既存の切替・アイコン生成の前例を構造の範囲で確認。外部調査は未実施 | 2026-10-17 | 本文（構造の確認の範囲） |

@@ -260,21 +260,31 @@ curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/m
 curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.sh | bash -s -- --purge
 ```
 
-toolkit を clone 済みの場合は `python tools/install.py --target /path/to/your-repo --uninstall`（または `--purge`）です。`install.ps1 -Uninstall`、`install.sh --uninstall` でも同じです。
+toolkit を clone 済みの場合は `python tools/uninstall.py --target /path/to/your-repo`（または `--purge`）です。`python tools/install.py --target ... --uninstall`・`--purge`、`install.ps1 -Uninstall`、`install.sh --uninstall` も同じ実装を使います。
+
+**どの版の EABK でも削除できます。** アンインストーラーは、`tools/install.py` のすべての版（旧名 hve の版を含む）が配布したファイルの内容のハッシュを git の履歴から集めたカタログ `tools/uninstall-catalog.json` で判定します。ダウンロードするのは `uninstall.py` とカタログの 2 ファイルだけで、toolkit の clone は要りません。マニフェストがない導入先でも、旧版のファイル（`hvelib.py`・`hve-verify.yml`・conductor など）、旧版のブロックの印（`hve-abk`・`hve-conductor`）、旧版の設定とマニフェスト（`scripts/hve.config.json`・`.github/hve-toolkit.json`）、`*.hve-backup-*` も削除します。
+
+| オプション（PowerShell） | 内容 |
+|---|---|
+| `--dry-run`（`-DryRun`） | 何も変えずに、行う操作を一覧で表示します |
+| `--purge`（`-Purge`） | 管理データ・設定・`/work`・追記した行・バックアップも削除します（下の表） |
+| `--force`（`-Force`） | 利用者が変更した toolkit のファイルも削除します（マニフェストに記録されたパスか、この版が配布するパスだけ） |
+| `--runs`（`-Runs`） | 旧版の conductor が作った worktree（`<リポジトリ名>-run-*`・`work/worktrees/*`）と、HEAD に取り込み済みの `run/*` ブランチも削除します。worktree の中の依存のリンクはリンクだけを外します。付けなければ一覧を表示するだけです |
 
 | 対象 | `--uninstall` | `--purge` |
 |---|---|---|
-| toolkit のファイル（`.github/agents`・`skills`・`workflows/ebak-*.yml`、`scripts/*.py` など）と旧版のファイル | 変更していなければ削除（変更していれば `KEEP-LOCAL` で残す。`--force` で削除） | 同じ |
-| `AGENTS.md`・`.github/copilot-instructions.md` のブロック | ブロックだけを削除（ほかに記述がなければファイルごと削除） | 同じ |
-| マニフェスト `.github/ebak-toolkit.json`、空になったフォルダー、削除した `.py` の `__pycache__` | 削除 | 削除 |
-| 管理データ（`docs/requirements-definition.md`・`catalog.md`・`integrations.md`・`id-registry.md`・`manual-tests.md`・`docs/requirements/`・`tests/system/ledger.json`）。パスは `scripts/ebak.config.json` の `management_files` に従います | 残す | 削除 |
-| `scripts/ebak.config.json`、`/work`、`*.ebak-backup-*` | 残す | 削除 |
-| `.gitignore` の `/work/`、`.gitattributes` の `merge=union` の行 | 残す | 追記した行だけを削除（空になればファイルごと削除） |
+| toolkit のファイル（どの版のものでも。`.github/agents`・`skills`・`workflows`、`scripts/*.py` など） | どれかの版の内容と同じなら削除（変更していれば `KEEP-LOCAL` で残す。`--force` で削除） | 同じ |
+| 旧版だけが使ったパスにある、どの版とも内容が違うファイル（例: 自分で書いた `users-guide/README.md`） | 利用者のファイルとして残す（`KEEP-UNKNOWN`。`--force` でも削除しない） | 同じ |
+| `AGENTS.md`・`.github/copilot-instructions.md` のブロック（すべての版の印） | ブロックだけを削除（ほかに記述がなければファイルごと削除） | 同じ |
+| マニフェスト（`.github/ebak-toolkit.json`・`.github/hve-toolkit.json`）、空になったフォルダー、削除した `.py` の `__pycache__` | 削除 | 削除 |
+| 管理データ（`docs/requirements-definition.md`・`catalog.md`・`integrations.md`・`id-registry.md`・`manual-tests.md`・`docs/requirements/`・`tests/system/ledger.json` など。設定の `management_files` のパスも含む） | 残す | 削除 |
+| 設定（`scripts/ebak.config.json`・`scripts/hve.config.json`）、`/work`、`*.ebak-backup-*`・`*.hve-backup-*` | 残す | 削除 |
+| `.gitignore`・`.gitattributes` に追記した節（すべての版の見出し） | 残す | 追記した行だけを削除（空になればファイルごと削除） |
 | System Test のコード（`tests/system/` の台帳以外）、アプリのコード、`docs/` のほかの文書 | 残す | 残す |
 
-- マニフェストが失われている場合は、この版の toolkit と同じ内容のファイルだけを削除します（`WARN` を表示します）。
-- 削除は git の作業ツリーに対して行います。結果を `git status` で確認してから commit します（`git restore` で戻せます。`/work` は git の管理対象外なので戻せません）。
-- 何度実行しても安全です（2 回目は `changes=0`）。
+- 削除は git の作業ツリーに対して行います。結果を `git status` で確認してから commit します（`git restore` で戻せます。`/work` は git の管理対象外なので戻せません）。git のリポジトリの最上位でなければ実行しません（`--allow-non-git` で続行）。
+- 終了コード: `0` は選んだ範囲に EABK が残っていない、`1` は残っている（`RESIDUE` に一覧）、`2` は誤り。何度実行しても安全です（2 回目は `changes=0`）。
+- `--purge` の後は、利用者のファイル（改行コード CRLF を含む）が導入前とバイト単位で同じに戻り、`git status --porcelain --ignored` が空になります。ただし 0.6.0 より前のインストーラーは CRLF の `AGENTS.md`・`.gitignore` を LF に書き換えていたため、その差は `git status` に残ります（`git restore` で戻します）。
 
 ### plugin ではなくインストーラーを使う理由
 
