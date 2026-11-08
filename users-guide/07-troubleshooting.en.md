@@ -8,6 +8,7 @@
 |---|---|
 | `python scripts/verify.py` exits 1 | Fix the `ERROR CHK-xx <location> <message>` lines from the top. How to fix each CHK is in [6.3](06-quality-gates.en.md#63-checks-performed-by-verify). Full logs are in `/work/logs/` |
 | A `HINT rdfix: …` line appears | There are inconsistencies that can be fixed automatically. Check the plan with `python scripts/rdfix.py --full`, then fix with `python scripts/rdfix.py --full --apply` ([7.2](#72-data-layer-mismatches-rdfix)) |
+| CI ebak-verify fails on the data-layer check | CI does not repair. Run `python scripts/rdfix.py --full --apply` locally and push the repair in the same change ([7.2](#72-data-layer-mismatches-rdfix)) |
 | It passes locally but only CI ebak-verify fails | CI may lack your app's toolchain. Add setup steps (such as `actions/setup-node`) before the verify step in `.github/workflows/ebak-verify.yml`. Also check that you are not overriding `checks.profile` with `--profile` in your local command |
 | `PASS (cached …)` appears and you worry the result is stale | The cache is used only when the working tree is clean and HEAD, arguments, and configuration are the same. After changing the build environment (SDK, dependencies), re-run with `--no-cache` |
 | `FAIL config` | `verify.commands` has an element without `run` or an invalid element. Fix it to the format in [4.6](04-customization.en.md#46-build-static-analysis-and-test-commands-verifycommands) |
@@ -20,7 +21,7 @@
 
 ## 7.2 Data-layer mismatches (rdfix)
 
-When the catalog, ID registry, ledger, or run history disagree, for example after a merge (CHK-07, CHK-01, CHK-11, CHK-23), check with `python scripts/rdfix.py --full` and fix with `python scripts/rdfix.py --full --apply`. The requirements definition (要求定義書) is never changed.
+When the catalog, ID registry, or ledger disagree, for example after a merge (CHK-07, CHK-01, CHK-11), check with `python scripts/rdfix.py --full` and fix with `python scripts/rdfix.py --full --apply`. The requirements definition (要求定義書) is never changed.
 
 | Exit code | Meaning | What to do next |
 |---|---|---|
@@ -32,7 +33,6 @@ Main causes of exit 2:
 
 | Message / situation | What to do |
 |---|---|
-| `作業役のブランチ（work/<run-id>/<item>。0.5.x の run の名残）では --apply しません` (no `--apply` on a worker branch left over from 0.5.x runs) | Switch to the default branch or your own working branch and run it there. Do not use branch names of the form `work/<name>/<name>` |
 | Lock-wait timeout (`work/.ebak/rdfix.lock`) | Another `--apply` is running. Wait for it to finish and run again (the wait is `--lock-wait` seconds, 30 by default). A lock left by a dead process is taken over automatically |
 | Write failure, a change in the requirements definition or `docs/integrations.md`, or a new error | Every change was undone. Check that no editor holds the files open. For files that could not be restored, the pre-repair content is saved in `work/.ebak/rdfix-undo-*/` |
 
@@ -49,19 +49,17 @@ If `next-id.py` runs on two branches at the same time, the same ID can be alloca
 | Symptom | What to do |
 |---|---|
 | `KEEP-LOCAL <file>` appears on update | Toolkit files you modified locally are not overwritten. To take in the new version, check with `--dry-run`, then merge the diff by hand or use `--force` (which keeps `.ebak-backup-*`). Differences only in line endings from Windows `core.autocrlf` do not cause `KEEP-LOCAL` |
-| `PRUNE scripts/ebak.config.json (gates, limits, …)` appears on update | The configuration keys dropped in 0.6.0 (`gates`, `limits`, `credits`, `worktree_share`, `prompt_prefix`, and the old default verify command `toolkit-unit`) were removed. Nothing to do ([4.8](04-customization.en.md#48-removed-configuration-keys-when-updating-from-05x)) |
-| `WARN-HOOK  <path>` appears on update | A locally modified hook file from an older version (`.github/hooks/quality-gates.json` or `prompt-prefix.json`) was kept (`KEEP-LOCAL`). It calls the deleted `scripts/hooks/gate.py`. When a hook errors, Copilot denies every tool call, so delete the file and reopen the Copilot session |
+| A note on update says that N files this version does not ship remain | They were installed by an older version. A normal update does not delete them. Reinstall with `--clean` (clean install; [9.4](09-versioning.en.md#94-updating-from-an-older-version-clean-install)) |
+| `--clean` says to commit or stash uncommitted changes first | Check `git status`, commit or `git stash`, and run again. It runs only on a clean working tree so that deleted files can be restored from git |
 | `WARN-WIRING <file>:<line>` appears | A custom check you added directly to `scripts/*.py` will be dropped by the update. Register it again in `extensions.checks` or `scripts/ext/` ([4.7](04-customization.en.md#47-project-specific-checks-extensionschecks--scriptsext)) |
 | You want to stop the data-layer repair after installing | `--no-repair` checks and plans only (writes nothing); `--skip-verify` neither checks nor repairs. The PowerShell wrapper uses `-NoRepair`. The installer's exit code does not depend on the data-layer result |
 
 ### Updating from 0.5.x to 0.6.0 (EABK Lite)
 
-- **Removed files**: Old files you did not modify (the conductor, rd-author, test-designer, implementer, and reviewer agents, skills such as build, scripts such as `run-state.py` and `integrate.py`, and the hook files `.github/hooks/quality-gates.json`, `.github/hooks/prompt-prefix.json`, and `scripts/hooks/gate.py`) are deleted with `REMOVE`. Files you modified locally are kept with `KEEP-LOCAL`. Delete them by hand if you do not need them, or delete them with `--force`.
-- **A leftover hook file**: It remains only if you modified it locally, and the installer prints `WARN-HOOK  <path>`. The `gate.py` it calls is deleted, so the hook errors and Copilot denies every tool. Delete the file and reopen the Copilot session.
-- **Configuration keys**: `gates`, `limits`, `credits`, `worktree_share`, and `prompt_prefix` are removed with `PRUNE`.
-- **Preamble**: An existing `.github/ebak-prompt-prefix.md` is left alone but no longer read. Delete it if you do not need it.
+- **How to update**: The installer has no migration code for older versions. Do a clean install with `--clean`. The old agents, skills, hooks, scripts, the auto-repair workflow and the old settings keys are deleted even if you modified them, and this version is installed again.
+- **Settings**: `scripts/ebak.config.json` is recreated from defaults. Check the previous values (such as `verify.commands`) with `git diff scripts/ebak.config.json` and restore what you need.
+- **What remains**: The management data (requirements definition, catalog, ledger, ID registry) and `/work` are not changed. `docs/run-history.md` from 0.5.x and `.github/ebak-prompt-prefix.md` also remain but are no longer read. Delete them by hand if you do not need them.
 - **Worktrees and work branches**: Worktrees and `work/*` branches left by 0.5.x runs are not deleted automatically. Check them with `git worktree list` and `git branch --list "work/*"`, and delete the ones you no longer need with `git worktree remove <path>` and `git branch -D <branch>`. Delete old run folders under `/work` too if you do not need them.
-- **Management data**: The requirements definition, catalog, ledger, and ID registry are not changed. If `docs/run-history.md` remains, it is treated as a read-only record (EABK Studio shows it if it can read it).
 
 ## 7.5 Hooks and the preamble from older versions
 
@@ -69,14 +67,14 @@ EABK Lite has no hooks and no automatic preamble. The following symptoms appear 
 
 | Symptom | What to do |
 |---|---|
-| Every tool call is denied, or a warning says a hook failed | A hook file from an older version (`.github/hooks/*.json`) remains and calls the deleted `scripts/hooks/gate.py`. Delete the file and reopen the Copilot session (the `WARN-HOOK` line printed on update shows the path) |
+| Every tool call is denied, or a warning says a hook failed | A hook file from an older version (`.github/hooks/*.json`) remains and calls the deleted `scripts/hooks/gate.py`. Reinstall with `--clean`, or delete the file and reopen the Copilot session |
 | The preamble is no longer added | By design. `.github/ebak-prompt-prefix.md` and the `prompt_prefix` setting are no longer used. If you want a standing preamble, put it in your own Copilot instructions |
 
 ## 7.6 EABK Studio
 
 | Symptom | What to do |
 |---|---|
-| It exits with code 1 without starting | The folder given in `--repo` has no data layer (requirements definition and so on). Check which files were read and the counts with `python EABK-Studio/studio.py --check --repo <path>` |
+| It exits with code 1 without starting (`no EABK data layer … and nothing to show in code mode`) | The folder given in `--repo` has no data layer (requirements definition and so on), and code mode has nothing to show either. Code mode applies only to the root of a git repository; an empty or non-git folder is not shown. Check which files were read and the counts (in code mode, the `mode: code (...)` line) with `python EABK-Studio/studio.py --check --repo <path>` |
 | The port is in use | If the default 8765 is in use, it listens on the next number. To pin it, pass `--port N` |
 | The screen shows old content | When data-layer files change, Studio reloads them within a few seconds. If reloading the browser does not help, restart Studio |
 
@@ -97,4 +95,4 @@ For anything else, see [Studio troubleshooting](studio/04-troubleshooting.en.md)
 | Full logs of verify and tests | `work/logs/` |
 | rdfix lock and files that could not be restored | `work/.ebak/rdfix.lock`, `work/.ebak/rdfix-undo-*/` |
 | Audit results | `work/audit/<date-time>/report.md` (each run in `run<n>.md`) |
-| CI results | The GitHub Actions screen (ebak-verify, ebak-data-layer) and Issues labeled `eabk-data-layer` |
+| CI results | The GitHub Actions screen (ebak-verify) |

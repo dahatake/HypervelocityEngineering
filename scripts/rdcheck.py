@@ -2,7 +2,7 @@
 """rdcheck.py - parse and check the management data (plan §10, CHK-01..27).
 
 Usage:
-  python scripts/rdcheck.py check [--base REF] [--run RUN_ID] [--strict] [--strict-ledger] [--json]
+  python scripts/rdcheck.py check [--base REF] [--profile lite|full] [--json]
   python scripts/rdcheck.py show ID [ID ...]        # print only the requirement / AC block (token saving)
   python scripts/rdcheck.py trace ID|名前 [...] [--json]  # links up and down (G / SRC / 用語・状態 / PARAM / AC / 台帳 / カタログ / コード)
   python scripts/rdcheck.py list [--state 承認済み] [--level system] [--priority MUST] [--kind FR] [--area 名 | --by-area]
@@ -67,10 +67,8 @@ class Ref:
 
 
 class Checker:
-    def __init__(self, root: Path, cfg: dict, base: Optional[str], run_id: Optional[str],
-                 strict: bool, strict_ledger: Optional[bool], profile: Optional[str] = None):
-        self.root, self.cfg, self.base, self.run_id = root, cfg, base, run_id
-        self.strict = strict
+    def __init__(self, root: Path, cfg: dict, base: Optional[str], profile: Optional[str] = None):
+        self.root, self.cfg, self.base = root, cfg, base
         self.profile = check_profile(cfg, profile)
         self.lite_checks = set(cfg["checks"].get("lite_checks") or [])
         self.findings: List[Finding] = []
@@ -82,13 +80,6 @@ class Checker:
         self.integ = h.parse_integrations(root, cfg)
         self._files: Optional[List[str]] = None
         self._refs: Optional[Dict[str, List[Ref]]] = None
-        self.croot = h.conductor_root(root, cfg)
-        if strict_ledger is None:
-            strict_ledger = strict
-            rid = run_id or h.current_run(self.croot, cfg)
-            if rid and h.load_meta(self.croot, cfg, rid).get("ledger_strict"):
-                strict_ledger = True
-        self.strict_ledger = strict_ledger
 
     # ------------------------------------------------------------------ helpers
     def add(self, level: str, chk: str, loc: str, msg: str) -> None:
@@ -100,7 +91,7 @@ class Checker:
         self.add("ERROR", chk, loc, msg)
 
     def warn(self, chk: str, loc: str, msg: str) -> None:
-        self.add("ERROR" if self.strict and chk in ("CHK-09",) else "WARN", chk, loc, msg)
+        self.add("WARN", chk, loc, msg)
 
     @staticmethod
     def loc(file: str, line) -> str:
@@ -152,14 +143,14 @@ class Checker:
     def run_all(self) -> List[Finding]:
         req_path = h.mf(self.cfg, "requirements")
         if not self.doc.exists:
-            self.add("ERROR" if self.strict else "WARN", "CHK-00", req_path,
+            self.add("WARN", "CHK-00", req_path,
                      "要求定義書がありません（未初期化）。skill `requirement-definition` に従って作成します")
             self.chk23()
             return self.findings
         self.prefetch(self.scan_files())
         for fn in (self.chk01_02, self.chk03, self.chk04, self.chk05, self.chk06_22, self.chk07_08,
                    self.chk09, self.chk10_11, self.chk12, self.chk13_14_15, self.chk16, self.chk17,
-                   self.chk18, self.chk19, self.chk20, self.chk21, self.chk23, self.chk25, self.chk26,
+                   self.chk18, self.chk19, self.chk20, self.chk23, self.chk25, self.chk26,
                    self.chk27, self.chk24, self.chk28, self.chk29, self.chk30, self.chk31, self.chk32, self.chk33, self.chk34):
             fn()
         return self.findings
@@ -371,7 +362,7 @@ class Checker:
         cases = self.ledger.get("cases", [])
         sys_acs = {a.id: a for a in h.system_acs(self.doc)}
         covered: Set[str] = set()
-        level_missing = "ERROR" if (self.strict_ledger or self.strict) else "WARN"
+        level_missing = "WARN"
         for c in cases:
             cid = c.get("id", "?")
             for a in c.get("ac_ids", []):
@@ -404,23 +395,6 @@ class Checker:
     # ------------------------------------------------------------------ CHK-12
     def chk12(self) -> None:
         led = h.mf(self.cfg, "ledger")
-        branch = h.current_branch(self.root)
-        wm = re.match(r"^work/([^/]+)/[^/]+$", branch)
-        if wm:
-            integ = h.load_meta(self.croot, self.cfg, wm.group(1)).get("integration_branch")
-            fork = None
-            for ref in ([integ] if integ else []) + [self.cfg.get("base_branch", "main")]:
-                if ref and h.ref_exists(self.root, ref):
-                    rc, out = h.git(["merge-base", "HEAD", ref], self.root)
-                    if rc == 0 and out.strip():
-                        fork = out.strip()
-                        break
-            if fork:
-                rc, out = h.git(["diff", "--name-only", f"{fork}...HEAD", "--", "tests/system"], self.root)
-                changed = [x for x in out.splitlines() if x.strip()] if rc == 0 else []
-                if changed:
-                    self.err("CHK-12", branch, f"作業役のブランチが System Test を変更しています: {', '.join(changed[:5])}")
-            return
         if not self.base:
             return
         old_text = h.git_show(self.root, self.base, led)
@@ -494,7 +468,7 @@ class Checker:
             if changed is None or id_ in changed:
                 hits = [w for w in words if w in text]
                 if hits:
-                    lvl = "ERROR" if (self.strict and prio == "MUST") else "WARN"
+                    lvl = "WARN"
                     self.add(lvl, "CHK-13", self.loc(f, ln), f"{id_} に曖昧な語があります: {'、'.join(hits)}")
             plain = h.PARAM_REF_RE.sub("", text)
             plain = re.sub(r"WCAG\s*[\d.]+|\d{4}-\d{2}-\d{2}|(?:[A-Z]+-)+\d{3,}", "", plain)
@@ -592,30 +566,6 @@ class Checker:
                     if ac and ac.level not in h.VERIFICATION_LEVELS:
                         self.err("CHK-20", self.loc(ac.file, ac.line), f"{a} に検証レベル（system／integration／unit／manual）がありません")
 
-    # ------------------------------------------------------------------ CHK-21
-    def chk21(self) -> None:
-        if not self.run_id:
-            return
-        rdir = h.run_dir(self.croot, self.cfg, self.run_id)
-        if not (rdir / "queue.json").exists():
-            return
-        q = h.load_queue(self.croot, self.cfg, self.run_id)
-        status = {}
-        for c in self.ledger.get("cases", []):
-            for a in c.get("ac_ids", []):
-                status.setdefault(a, []).append(c.get("status"))
-        sys_ids = {a.id for a in h.system_acs(self.doc)}
-        for it in q.get("items", []):
-            if it.get("status") != "done":
-                continue
-            for rid in it.get("requirement_ids", []):
-                row = self.cat_req.get(rid)
-                if not row or not h.split_paths(h.catalog_cell(row, "実装ファイル")):
-                    self.err("CHK-21", f"queue:{it.get('id')}", f"done の {rid} がカタログに実装ファイルとして載っていません")
-            for a in it.get("ac_ids", []):
-                if a in sys_ids and not any(s == "pass" for s in status.get(a, [])):
-                    self.err("CHK-21", f"queue:{it.get('id')}", f"done の {a} の台帳のケースが pass になっていません")
-
     # ------------------------------------------------------------------ CHK-23
     def chk23(self) -> None:
         wd = self.cfg["work"]["dir"]
@@ -628,20 +578,6 @@ class Checker:
         for f in (out.splitlines() if rc == 0 else []):
             if (f.startswith("docs/") or f.startswith("tests/")) and rx.search(f):
                 self.err("CHK-23", f, "一時ファイル（ログ・証跡・実行結果）が commit されています。/work に置きます")
-        hist = self.root / h.mf(self.cfg, "run_history")
-        if hist.exists():
-            seen: Dict[str, int] = {}
-            for t in h.parse_tables(h.read_text(hist).splitlines()):
-                c = t.col("run-id", "run_id")
-                if c is None:
-                    continue
-                for ln, cells in t.rows:
-                    rid = h.strip_md(cells[c]) if c < len(cells) else ""
-                    if not rid:
-                        continue
-                    if rid in seen:
-                        self.err("CHK-23", self.loc(h.mf(self.cfg, "run_history"), ln), f"run-id {rid} が重複しています（{seen[rid]} 行目）")
-                    seen[rid] = ln
 
     # ------------------------------------------------------------------ CHK-24
     def chk24(self) -> None:
@@ -1098,11 +1034,7 @@ def cmd_check(args, root, cfg) -> int:
         base = h.default_base(root, cfg)
     elif base == "none":
         base = None
-    run_id = args.run
-    if run_id == "current":
-        run_id = h.current_run(h.conductor_root(root, cfg), cfg)
-    ck = Checker(root, cfg, base, run_id, args.strict, True if args.strict_ledger else (False if args.no_strict_ledger else None),
-                 profile=args.profile)
+    ck = Checker(root, cfg, base, profile=args.profile)
     findings = ck.run_all()
     # FR-1082: project-specific extensions (extensions.checks / scripts/ext/*.py) run with the standard checks
     ext_results, ext_skipped, ext_errors = extpoints.run(root, cfg, "rdcheck")
@@ -1125,7 +1057,7 @@ def cmd_check(args, root, cfg) -> int:
         if getattr(ck, "area_info", None) is not None and ck.doc.exists and not args.errors_only:
             if ck.area_assignment() is None:
                 print(f"INFO 領域未所属の要求: {ck.area_info} 件（領域の割り当て表の承認まで任意）")
-        print(f"rdcheck: errors={errors} warnings={warns} base={base or '-'} run={run_id or '-'} profile={ck.profile}")
+        print(f"rdcheck: errors={errors} warnings={warns} base={base or '-'} profile={ck.profile}")
     return 1 if errors else 0
 
 
@@ -1255,7 +1187,7 @@ def build_index(ck: "Checker") -> List[tuple]:
 
 
 def cmd_index(args, root, cfg) -> int:
-    ck = Checker(root, cfg, None, None, False, False)
+    ck = Checker(root, cfg, None)
     pairs = build_index(ck)
     if args.ids:
         ids = set(args.ids)
@@ -1591,7 +1523,7 @@ def _print_trace(t: dict) -> None:
 
 
 def cmd_trace(args, root, cfg) -> int:
-    ck = Checker(root, cfg, None, None, False, False)
+    ck = Checker(root, cfg, None)
     code = _code_index(ck)
     out = [trace_one(ck, k, code) for k in args.ids]
     if args.json:
@@ -1639,10 +1571,6 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("check")
     c.add_argument("--base", default=None, help="比較の基準（既定: main との merge-base。'none' で比較しない）")
-    c.add_argument("--run", default=None, help="CHK-21 を行う run-id（'current' 可）")
-    c.add_argument("--strict", action="store_true", help="warn の一部を error にする（最終・統合時）")
-    c.add_argument("--strict-ledger", action="store_true", help="CHK-10/11 の不足を error にする（工程 4 以降）")
-    c.add_argument("--no-strict-ledger", action="store_true")
     c.add_argument("--profile", choices=PROFILES, default=None,
                    help="報告する検査の範囲。lite（既定）は構造と追跡性の CHK だけ、full はすべて（checks.profile で既定を変える）")
     c.add_argument("--errors-only", action="store_true")

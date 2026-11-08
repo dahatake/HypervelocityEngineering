@@ -8,10 +8,10 @@
 {
   "management_files": { "requirements": "docs/requirements-definition.md", "catalog": "docs/catalog.md", "...": "..." },
   "base_branch": "main",
-  "work": { "dir": "work", "retention_days": 14 },
+  "work": { "dir": "work" },
   "checks": { "profile": "lite", "lite_checks": ["CHK-01", "CHK-02", "CHK-03", "CHK-05", "CHK-09", "CHK-12", "CHK-17", "CHK-19", "CHK-24"] },
   "system_test": { "jobs": "auto", "batch_pytest": true, "budget": { "max_active_cases": 100, "...": "..." } },
-  "verify": { "timeout_sec": 1800, "commands": [ { "name": "studio-ui", "run": "python -m pytest -q EABK-Studio/tests", "slow": true } ] },
+  "verify": { "timeout_sec": 1800, "commands": [] },
   "extensions": { "checks": [] }
 }
 ```
@@ -30,7 +30,6 @@ EABK Lite には hook も定型文の自動付与もありません。毎回伝�
 | `requirements_dir` | `docs/requirements` | 要求定義書を分割したときの置き場所 |
 | `catalog` | `docs/catalog.md` | カタログ |
 | `id_registry` | `docs/id-registry.md` | ID 台帳（`next-id.py` だけが書きます） |
-| `run_history` | `docs/run-history.md` | 0.5.x の実行履歴。新しい導入では作りません。残っていれば読み取り専用の記録として扱います |
 | `ledger` | `tests/system/ledger.json` | System Test の台帳（`ledger.py` だけが書きます） |
 | `manual_tests` | `docs/manual-tests.md` | 手動テストの記録 |
 | `integrations` | `docs/integrations.md` | 外部連携カタログ |
@@ -42,8 +41,7 @@ EABK Lite には hook も定型文の自動付与もありません。毎回伝�
 | キー | 既定値 | 意味 |
 |---|---|---|
 | `base_branch` | `main` | 差分の検査（CHK-12 など）で比べる基準のブランチ。rd-auditor の差分の監査も、このブランチとの差分を見ます |
-| `work.dir` | `work` | 一時ファイル（ログ・証跡・実行結果・監査の結果）の置き場所。git の管理対象外です |
-| `work.retention_days` | 14 | 保持日数の目安です。EABK Lite は `/work` を自動では消しません。不要になったら手で削除します |
+| `work.dir` | `work` | 一時ファイル（ログ・証跡・実行結果・監査の結果）の置き場所。git の管理対象外です。EABK Lite は `/work` を自動では消しません。不要になったら手で削除します |
 
 ## 4.4 検査の範囲（`checks`）
 
@@ -100,7 +98,7 @@ EABK Lite には hook も定型文の自動付与もありません。毎回伝�
 - `verify.retry_on`（正規表現）に一致する環境起因の失敗（vitest の `Timeout calling`、`ECONNRESET` など）は、1 回だけ自動で再実行します。止めるには `verify.retry_flaky: false` にします。
 - `"commands": ["python -m pytest -q"]` のように文字列だけでも書けます（`name` はコマンドの先頭の語）。`run` のない要素や不正な要素は `FAIL config` で verify を失敗させます。
 - ログの全文は `/work/logs/` に保存され、コンソールには失敗の要約だけが出ます。
-- 新しく導入した直後は、EABK Studio のテスト `studio-ui`（`slow`）が入っています。Studio を使わない場合は消してかまいません。
+- 新しく導入した直後の `verify.commands` は空（`[]`）です。導入先のビルド・テストのコマンドを自分で登録します（Copilot に「このスタックの標準のビルドとテストのコマンドを `verify.commands` に登録して」と頼んでもかまいません）。
 
 | スタック | 例 |
 |---|---|
@@ -124,7 +122,7 @@ toolkit の更新では、利用者が `scripts/*.py` に直接足した配線�
 
 ## 4.8 撤去した設定のキー（0.5.x から更新した場合）
 
-0.6.0（EABK Lite）では、run と hook を前提にした次のキーがなくなりました。インストーラは更新のときにこれらを設定から削除し、`PRUNE scripts/ebak.config.json (gates, limits, …)` と表示します。手で消す必要はありません。
+0.6.0（EABK Lite）では、run と hook を前提にした次のキーがなくなりました。インストーラは旧版の設定を書き換えません。通常の更新ではこれらのキーが残りますが、もう読みません。消すときは `--clean`（クリーンインストール）で設定を既定から作り直すか、手で削除します（[9.4](09-versioning.md#94-旧版から更新するクリーンインストール)）。
 
 | 撤去したキー | 0.5.x での用途 |
 |---|---|
@@ -133,9 +131,11 @@ toolkit の更新では、利用者が `scripts/*.py` に直接足した配線�
 | `credits` | AI クレジットの推定 |
 | `worktree_share` | 作業用 worktree の依存ディレクトリの共有 |
 | `prompt_prefix` | hook による定型文の自動付与 |
+| `work.retention_days` | `/work` の 14 日の清掃（もうありません） |
 | `verify.commands` の `toolkit-unit` | 撤去した `clean-work.py` のテスト |
+| `verify.commands` の `studio-ui`（`python -m pytest -q EABK-Studio/tests`） | EABK Studio のテスト。導入先には `EABK-Studio/tests/` を入れなくなりました |
 
-導入先に残った `.github/ebak-prompt-prefix.md` は削除しませんが、もう読みません。hook のファイル（`.github/hooks/quality-gates.json`・`.github/hooks/prompt-prefix.json`・`scripts/hooks/gate.py`）は、変更していなければ削除します。ローカルで変更した hook のファイルが残ると（`KEEP-LOCAL`）、インストーラは `WARN-HOOK  <パス>` を表示します。そのファイルは削除された `gate.py` を呼び、hook がエラーになると Copilot がすべてのツールを拒否するので、ファイルを削除してから Copilot のセッションを開き直します。
+`.github/ebak-prompt-prefix.md` と hook のファイル（`.github/hooks/quality-gates.json`・`.github/hooks/prompt-prefix.json`・`scripts/hooks/gate.py`）は、もう読みません。旧版から更新するときは `--clean` を使うと、これらも削除されます。
 
 ## 4.9 MCP Server・plugin・拡張機能を使う
 
@@ -157,13 +157,8 @@ toolkit の更新では、利用者が `scripts/*.py` に直接足した配線�
 
 `.github/workflows/ebak-verify.yml`（ebak-verify）は、pull request と main への push で `scripts/verify.sh --show-warnings` を実行します。検査の範囲は `checks.profile` に従います（既定は lite）。手元の `python scripts/verify.py` と同じ検査なので、AGENTS.md の規則が、人や PC に関係なく push のたびに確かめられます。アプリのビルドに必要なツールチェーン（`actions/setup-node` など）は、verify のステップの前に追加します。CodeQL や依存関係のスキャンも、このワークフローに追記できます。
 
-### データ層ワークフロー（ebak-data-layer）
+### データ層の修復（CI では修復しない）
 
-`.github/workflows/ebak-data-layer.yml`（ebak-data-layer）は、プルリクエスト（pull_request）、main への push、手動実行（workflow_dispatch）、毎週 1 回の定期実行（schedule）で `python scripts/verify.py --docs-only` を実行し、データ層を検査します。
+CI は検査だけを行い、データ層を修復しません（`ebak-verify` の権限は contents の read だけです）。データ層の検査が不合格なら、手元で共通の入口 `python scripts/rdfix.py --full --apply` を実行して再検査し、修復を同じ変更に含めて push します（終了コード 0/1/2 は [05](05-scripts-reference.md)）。要求定義書と `docs/integrations.md` は変更しません。インストーラも導入後にこの入口を 1 回呼びます。`--no-repair` で検査と計画だけ（書き込まない）、`--skip-verify` で検査も修復もしません。
 
-- 不合格のときは、共通の入口 `python scripts/rdfix.py --full --apply` で自動修復し、再検査します。インストーラ・手動の実行と同じ入口で、独自の書き換え手順は持ちません（終了コード 0/1/2 は [05](05-scripts-reference.md)）。インストーラは導入後にこの入口を 1 回呼びます。`--no-repair` で検査と計画だけ（書き込まない）、`--skip-verify` で検査も修復もしません。
-- 自動修復で要求定義書は変更しない設計です（`docs/requirements-definition.md` と `docs/integrations.md` は修復の前後でバイト単位で比べ、変わったら全部を元に戻します）。
-- 再検査に合格したときだけ、修復を commit します。同じリポジトリのプルリクエストでは、その PR のブランチへ push します。main への push と定期実行では、修復用のブランチ `eabk/data-layer-fix` へ push して PR を作ります（既にあれば作りません）。
-- 修復しても直らないときは、ラベル `eabk-data-layer` を付けて、失敗の要約と実行へのリンクを含む Issue を作ります。同じ内容の未解決の Issue があれば、コメントを追加します。
-- 権限は contents・pull-requests・issues の write だけです。fork からのプルリクエストでは検査だけを行い、書き込みません。bot の修復 commit では再修復しません。
-- 無効化するには、このファイルを削除するか、GitHub の Actions 画面でこのワークフローを Disable します。インストール時に入れたくない場合は `--no-ci` を指定します（ebak-verify も入りません）。
+CI が修復しない理由: 読むだけの CI には書き込みの権限が要りません。また、bot が誰かの PR のブランチへ修復を push すると、ほかの人・PC のブランチと食い違います。以前の版で配っていた `.github/workflows/ebak-data-layer.yml`（自動修復の commit と Issue）は、旧版から `--clean`（クリーンインストール）で更新すると削除されます（[9. 版の管理](09-versioning.md)）。ワークフローを入れたくない場合は、インストール時に `--no-ci` を指定します。

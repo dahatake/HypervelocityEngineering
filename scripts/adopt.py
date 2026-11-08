@@ -66,7 +66,7 @@ GENERIC_DIRS = {"src", "lib", "app", "apps", "main", "java", "source", "pkg", "i
 TOOLKIT_PREFIXES = ("scripts/hooks/", "tools/templates/", ".github/agents/", ".github/skills/", ".github/hooks/", ".github/workflows/ebak-", "EABK-Studio/",
                     "tests/system/", "tests/toolkit/", "work/", f"{BASELINE}/")
 TOOLKIT_FILES = {"AGENTS.md", ".github/copilot-instructions.md", ".github/ebak-toolkit.json", "docs/catalog.md",
-                 "docs/id-registry.md", "docs/run-history.md", "docs/requirements-definition.md"}
+                 "docs/id-registry.md", "docs/requirements-definition.md"}
 DESIGN_HINT = re.compile(r"design|設計|architecture|アーキ|spec|仕様|requirement|要件|要求|adr|decision|openapi|swagger|"
                          r"erd|er-|データモデル|schema|interface|api|画面|基本設計|詳細設計", re.I)
 ROUTE_PATTERNS = [

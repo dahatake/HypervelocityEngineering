@@ -8,7 +8,7 @@ EABK Lite の 1 回の変更は、次の 5 段階で進みます。どれも、�
 1. 依頼する            いつもの Copilot（既定のエージェント）にチャットで依頼する（1 章）
 2. 同じ変更で更新する   Copilot が要求定義書・カタログ・テスト・コードを同じ変更で直す
 3. 手元で検査する       python scripts/verify.py が exit 0
-4. push / PR           CI の ebak-verify と ebak-data-layer が同じ検査をする
+4. push / PR           CI の ebak-verify が同じ検査をする（検査だけ）
 5. 節目に監査する       リリース前などに rd-auditor で要求の意味を監査する
 （いつでも）           状況は EABK Studio で見る
 ```
@@ -73,20 +73,19 @@ git push -u origin feature/draft-save
 gh pr create --base main
 ```
 
-push と PR で、2 つのワークフローが動きます。
+push と PR で、1 つのワークフローが動きます。
 
 | ワークフロー | いつ動くか | すること |
 |---|---|---|
-| `ebak-verify`（`.github/workflows/ebak-verify.yml`） | push・PR | `scripts/verify.sh --show-warnings` を実行します。手元の `verify.py` と同じ検査です |
-| `ebak-data-layer`（`.github/workflows/ebak-data-layer.yml`） | PR・push・手動・毎週 | データ層を検査し、不合格なら `rdfix.py --full --apply` で自動修復します。修復が合格したら、その修正を commit します（同じリポジトリの PR はそのブランチへ、push のときは修正用のブランチを作って PR に）。自動で直せないものは Issue にします。要求定義書は変更しません |
+| `ebak-verify`（`.github/workflows/ebak-verify.yml`） | push・PR | `scripts/verify.sh --show-warnings` を実行します。手元の `verify.py` と同じ検査です。読み取りの権限だけで動き、修復の commit も Issue も作りません |
+
+CI のデータ層の検査が不合格なら、手元で `python scripts/rdfix.py --full --apply` を実行し、修復を同じ変更に含めて push し直します（要求定義書は変更しません）。CI が修復しないのは、読むだけの CI には書き込みの権限が要らず、bot が誰かの PR のブランチへ修復を push すると、ほかの人・PC のブランチと食い違うためです。
 
 マージの前に、少なくとも次を確かめます。
 
-1. `ebak-verify` と `ebak-data-layer` が成功している
+1. `ebak-verify` が成功している
 2. `git diff main...HEAD -- docs/requirements-definition.md` の要求の変更が、依頼の意図と合っている
 3. 「AI提案／承認待ち」のまま実装された要求がない（`python scripts/rdcheck.py list --state 承認待ち` の要求に、対応するコードがない）
-
-`ebak-data-layer` を止めたいときは、ワークフローのファイルを削除するか、GitHub の Actions 画面で Disable にします（[4. カスタマイズ](04-customization.md)）。
 
 ## 2.5 節目に監査する（rd-auditor）
 

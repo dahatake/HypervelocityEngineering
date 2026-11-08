@@ -69,3 +69,15 @@ def test_ac214_catalog_related_managed_files_follow_the_normal_update_path_and_n
     _install(fresh, "--no-ci", "--allow-non-git")
     assert not (fresh / ".github" / "workflows" / "ebak-verify.yml").exists()
     assert (fresh / CATALOG).is_file()
+
+
+# FR-1085 AC-467 AC-473: an installed EABK Lite has no hooks, no repairing workflow, no Studio tests, and an empty
+# verify.commands (the target registers its own build and test commands)
+def test_fr1085_installed_lite_has_rules_and_checks_only(installed_repo):
+    for rel in (".github/hooks", "scripts/hooks", ".github/workflows/ebak-data-layer.yml", "EABK-Studio/tests",
+                ".github/agents/conductor.agent.md", "scripts/run-state.py"):
+        assert not (installed_repo / rel).exists(), rel
+    assert (installed_repo / ".github" / "workflows" / "ebak-verify.yml").is_file()
+    cfg = json.loads((installed_repo / "scripts" / "ebak.config.json").read_text(encoding="utf-8"))
+    assert cfg["verify"]["commands"] == [] and cfg["checks"]["profile"] == "lite"
+    assert "next-id.py" in (installed_repo / "AGENTS.md").read_text(encoding="utf-8")

@@ -75,17 +75,6 @@ def test_ledger_writers_are_serialised(sample):
     assert not (sample.path / "work" / ".ebak" / "ledger.lock").exists()
 
 
-def test_auto_workers_scale_with_machine():
-    import importlib.util, sys
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
-    h = importlib.import_module("ebaklib")
-    assert h.auto_workers(cpus=4, mem_gb=64) == 2
-    assert h.auto_workers(cpus=20, mem_gb=64) == 8
-    assert h.auto_workers(cpus=20, mem_gb=16) == 2
-    assert h.auto_workers(cpus=64, mem_gb=512) == 8
-    assert h.cpu_share(8, cpus=20) == 4 and h.cpu_share(5, cpus=20) == 6 and h.cpu_share(32, cpus=20) == 1 and h.cpu_share(1, cpus=20) == 20
-
-
 def test_verify_parallel_group_runs_concurrently(sample):
     sleep = "python -c \"import time;time.sleep(3)\""
     cfg = json.loads(sample.read("scripts/ebak.config.json"))

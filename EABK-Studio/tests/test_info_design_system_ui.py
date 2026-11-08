@@ -65,7 +65,7 @@ def test_ac277_every_kind_has_no_plain_text_existing_ids(studio):
     page = _open(studio, "tables")
     idre = re.compile(r"\b(?:G|FR|NFR(?:-[A-Z]+)?|AC|Q|PARAM|SRC|INT|E2E|IT)-\d+\b")
     tabs = page.locator("#view [role=tab]")
-    assert tabs.count() == 18
+    assert tabs.count() == 17
     for i in range(tabs.count()):
         tabs.nth(i).click()
         for cell in page.locator("#view table td").all()[:300]:

@@ -132,7 +132,6 @@
   <text class="sub" x="76" y="714">　質問票・決定記録を含む</text>
   <text class="sub" x="76" y="734">catalog.md … カタログ（要求と実装・テストの対応）</text>
   <text class="sub" x="76" y="754">id-registry.md … ID 台帳</text>
-  <text class="sub" x="76" y="774">run-history.md … 実行履歴</text>
 
   <rect class="box perm" x="480" y="646" width="280" height="140" rx="8"/>
   <text class="title" x="496" y="670">tests/system/（永続・git）</text>

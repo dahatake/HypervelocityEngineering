@@ -8,6 +8,7 @@
 |---|---|
 | `python scripts/verify.py` が exit 1 | 出力の `ERROR CHK-xx <位置> <内容>` を上から直します。各 CHK の直し方は [6.3](06-quality-gates.md#63-verify-の検査項目) にあります。ログの全文は `/work/logs/` にあります |
 | `HINT rdfix: …` の行が出る | 自動で直せる不整合があります。`python scripts/rdfix.py --full` で計画を確かめ、`python scripts/rdfix.py --full --apply` で直します（[7.2](#72-データ層の食い違いrdfix)） |
+| CI の ebak-verify がデータ層の検査で失敗する | CI は修復しません。手元で `python scripts/rdfix.py --full --apply` を実行し、修復を同じ変更に含めて push し直します（[7.2](#72-データ層の食い違いrdfix)） |
 | 手元では合格するのに、CI の ebak-verify だけが失敗する | CI にアプリのツールチェーンがない可能性があります。`.github/workflows/ebak-verify.yml` の verify のステップの前に、セットアップのステップ（`actions/setup-node` など）を追加します。`checks.profile` を手元のコマンドの `--profile` で上書きしていないかも確かめます |
 | `PASS (cached …)` と出るが、結果が古いのではと心配 | キャッシュは、作業ツリーが clean で、HEAD・引数・設定が同じときだけ使われます。ビルドの環境（SDK・依存）を変えた後は `--no-cache` で再実行します |
 | `FAIL config` | `verify.commands` に `run` のない要素や不正な要素があります。[4.6](04-customization.md#46-ビルド静的解析テストのコマンドverifycommands) の形式に直します |
@@ -20,7 +21,7 @@
 
 ## 7.2 データ層の食い違い（rdfix）
 
-マージの後などにカタログ・ID 台帳・台帳・実行履歴が食い違ったときは（CHK-07・CHK-01・CHK-11・CHK-23）、`python scripts/rdfix.py --full` で確認し、`python scripts/rdfix.py --full --apply` で直します。要求定義書は変更しません。
+マージの後などにカタログ・ID 台帳・台帳が食い違ったときは（CHK-07・CHK-01・CHK-11）、`python scripts/rdfix.py --full` で確認し、`python scripts/rdfix.py --full --apply` で直します。要求定義書は変更しません。
 
 | 終了コード | 意味 | 次にすること |
 |---|---|---|
@@ -32,7 +33,6 @@ exit 2 になる主な原因:
 
 | メッセージ・状況 | 対処 |
 |---|---|
-| `作業役のブランチ（work/<run-id>/<item>。0.5.x の run の名残）では --apply しません` | 既定のブランチか、自分の作業ブランチに切り替えて実行します。`work/<名前>/<名前>` の形のブランチ名は使わないでください |
 | 排他の待ち時間切れ（`work/.ebak/rdfix.lock`） | 別の `--apply` が実行中です。終わるのを待って再実行します（待ちは `--lock-wait` 秒、既定 30 秒）。異常終了したプロセスのロックは自動で引き継がれます |
 | 書き込みの失敗・要求定義書や `docs/integrations.md` の変化・新しいエラー | すべての変更を元に戻しました。エディターでファイルを開いたままにしていないかを確かめます。元に戻せなかったファイルは `work/.ebak/rdfix-undo-*/` に修復前の内容が保存されます |
 
@@ -49,19 +49,17 @@ exit 2 になる主な原因:
 | 症状 | 対処 |
 |---|---|
 | 更新で `KEEP-LOCAL <ファイル>` が出る | ローカルで変更した toolkit のファイルは上書きしません。新しい版を取り込むなら、`--dry-run` で確かめてから差分を手でマージするか、`--force`（`.ebak-backup-*` を残します）を使います。Windows の `core.autocrlf` による改行だけの差では `KEEP-LOCAL` になりません |
-| 更新で `PRUNE scripts/ebak.config.json (gates, limits, …)` が出る | 0.6.0 でなくなった設定のキー（`gates`・`limits`・`credits`・`worktree_share`・`prompt_prefix`、旧既定の verify コマンド `toolkit-unit`）を削除しました。対処は不要です（[4.8](04-customization.md#48-撤去した設定のキー05x-から更新した場合)） |
-| 更新で `WARN-HOOK  <パス>` が出る | ローカルで変更した旧版の hook のファイル（`.github/hooks/quality-gates.json`・`prompt-prefix.json`）を残しました（`KEEP-LOCAL`）。このファイルは削除された `scripts/hooks/gate.py` を呼びます。hook がエラーになると Copilot がすべてのツールの呼び出しを拒否するので、ファイルを削除してから Copilot のセッションを開き直します |
+| 更新で「この版が配布しないファイルが N 件残っています」と出る | 旧版が入れたファイルです。通常の更新では削除しません。`--clean`（クリーンインストール）で入れ直します（[9.4](09-versioning.md#94-旧版から更新するクリーンインストール)） |
+| `--clean の前に、未 commit の変更を commit するか退避します` と出る | `git status` で確かめ、commit するか `git stash` してから再実行します。消したファイルを git から戻せるようにするため、作業ツリーがきれいなときだけ実行します |
 | `WARN-WIRING <ファイル>:<行>` が出る | `scripts/*.py` に直接足した独自の検査が、更新で脱落します。`extensions.checks` か `scripts/ext/` に登録し直します（[4.7](04-customization.md#47-プロジェクト固有の検査extensionschecks--scriptsext)） |
 | 導入後のデータ層の修復を止めたい | `--no-repair` で検査と計画だけ（書き込まない）、`--skip-verify` で検査も修復もしません。PowerShell のラッパーでは `-NoRepair` です。インストーラの終了コードはデータ層の結果に左右されません |
 
 ### 0.5.x から 0.6.0（EABK Lite）に更新したとき
 
-- **撤去したファイル**: 利用者が変更していない旧ファイル（conductor・rd-author・test-designer・implementer・reviewer のエージェント、build などの skill、`run-state.py`・`integrate.py` などのスクリプト、hook のファイル `.github/hooks/quality-gates.json`・`.github/hooks/prompt-prefix.json`・`scripts/hooks/gate.py`）は `REMOVE` で削除されます。ローカルで変更していたものは `KEEP-LOCAL` で残ります。不要なら手で削除するか、`--force` で削除します。
-- **残った hook のファイル**: ローカルで変更していた場合だけ残り、インストーラが `WARN-HOOK  <パス>` を表示します。そのファイルが呼ぶ `gate.py` は削除されているので、hook がエラーになり、Copilot がすべてのツールを拒否します。ファイルを削除してから Copilot のセッションを開き直します。
-- **設定のキー**: `gates`・`limits`・`credits`・`worktree_share`・`prompt_prefix` は `PRUNE` で削除されます。
-- **定型文**: 導入先の `.github/ebak-prompt-prefix.md` はそのまま残りますが、もう読みません。不要なら削除します。
+- **更新の方法**: インストーラは旧版からの移行の処理を持ちません。`--clean` でクリーンインストールします。旧版の agent・skill・hook・スクリプト・自動修復のワークフロー・設定の旧キーは、変更していても削除され、この版が入れ直されます。
+- **設定**: `scripts/ebak.config.json` は既定から作り直されます。以前の値（`verify.commands` など）は `git diff scripts/ebak.config.json` で確かめ、必要な値を戻します。
+- **残るもの**: 管理データ（要求定義書・カタログ・台帳・ID 台帳）と `/work` は変えません。0.5.x の `docs/run-history.md` と `.github/ebak-prompt-prefix.md` も残りますが、もう読みません。不要なら手で削除します。
 - **worktree と作業用のブランチ**: 0.5.x の run が残した worktree と `work/*` ブランチは、自動では消しません。`git worktree list` と `git branch --list "work/*"` で確かめ、不要なものを `git worktree remove <パス>` と `git branch -D <ブランチ>` で手で削除します。`/work` の下の古い run のフォルダーも、不要なら削除します。
-- **管理データ**: 要求定義書・カタログ・台帳・ID 台帳は変更しません。`docs/run-history.md` が残っていれば、読み取り専用の記録として扱われます（EABK Studio が読めれば表示します）。
 
 ## 7.5 旧版の hook と定型文
 
@@ -69,14 +67,14 @@ EABK Lite には hook も定型文の自動付与もありません。次は旧�
 
 | 症状 | 対処 |
 |---|---|
-| すべてのツールの呼び出しが拒否される・hook の失敗の警告が出る | 旧版の hook のファイル（`.github/hooks/*.json`）が残り、削除された `scripts/hooks/gate.py` を呼んでいます。ファイルを削除してから Copilot のセッションを開き直します（更新時の `WARN-HOOK` の行にパスが出ます） |
+| すべてのツールの呼び出しが拒否される・hook の失敗の警告が出る | 旧版の hook のファイル（`.github/hooks/*.json`）が残り、削除された `scripts/hooks/gate.py` を呼んでいます。`--clean` で入れ直すか、ファイルを削除してから Copilot のセッションを開き直します |
 | 定型文が付かなくなった | 仕様です。`.github/ebak-prompt-prefix.md` と設定の `prompt_prefix` はもう使いません。毎回伝えたい前提は、自分の Copilot の instructions に書きます |
 
 ## 7.6 EABK Studio
 
 | 症状 | 対処 |
 |---|---|
-| 起動せずに終了コード 1 で終わる | `--repo` に指定したフォルダーにデータ層（要求定義書など）がありません。`python EABK-Studio/studio.py --check --repo <パス>` で、読めたファイルと件数を確かめます |
+| 起動せずに終了コード 1 で終わる（`no EABK data layer … and nothing to show in code mode`） | `--repo` に指定したフォルダーにデータ層（要求定義書など）がなく、コードのモードでも表示するものがありません。コードのモードは git リポジトリのルートだけが対象で、空のフォルダーや git でないフォルダーは表示しません。`python EABK-Studio/studio.py --check --repo <パス>` で、読めたファイルと件数（コードのモードなら `mode: code (...)` の行）を確かめます |
 | ポートが使用中 | 既定の 8765 が使用中なら、次の番号で待ち受けます。固定したいときは `--port N` を指定します |
 | 画面の内容が古い | データ層のファイルを更新すると、数秒以内に自動で読み直します。ブラウザーを再読み込みしても変わらない場合は、Studio を起動し直します |
 
@@ -97,4 +95,4 @@ EABK Lite には hook も定型文の自動付与もありません。次は旧�
 | verify・テストのログの全文 | `work/logs/` |
 | rdfix の排他と、元に戻せなかったファイル | `work/.ebak/rdfix.lock`、`work/.ebak/rdfix-undo-*/` |
 | 監査の結果 | `work/audit/<日時>/report.md`（各回は `run<n>.md`） |
-| CI の結果 | GitHub の Actions 画面（ebak-verify・ebak-data-layer）、ラベル `eabk-data-layer` の Issue |
+| CI の結果 | GitHub の Actions 画面（ebak-verify） |

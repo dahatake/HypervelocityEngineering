@@ -8,10 +8,10 @@ All settings live in one file, `scripts/ebak.config.json`. When you update with 
 {
   "management_files": { "requirements": "docs/requirements-definition.md", "catalog": "docs/catalog.md", "...": "..." },
   "base_branch": "main",
-  "work": { "dir": "work", "retention_days": 14 },
+  "work": { "dir": "work" },
   "checks": { "profile": "lite", "lite_checks": ["CHK-01", "CHK-02", "CHK-03", "CHK-05", "CHK-09", "CHK-12", "CHK-17", "CHK-19", "CHK-24"] },
   "system_test": { "jobs": "auto", "batch_pytest": true, "budget": { "max_active_cases": 100, "...": "..." } },
-  "verify": { "timeout_sec": 1800, "commands": [ { "name": "studio-ui", "run": "python -m pytest -q EABK-Studio/tests", "slow": true } ] },
+  "verify": { "timeout_sec": 1800, "commands": [] },
   "extensions": { "checks": [] }
 }
 ```
@@ -30,7 +30,6 @@ EABK Lite has no hooks and does not add a preamble automatically. If you want a 
 | `requirements_dir` | `docs/requirements` | Where a split requirements definition lives |
 | `catalog` | `docs/catalog.md` | Catalog |
 | `id_registry` | `docs/id-registry.md` | ID registry (written only by `next-id.py`) |
-| `run_history` | `docs/run-history.md` | Run history from 0.5.x. Not created by new installs. If it remains, it is treated as a read-only record |
 | `ledger` | `tests/system/ledger.json` | System Test ledger (written only by `ledger.py`) |
 | `manual_tests` | `docs/manual-tests.md` | Record of manual tests |
 | `integrations` | `docs/integrations.md` | External integration catalog |
@@ -42,8 +41,7 @@ You can change these to match your directory layout. After changing them, run `p
 | Key | Default | Meaning |
 |---|---|---|
 | `base_branch` | `main` | The branch that diff checks (CHK-12 and others) compare against. rd-auditor's diff audit also uses the diff with this branch |
-| `work.dir` | `work` | Where temporary files go (logs, evidence, results, audit results). Not tracked by git |
-| `work.retention_days` | 14 | A guideline for retention. EABK Lite does not delete `/work` automatically; delete it by hand when you no longer need it |
+| `work.dir` | `work` | Where temporary files go (logs, evidence, results, audit results). Not tracked by git. EABK Lite does not delete `/work` automatically; delete it by hand when you no longer need it |
 
 ## 4.4 Check scope (`checks`)
 
@@ -100,7 +98,7 @@ After the management-data checks, `scripts/verify.py` runs the commands register
 - Environment-caused failures that match `verify.retry_on` (a regular expression; vitest `Timeout calling`, `ECONNRESET`, and so on) are retried once automatically. To stop this, set `verify.retry_flaky: false`.
 - You can also write plain strings, such as `"commands": ["python -m pytest -q"]` (`name` becomes the first word of the command). Elements without `run`, or invalid elements, fail verify with `FAIL config`.
 - Full logs are saved to `/work/logs/`; only a summary of failures is printed to the console.
-- Right after a new install, the EABK Studio test `studio-ui` (`slow`) is registered. You can remove it if you do not use Studio.
+- Right after a new install, `verify.commands` is empty (`[]`). Register your own build and test commands (you can also ask Copilot: "register the standard build and test commands for this stack in `verify.commands`").
 
 | Stack | Example |
 |---|---|
@@ -124,7 +122,7 @@ On a toolkit update, `tools/install.py` looks for wiring you added directly to `
 
 ## 4.8 Removed configuration keys (when updating from 0.5.x)
 
-In 0.6.0 (EABK Lite), the following run- and hook-based keys are gone. On update, the installer removes them from the configuration and prints `PRUNE scripts/ebak.config.json (gates, limits, …)`. You do not need to delete them by hand.
+In 0.6.0 (EABK Lite), the following run- and hook-based keys are gone. The installer does not rewrite an older version's settings. A normal update leaves these keys in place, but they are no longer read. To remove them, recreate the settings from defaults with `--clean` (clean install) or delete them by hand ([9.4](09-versioning.en.md#94-updating-from-an-older-version-clean-install)).
 
 | Removed key | Use in 0.5.x |
 |---|---|
@@ -133,9 +131,11 @@ In 0.6.0 (EABK Lite), the following run- and hook-based keys are gone. On update
 | `credits` | Estimate of AI credits |
 | `worktree_share` | Sharing dependency directories between worker worktrees |
 | `prompt_prefix` | Automatic preamble added by a hook |
+| `work.retention_days` | The 14-day cleanup of `/work` (no longer exists) |
 | `toolkit-unit` in `verify.commands` | Test of the removed `clean-work.py` |
+| `studio-ui` in `verify.commands` (`python -m pytest -q EABK-Studio/tests`) | EABK Studio's tests. `EABK-Studio/tests/` is no longer installed into targets |
 
-An existing `.github/ebak-prompt-prefix.md` in your repository is left alone but no longer read. Hook files (`.github/hooks/quality-gates.json`, `.github/hooks/prompt-prefix.json`, `scripts/hooks/gate.py`) are removed if unmodified. If a locally modified hook file is kept (`KEEP-LOCAL`), the installer prints `WARN-HOOK  <path>`: the file calls the deleted `gate.py`, and when a hook errors Copilot denies every tool, so delete the file and reopen the Copilot session.
+`.github/ebak-prompt-prefix.md` and the hook files (`.github/hooks/quality-gates.json`, `.github/hooks/prompt-prefix.json`, `scripts/hooks/gate.py`) are no longer read. When updating from an older version, `--clean` deletes them too.
 
 ## 4.9 Using MCP servers, plugins, and extensions
 
@@ -157,13 +157,8 @@ The tools and skills of the MCP servers, plugins, and extensions you have set up
 
 `.github/workflows/ebak-verify.yml` (ebak-verify) runs `scripts/verify.sh --show-warnings` on pull requests and on pushes to main. The check scope follows `checks.profile` (lite by default). It is the same check as your local `python scripts/verify.py`, so the rules in AGENTS.md are confirmed on every push, whoever made the change and on whichever PC. Add the toolchain your app build needs (such as `actions/setup-node`) before the verify step. You can also add CodeQL or dependency scanning to this workflow.
 
-### Data-layer workflow (ebak-data-layer)
+### Data-layer repair (CI does not repair)
 
-`.github/workflows/ebak-data-layer.yml` (ebak-data-layer) runs `python scripts/verify.py --docs-only` to check the data layer on pull requests (pull_request), pushes to main, manual runs (workflow_dispatch), and a weekly schedule (schedule).
+CI only checks and never repairs the data layer (`ebak-verify` has contents read permission only). If the data-layer check fails, run the common entry point `python scripts/rdfix.py --full --apply` locally, which checks again, and push the repair in the same change (exit codes 0/1/2 are in [05](05-scripts-reference.en.md)). The requirements definition and `docs/integrations.md` are never changed. The installer also calls this entry point once after installing. `--no-repair` checks and plans only (writes nothing); `--skip-verify` neither checks nor repairs.
 
-- On failure, it repairs automatically through the common entry point `python scripts/rdfix.py --full --apply` and checks again. It is the same entry point as the installer and manual runs, with no rewrite procedure of its own (exit codes 0/1/2 are in [05](05-scripts-reference.en.md)). The installer calls this entry point once after installing. `--no-repair` checks and plans only (writes nothing); `--skip-verify` neither checks nor repairs.
-- By design, the automatic repair does not change the requirements definition: `docs/requirements-definition.md` and `docs/integrations.md` are compared byte by byte before and after, and every change is undone if they differ.
-- The repair is committed only when the re-check passes. For a pull request from the same repository, it is pushed to that PR's branch. For pushes to main and scheduled runs, it is pushed to the repair branch `eabk/data-layer-fix` and a PR is opened (unless one already exists).
-- If the repair does not fix it, an Issue labeled `eabk-data-layer` is created with a summary of the failure and a link to the run. If an open Issue with the same content exists, a comment is added instead.
-- Permissions are write for contents, pull-requests, and issues only. For pull requests from forks, it only checks and writes nothing. It does not repair again on the bot's own repair commit.
-- To disable it, delete this file or Disable the workflow in the GitHub Actions screen. To leave it out at install time, pass `--no-ci` (ebak-verify is not installed either).
+Why CI does not repair: CI that only reads needs no write permission, and a bot pushing fixes onto someone's PR branch makes the branches of other people and PCs diverge. The `.github/workflows/ebak-data-layer.yml` shipped by earlier versions (repair commits and Issues) is deleted when you update from an older version with `--clean` (clean install; [9. Versioning](09-versioning.en.md)). To leave the workflow out at install time, pass `--no-ci`.

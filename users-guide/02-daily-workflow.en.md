@@ -8,7 +8,7 @@ In EABK Lite, every change goes through the following five steps. All of them us
 1. Ask                     ask the usual Copilot (the default agent) in chat (chapter 1)
 2. Update in one change    Copilot fixes the requirements definition, catalog, tests and code in the same change
 3. Check locally           python scripts/verify.py exits 0
-4. Push / PR               CI ebak-verify and ebak-data-layer run the same checks
+4. Push / PR               CI ebak-verify runs the same checks (check only)
 5. Audit at milestones     before a release etc., rd-auditor audits the meaning of the requirements
 (any time)                 view the status in EABK Studio
 ```
@@ -73,20 +73,19 @@ git push -u origin feature/draft-save
 gh pr create --base main
 ```
 
-Two workflows run on push and PR.
+One workflow runs on push and PR.
 
 | Workflow | When | What it does |
 |---|---|---|
-| `ebak-verify` (`.github/workflows/ebak-verify.yml`) | push, PR | Runs `scripts/verify.sh --show-warnings`, the same checks as a local `verify.py` |
-| `ebak-data-layer` (`.github/workflows/ebak-data-layer.yml`) | PR, push, manual, weekly | Checks the data layer and, if it fails, repairs it with `rdfix.py --full --apply`. When the repair passes, it commits the fix (to the PR branch for same-repository PRs; on push, to a fix branch with a PR). What cannot be fixed automatically becomes an Issue. The requirements definition is never changed |
+| `ebak-verify` (`.github/workflows/ebak-verify.yml`) | push, PR | Runs `scripts/verify.sh --show-warnings`, the same checks as a local `verify.py`. It runs with read permission only and creates no repair commits and no Issues |
+
+If the data-layer check fails in CI, run `python scripts/rdfix.py --full --apply` locally and push the repair in the same change (the requirements definition is never changed). CI does not repair because CI that only reads needs no write permission, and a bot pushing fixes onto someone's PR branch would make the branches of other people and PCs diverge.
 
 Before merging, confirm at least the following.
 
-1. `ebak-verify` and `ebak-data-layer` succeeded
+1. `ebak-verify` succeeded
 2. The requirement changes in `git diff main...HEAD -- docs/requirements-definition.md` match the intent of the request
 3. No requirement still "AI提案／承認待ち" (awaiting approval) was implemented (requirements listed by `python scripts/rdcheck.py list --state 承認待ち` have no matching code)
-
-To stop `ebak-data-layer`, delete the workflow file or disable it on the GitHub Actions page ([4. Customization](04-customization.en.md)).
 
 ## 2.5 Audit at milestones (rd-auditor)
 

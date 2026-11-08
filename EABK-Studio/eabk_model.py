@@ -1,7 +1,7 @@
 """EABK Studio: reads the EABK data layer of any repository and builds one model.
 
 Only the data layer is read (requirements definition, catalog, system-test ledger,
-ID registry, run history). Source code is never opened; it is only *named* by the
+ID registry). Source code is never opened; it is only *named* by the
 paths that the catalog already holds.
 """
 from __future__ import annotations
@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import hashlib
 import re
+import subprocess
 from collections import Counter, OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,14 +21,13 @@ DEFAULT_FILES = {
     "requirements_dir": "docs/requirements",
     "catalog": "docs/catalog.md",
     "id_registry": "docs/id-registry.md",
-    "run_history": "docs/run-history.md",
     "ledger": "tests/system/ledger.json",
     "manual_tests": "docs/manual-tests.md",
     "integrations": "docs/integrations.md",
 }
 CONFIG_CANDIDATES = ("scripts/ebak.config.json", "scripts/hve.config.json")
 
-REQ_ID = r"(?:FR-\d{3,}|FR-[A-Z][A-Z0-9_-]*|NFR-[A-Z0-9]+-\d{3,})"
+REQ_ID = r"(?:FR-\d{3,}|FR-[A-Z][A-Z0-9_-]*|NFR-[A-Z0-9]+-\d{2,})"
 REQ_ID_RE = re.compile(r"(?<![A-Za-z0-9\-])(" + REQ_ID + r")(?![0-9])")
 ANY_ID_RE = re.compile(r"(?<![A-Za-z0-9\-])((?:FR|AC|G|Q|PARAM|SRC|E2E|IT|AUD|NFR-[A-Z0-9]+)-\d{3,})(?![0-9])")
 REQ_HEADING_RE = re.compile(r"^(#{2,6})\s+\**(" + REQ_ID + r")\**\s*(.*)$")
@@ -118,7 +118,12 @@ def split_row(line: str) -> list[str]:
 
 def parse_document(path: Path, rel: str) -> dict:
     """Headings, tables and raw lines of one markdown file (code fences skipped)."""
-    lines = read_text(path).splitlines()
+    return parse_text(read_text(path), rel)
+
+
+def parse_text(text: str, rel: str) -> dict:
+    """parse_document for markdown that is not a file (the documents synthesised in code mode)."""
+    lines = text.splitlines()
     headings, tables = [], []
     fence = False
     i = 0
@@ -267,7 +272,135 @@ def find_root(start: Path) -> Path:
     for cand in [start, *start.parents]:
         if (cand / "docs" / "requirements-definition.md").is_file() or (cand / "docs" / "catalog.md").is_file():
             return cand
+    for cand in [start, *start.parents]:  # a repository without EABK: its git root (code mode)
+        if (cand / ".git").exists():
+            return cand
     return start
+
+
+# ------------------------------------------------------------------ code mode (a repository without EABK)
+# When a repository has no EABK data layer, Studio derives one from what is already there: requirement-like IDs
+# in markdown tables and headings (a PRD.md such as `| FR-SEL-02 | ... |`), the source files grouped by component,
+# and the files that mention each ID. Read-only; nothing is written. With a data layer this is never used.
+CODE_EXTS = {".py", ".cs", ".fs", ".vb", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".svelte", ".java",
+             ".kt", ".kts", ".scala", ".go", ".rs", ".rb", ".php", ".swift", ".m", ".mm", ".c", ".h", ".cc", ".cpp",
+             ".hpp", ".dart", ".lua", ".sql", ".ps1", ".psm1", ".sh", ".bash", ".r", ".jl", ".ex", ".exs", ".erl",
+             ".clj", ".hs", ".ml", ".zig", ".nim", ".css", ".scss", ".html", ".razor", ".cshtml", ".xaml"}
+SKIP_DIRS = {".git", "node_modules", "bin", "obj", "dist", "build", "out", "target", ".venv", "venv", "__pycache__",
+             ".next", ".nuxt", "coverage", "vendor", "packages", ".idea", ".vs", "work", "TestResults"}
+PRD_NAME_RE = re.compile(r"prd|requirement|要求|spec", re.I)
+CODE_MAX_FILES = 5000
+CODE_MAX_BYTES = 1_000_000
+PART_MAX_FILES = 300
+
+
+def _repo_files(root: Path) -> list[str] | None:
+    """Tracked + untracked-not-ignored files of a git repository root, or None when root is not one. Code mode is
+    limited to repositories so that an arbitrary folder (a home or temp directory) is never walked."""
+    if not (root / ".git").exists():
+        return None
+    try:
+        proc = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], cwd=root,
+                              capture_output=True, timeout=30, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    out = [p for p in proc.stdout.decode("utf-8", "replace").split("\0") if p]
+    return [p for p in out if not set(p.split("/")[:-1]) & SKIP_DIRS]
+
+
+def _md_order(rel: str) -> tuple:
+    name = rel.rsplit("/", 1)[-1]
+    return (0 if PRD_NAME_RE.search(name) else 1 if rel.startswith("docs/") else 2, rel)
+
+
+def _cell(text: str) -> str:
+    return re.sub(r"\s+", " ", strip_md(text)).replace("|", "／").strip()[:160]
+
+
+def synthesize_from_code(root: Path) -> tuple[list[dict], dict, dict] | None:
+    """(requirement docs, catalog doc, info) derived from a git repository without EABK, or None when root is not
+    a git repository or has neither requirement-like IDs in markdown nor source files."""
+    files = _repo_files(root)
+    if files is None:
+        return None
+    defs: OrderedDict[str, tuple[str, str, int]] = OrderedDict()  # id -> (title, file, line)
+    used_docs: list[str] = []
+    for rel in sorted((f for f in files if f.lower().endswith(".md")), key=_md_order):
+        p = root / rel
+        try:
+            if p.stat().st_size > CODE_MAX_BYTES:
+                continue
+        except OSError:
+            continue
+        before = len(defs)
+        doc = parse_document(p, rel)
+        for t in doc["tables"]:
+            for row in t["rows"]:
+                cells = row["cells"]
+                rid = strip_md(cells[0]) if cells else ""
+                if re.fullmatch(REQ_ID, rid) and rid not in defs:
+                    title = next((_cell(c) for c in cells[1:] if _cell(c)), rid)
+                    defs[rid] = (title, rel, row["line"])
+        for ln, raw in enumerate(doc["lines"], 1):
+            m = REQ_HEADING_RE.match(raw)
+            if m and m.group(2) not in defs:
+                defs[m.group(2)] = (_cell(m.group(3)) or m.group(2), rel, ln)
+        if len(defs) > before:
+            used_docs.append(rel)
+    code = [f for f in files if Path(f).suffix.lower() in CODE_EXTS][:CODE_MAX_FILES]
+    if not defs and not code:
+        return None
+    impl: dict[str, list[str]] = {}
+    tests: dict[str, list[str]] = {}
+    mentions: dict[str, set[str]] = {}
+    known = set(defs)
+    for rel in code:
+        p = root / rel
+        try:
+            if p.stat().st_size > CODE_MAX_BYTES:
+                continue
+            text = p.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        ids = {m.group(1) for m in REQ_ID_RE.finditer(text)} & known if known else set()
+        mentions[rel] = ids
+        for rid in ids:
+            (tests if is_test_path(rel) else impl).setdefault(rid, []).append(rel)
+    groups: OrderedDict[str, list[str]] = OrderedDict()
+    for rel in code:
+        groups.setdefault(component_of(rel)[0], []).append(rel)
+    rq = ["# 要求（コードのモード）", "", "## 要求", ""]
+    for rid, (title, _, _) in defs.items():
+        rq += [f"#### {rid} {title}", f"- 要求: {title}", ""]
+    ct = ["# カタログ（コードのモード）", "", "## 機能", "",
+          "| 要求 ID | 題名 | 決定状態 | 実装ファイル | テスト | 使っている共通部品 |", "|---|---|---|---|---|---|"]
+    owner = {rel: comp for comp, rels in groups.items() for rel in rels}
+    for rid, (title, _, _) in defs.items():
+        parts = sorted({owner[f] for f in impl.get(rid, []) + tests.get(rid, []) if f in owner})
+        ct.append(f"| {rid} | {title} | - | {', '.join(impl.get(rid, [])) or '-'} | "
+                  f"{', '.join(tests.get(rid, [])) or '-'} | {'、'.join(parts) or '-'} |")
+    ct += ["", "## 共通部品", "", "| 部品名 | ファイル | 用途 | 使っている要求 ID |", "|---|---|---|---|"]
+    for comp, rels in groups.items():
+        n_test = sum(1 for r in rels if is_test_path(r))
+        shown = rels[:PART_MAX_FILES]
+        more = f"（ほか {len(rels) - len(shown)} ファイルは省略）" if len(rels) > len(shown) else ""
+        ids = sorted({i for r in rels for i in mentions.get(r, ())})
+        ct.append(f"| {comp} | {', '.join(shown)} | コードから導出: {len(rels)} ファイル（テスト {n_test}）{more} | "
+                  f"{'、'.join(ids) or '-'} |")
+    req_doc = parse_text("\n".join(rq) + "\n", "(code mode)")
+    req_doc["origin"] = {rid: (f, ln) for rid, (_, f, ln) in defs.items()}
+    cat_doc = parse_text("\n".join(ct) + "\n", "(code mode)")
+    info = {"requirementDocs": used_docs, "requirements": len(defs), "codeFiles": len(code),
+            "testFiles": sum(1 for f in code if is_test_path(f)), "components": len(groups),
+            "linkedRequirements": sum(1 for rid in defs if rid in impl or rid in tests)}
+    return ([req_doc] if defs else []), cat_doc, info
+
+
+def can_view(root: Path) -> bool:
+    """A data layer, or something to show in code mode."""
+    return has_data_layer(root) or synthesize_from_code(Path(root).resolve()) is not None
 
 
 def has_data_layer(root: Path) -> bool:
@@ -284,7 +417,9 @@ def data_layer_report(root: Path) -> dict:
     model = build_model(root)
     return {
         "root": str(root),
-        "ok": has_data_layer(root),
+        "ok": not model["meta"].get("error"),
+        "mode": model["meta"].get("mode", "eabk"),
+        "derivedFrom": model["meta"].get("derivedFrom"),
         "files": entries,
         "boundaryFiles": len(list(rdir.glob("*.md"))) if rdir.is_dir() else 0,
         "counts": {
@@ -292,7 +427,6 @@ def data_layer_report(root: Path) -> dict:
             "acceptanceCriteria": sum(len(r["acs"]) for r in model["reqs"]),
             "catalogFeatures": len(model["catalog"]["features"]),
             "ledgerCases": len(model["cases"]),
-            "runs": len(model["runs"]),
         },
         "warnings": list(model["warnings"]),
     }
@@ -301,7 +435,7 @@ def data_layer_report(root: Path) -> dict:
 def fingerprint(root: Path) -> str:
     files = load_config(root)
     stamps = []
-    paths = [root / files[k] for k in ("requirements", "catalog", "ledger", "id_registry", "run_history", "integrations")]
+    paths = [root / files[k] for k in ("requirements", "catalog", "ledger", "id_registry", "integrations")]
     rd = root / files["requirements_dir"]
     if rd.is_dir():
         paths += sorted(rd.glob("*.md"))
@@ -316,7 +450,7 @@ def fingerprint(root: Path) -> str:
 
 def generated_at(root: Path) -> str:
     files = load_config(root)
-    paths = [root / files[k] for k in ("requirements", "catalog", "ledger", "id_registry", "run_history", "integrations")]
+    paths = [root / files[k] for k in ("requirements", "catalog", "ledger", "id_registry", "integrations")]
     rd = root / files["requirements_dir"]
     if rd.is_dir():
         paths += sorted(rd.glob("*.md"))
@@ -925,7 +1059,7 @@ def build_model(root: Path) -> dict:
         "goals": [], "reqs": [], "params": [], "terms": [], "stateMachines": [], "personas": [],         "integrations": [], "integrationCatalog": [],
         "questions": [], "decisions": [], "audits": [], "sources": [], "scenarios": [], "catalog": {"features": [], "apis": [], "tables": [], "parts": []},
         "hierarchy": {"items": [], "tiers": [], "unclassified": UNCLASSIFIED, "kinds": list(HIER_KINDS)},
-        "cases": [], "caseDigests": {}, "runs": [], "registry": [], "registryRecords": [],
+        "cases": [], "caseDigests": {}, "registry": [], "registryRecords": [],
         "analysis": {"structure": {"layers": [], "differences": []}, "runtime": {}, "history": []},
         "graph": {"nodes": [], "edges": []}, "warnings": warnings,
     }
@@ -940,14 +1074,21 @@ def build_model(root: Path) -> dict:
             docs.append(parse_document(p, f"{files['requirements_dir']}/{p.name}"))
     cat_doc = parse_document(cat_path, files["catalog"]) if cat_path.is_file() else None
     model["meta"]["files"] = {k: (v if (root / v).exists() else None) for k, v in files.items()}
+    model["meta"]["mode"] = "eabk"
     if not docs and not cat_doc:
-        model["meta"]["error"] = "no-data-layer"
-        return model
+        derived = synthesize_from_code(root)
+        if derived is None:
+            model["meta"]["error"] = "no-data-layer"
+            return model
+        docs, cat_doc, model["meta"]["derivedFrom"] = derived
+        model["meta"]["mode"] = "code"
 
     # requirements
     reqs: OrderedDict[str, dict] = OrderedDict()
     for d in docs:
         for r in parse_requirements(d):
+            if r["id"] in d.get("origin", {}):  # code mode: point at the real PRD line
+                r["file"], r["line"] = d["origin"][r["id"]]
             if r["id"] in reqs:
                 warnings.append(f"duplicate {r['id']} ({d['rel']}:{r['line']})")
                 continue
@@ -1112,7 +1253,7 @@ def build_model(root: Path) -> dict:
         tb["reqs"] = expand_ids(tb.pop("reqRaw"), known)
     model["catalog"]["parts"] = parts
 
-    # ledger / registry / run history
+    # ledger / registry
     lp = root / files["ledger"]
     if lp.is_file():
         try:
@@ -1151,17 +1292,6 @@ def build_model(root: Path) -> dict:
                              "file": files["id_registry"], "line": row["line"]}
                         )
         model["registry"] = [{"kind": k, "state": s, "count": n} for (k, s), n in sorted(cnt.items())]
-    hp = root / files["run_history"]
-    if hp.is_file():
-        rh = parse_document(hp, files["run_history"])
-        for t in rh["tables"]:
-            if t["key"] and t["key"][0] == "run-id":
-                for row in t["rows"]:
-                    c = row["cells"] + [""] * len(t["header"])
-                    record = {t["header"][k]: strip_md(c[k]) for k in range(len(t["header"]))}
-                    record.update({"file": files["run_history"], "line": row["line"]})
-                    model["runs"].append(record)
-
     model["reqs"] = list(reqs.values())
     # FR-1034 AC-206: per-requirement 配置先 (run location / stores / links) handed to the diagram and the list
     model["placements"]["requirements"] = [
@@ -1203,7 +1333,6 @@ def build_management_analysis(model: dict, docs: list[dict], cat_doc: dict | Non
         ("カタログ", len(model["catalog"]["features"]), "要求ごとに実装・試験・共通部品を登録する", files["catalog"]),
         ("System Test", len(model["cases"]), "system ACをケースから要求へ参照できる", files["ledger"]),
         ("ID 台帳", len(model["registryRecords"]), "管理IDを一意な種別・状態で登録する", files["id_registry"]),
-        ("実行履歴", len(model["runs"]), "run-idごとに工程・commit・要求・AC・ケースを記録する", files["run_history"]),
         ("境界間", len(model["integrations"]), "連携先ごとに方式・方向・正本を明示する", files["requirements"]),
     ]
     known_req = {r["id"] for r in model["reqs"]}
@@ -1334,25 +1463,6 @@ def build_management_analysis(model: dict, docs: list[dict], cat_doc: dict | Non
                 "親要求一致・一意なケースID・AC digest一致", "親子制約・参照制約",
                 "ケースの親・digest・一意性を確認", files["ledger"])
 
-    run_counts = Counter(run.get("run-id", "") for run in model["runs"])
-    for run in model["runs"]:
-        run_id = run.get("run-id", "")
-        refs = expand_ids(" ".join(str(v) for v in run.values()))
-        dangling = [ref for ref in refs if ref not in known_req]
-        case_refs = [v for k, v in run.items() if k in ("ケース", "case") and v and v not in known_case]
-        if dangling or case_refs:
-            add("実行履歴", "参照不整合", run_id or source(run["file"], run["line"]),
-                "未定義参照: " + "・".join(dangling + case_refs),
-                "要求・ケース参照が存在", "参照制約",
-                "履歴から辿る参照先が解析データに存在しない", run["file"], run["line"])
-        elif run_counts[run_id] > 1:
-            add("実行履歴", "重複", run_id, f"履歴 {run_counts[run_id]} 件",
-                "run-idごとに履歴1件", "必須要素", "同じrun-idが複数行に存在", run["file"], run["line"])
-        else:
-            add("実行履歴", "妥当", run_id or source(run["file"], run["line"]),
-                "要求・AC・ケース参照を解析済み", "run-idごとに参照先が存在",
-                "参照制約", "履歴の参照先と一意性を確認", run["file"], run["line"])
-
     # Boundary contracts are records too; no aggregate count is used as the
     # oracle. Method, direction, owner and source are cross-boundary constraints.
     boundary_counts = Counter(x["name"] for x in model["integrations"])
@@ -1373,7 +1483,7 @@ def build_management_analysis(model: dict, docs: list[dict], cat_doc: dict | Non
                 "方式・方向・正本を明示", "境界間制約",
                 "境界を越えるデータ契約を個別に確認", item["file"], item["line"])
 
-    # AC-045: each of the seven layer summaries is a complete judgement in
+    # AC-045: each of the six layer summaries is a complete judgement in
     # its own right, not a heading that relies on the detail table below it.
     for name, count, ideal, file in layer_specs:
         rows = [row for row in differences if row["layer"] == name]
@@ -1437,10 +1547,6 @@ def build_management_analysis(model: dict, docs: list[dict], cat_doc: dict | Non
     for d in model["decisions"]:
         history.append({"category": "決定記録", "id": d["target"] or d["decision"], "date": d["date"],
                         "status": d["decision"], "file": d["file"], "line": d["line"]})
-    for run in model["runs"]:
-        history.append({"category": "実行履歴", "id": run.get("run-id", ""),
-                        "date": run.get("終了") or run.get("開始", ""),
-                        "status": run.get("結果", ""), "file": run["file"], "line": run["line"]})
     for r in model["reqs"]:
         history.append({"category": "要求状態", "id": r["id"], "date": "", "status": r["status"],
                         "file": r["file"], "line": r["line"]})

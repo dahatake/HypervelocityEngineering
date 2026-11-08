@@ -154,5 +154,5 @@ def test_ac225_docs_list_exactly_the_navigation_items_of_the_app():
         assert "主な閲覧場所" in text, doc
         for name in names:
             assert name in text, (doc, name)
-        for kind in ("目的", "要求", "受入基準", "試験ケース", "共通部品", "API", "テーブル", "ファイル", "PARAM", "質問", "用語", "ペルソナ", "エンティティ", "外部連携", "決定記録", "監査指摘", "出典", "実行履歴"):
+        for kind in ("目的", "要求", "受入基準", "試験ケース", "共通部品", "API", "テーブル", "ファイル", "PARAM", "質問", "用語", "ペルソナ", "エンティティ", "外部連携", "決定記録", "監査指摘", "出典"):
             assert re.search(rf"^\|\s*{kind}\s*\|", text, re.M), (doc, kind)

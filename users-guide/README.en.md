@@ -22,10 +22,10 @@ The two parts are connected by the same data layer. Copilot (or a person) writes
 | 3 | [Managed data formats](03-requirements-format.en.md) | You want to know the formats of the requirements definition, the catalog, the ID ledger, and the System Test ledger |
 | 4 | [Settings and customization](04-customization.en.md) | You want to adjust build and test commands, and the check profile (`lite` / `full`), or use MCP servers and plugins (Work IQ, Azure, and so on) |
 | 5 | [Scripts reference](05-scripts-reference.en.md) | You want to know how to use each command in `scripts/` |
-| 6 | [Checks and CI](06-quality-gates.en.md) | You want to know the meaning of the verify checks (CHK-xx) and CI (`ebak-verify`, `ebak-data-layer`) and how to fix them |
+| 6 | [Checks and CI](06-quality-gates.en.md) | You want to know the meaning of the verify checks (CHK-xx) and CI (`ebak-verify`, check only) and how to fix them with `rdfix.py` |
 | 7 | [Troubleshooting](07-troubleshooting.en.md) | A check failed, CI failed, or installation did not go well |
 | 8 | [Adoption steps and roadmap](08-roadmap.en.md) | How to bring it into a team, and what to verify after Lite |
-| 9 | [Version upgrade procedure](09-versioning.en.md) | Bump the version (distribution source), update an already-installed repository (users), or migrate from 0.5.x to 0.6.0 |
+| 9 | [Version upgrade procedure](09-versioning.en.md) | Bump the version (distribution source), update an already-installed repository (users), or update from an older version with a clean install |
 | 10 | [Adopting an existing app](10-adopting-existing-apps.en.md) | Prepare the data layer from existing code and design documents through inventory → reverse-generated requirements (pending approval) → pinning current behavior. Research on the approach and verification of its fit |
 | 11 | [Integration catalog](11-integration-catalog.en.md) | You want to record integrations with external systems (API, file, DB, event) in `docs/integrations.md` and learn how to add, change, retire, and check them (`verify.py --docs-only`) |
 
@@ -65,7 +65,7 @@ In every case, first read "Introduction", "Installation", and "Quickstart" in [R
 | Configure verification commands and the check profile | [4](04-customization.en.md), [6](06-quality-gates.en.md) |
 | A check failed or CI failed | [7](07-troubleshooting.en.md). If Studio doesn't work, see [S4](studio/04-troubleshooting.en.md) |
 | Adopt it in an existing app | [10](10-adopting-existing-apps.en.md); for the steps, see [8](08-roadmap.en.md) |
-| Update the toolkit or migrate from 0.5.x | [9](09-versioning.en.md) |
+| Update the toolkit or clean-install over an older version | [9](09-versioning.en.md) |
 | View the data layer in diagrams and tables | [S1](studio/01-first-steps.en.md), [S2](studio/02-screens.en.md) |
 
 ## Links to README sections
@@ -83,4 +83,4 @@ In every case, first read "Introduction", "Installation", and "Quickstart" in [R
 - Chapter numbers are `1`–`11` in Part 1 and `S1`–`S8` in Part 2. Sections follow the chapter number, as in `4.4` and `S8.5.2`. Use these labels when referring to them from other guides.
 - In the distribution source repository the folder is `users-guide/`. In a repository where you installed with `tools/install.py`, it is placed in `EABK-docs/` (the `users-guide/` of the target repository is not touched). Links within the guide are relative paths based on the distribution source's layout.
 - Real screenshots are in `studio/images/`, their capture conditions are in [studio/screen-images.json](studio/screen-images.json), and recapturing is done with `studio/capture-screens.py`. Diagrams for EABK core are in `images/`.
-- When you add or rename a file, update `MANAGED` in `tools/install.py` (and `OBSOLETE` for files to be removed) accordingly ([9](09-versioning.en.md)).
+- When you add or rename a file, update `MANAGED` in `tools/install.py` accordingly (there is no removal list for older versions; use `--clean`) ([9](09-versioning.en.md)).

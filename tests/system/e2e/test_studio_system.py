@@ -124,7 +124,6 @@ def _management_fingerprints(repo=ROOT):
         repo / "docs" / "requirements-definition.md",
         repo / "docs" / "catalog.md",
         repo / "docs" / "id-registry.md",
-        repo / "docs" / "run-history.md",
         repo / "tests" / "system" / "ledger.json",
     )
     return {path: _fingerprint(path) for path in paths if path.exists()}

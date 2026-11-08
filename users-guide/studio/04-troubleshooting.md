@@ -9,7 +9,7 @@
 | ブラウザーが開かない | ターミナルに出る URL（`http://127.0.0.1:…`）を、手でブラウザーに貼ります。 |
 | `python` が見つからない | Python 3.9 以上を入れるか、`py EABK-Studio/studio.py` を試します。 |
 | 「EABK のデータ層が見つかりません」 | 起動時に案内を出して終了した場合、対象のフォルダーに `docs/requirements-definition.md`・`docs/catalog.md`・`tests/system/ledger.json` のどれもありません。`--repo` で正しいフォルダーを指定します。EABK を入れただけで要求が未作成のときは、先に Copilot のチャットで依頼して要求を作ります（`docs/requirements-definition.md` ができます）。 |
-| どのファイルが読めているか分からない | `python EABK-Studio/studio.py --repo <リポジトリ> --check` を実行します。見つかった／ない管理データのファイル、解析できた要求・受入基準・カタログ行・台帳のケース・実行履歴の件数、警告を表示して終了します（起動はしません）。データ層があれば終了コード 0、なければ 1 です。ファイルの場所を変えているときは `scripts/ebak.config.json` の `management_files` を確認します。 |
+| どのファイルが読めているか分からない | `python EABK-Studio/studio.py --repo <リポジトリ> --check` を実行します。見つかった／ない管理データのファイル、解析できた要求・受入基準・カタログ行・台帳のケースの件数、警告を表示して終了します（起動はしません）。データ層があれば終了コード 0、なければ 1 です。ファイルの場所を変えているときは `scripts/ebak.config.json` の `management_files` を確認します。 |
 | 画面に出ない（件数が 0） | `--check` の件数が 0 のときは、表の見出しの列名が [08-data-reference.md](08-data-reference.md) の書式と合っていません（例: 機能の表に `要求ID`・`実装ファイル` の列がない）。EABK 本体の[管理データの書式](../03-requirements-format.md)に合わせます。 |
 | 整合性保守で `preview-conflict` | Studio の起動後に、別の手段でカタログが更新されています。Studio を起動し直して、もう一度プレビューします。 |
 | `?select=` のリンクでメニューが出ない | `select` を付けたリンクは撮影用の表示です。普段は `#/map2d?q=<要求ID>` のように `q` を使います。 |
@@ -24,7 +24,7 @@
 
 | 用語 | 意味 |
 |---|---|
-| データ層 | EABK が管理する記録（要求定義書・カタログ・System Test の台帳・ID 台帳。0.5.x から更新したリポジトリでは、残っている実行履歴も読み取り専用で表示） |
+| データ層 | EABK が管理する記録（要求定義書・カタログ・System Test の台帳・ID 台帳） |
 | 目的（G-001） | 事業としてやりたいこと。要求はどれかの目的に属します |
 | 要求（FR / NFR） | FR は機能、NFR は性能・安全などの非機能の要求 |
 | 受入基準（AC） | 要求が満たされたと言える条件。検証レベルは system / integration / unit / manual |

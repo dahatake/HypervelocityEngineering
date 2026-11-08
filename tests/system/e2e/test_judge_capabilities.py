@@ -51,12 +51,6 @@ def _write_repo(base, name, requirements, catalog="# カタログ\n", ledger=Non
         "| FR-VALID | FR | 使用中 |\n| AC-VALID | AC | 使用中 |\n",
         encoding="utf-8",
     )
-    (repo / "docs" / "run-history.md").write_text(
-        "# 実行履歴\n\n| run-id | 工程状態 | commit | 要求 | AC | ケース |\n"
-        "|---|---|---|---|---|---|\n"
-        "| 202610100001 | 完了 | abcdef1 | FR-VALID | AC-VALID | E2E-900 |\n",
-        encoding="utf-8",
-    )
     (repo / "tests" / "system" / "ledger.json").write_text(
         json.dumps(
             ledger
@@ -210,16 +204,10 @@ def test_current_and_ideal_structure_explain_every_layer_and_difference_type(stu
         "| FR-NOT-DEFINED | FR | 使用中 |\n",
         encoding="utf-8",
     )
-    (repo / "docs" / "run-history.md").write_text(
-        "# 実行履歴\n| run-id | 工程状態 | commit | 要求 | AC | ケース |\n|---|---|---|---|---|---|\n"
-        "| duplicate-run | 完了 | absent | FR-NOT-DEFINED | AC-NOT-DEFINED | E2E-NONE |\n"
-        "| duplicate-run | 完了 | absent | FR-NOT-DEFINED | AC-NOT-DEFINED | E2E-NONE |\n",
-        encoding="utf-8",
-    )
     _switch_repo(studio_page, repo)
     studio_page.goto(studio_page.url.split("#")[0] + "#/structure")
     view = studio_page.locator("#view")
-    for layer in ("要求定義書", "境界別要求", "カタログ", "System Test", "ID 台帳", "実行履歴", "境界間"):
+    for layer in ("要求定義書", "境界別要求", "カタログ", "System Test", "ID 台帳", "境界間"):
         expect(view).to_contain_text(layer)
     expect(view).to_contain_text(re.compile("現状.*理想|current.*ideal", re.I))
     for difference in ("妥当", "不足", "余剰", "孤立", "重複", "参照不整合"):
@@ -450,7 +438,7 @@ def test_history_progress_and_infographics_drill_to_evidence_without_counting_no
     page = studio_page
     page.goto(page.url.split("#")[0] + "#/dashboard")
     view = page.locator("#view")
-    for dimension in ("決定記録", "実行履歴", "要求状態", "実装登録", "System Test", "目的", "データ種別"):
+    for dimension in ("決定記録", "要求状態", "実装登録", "System Test", "目的", "データ種別"):
         expect(view).to_contain_text(dimension)
     expect(view).to_contain_text(re.compile("時系列|timeline|状態別|by status", re.I))
     expect(view).to_contain_text(re.compile("測定時点|measured at", re.I))

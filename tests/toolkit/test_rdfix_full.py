@@ -23,7 +23,6 @@ APPLY = ("--full", "--apply")
 CATALOG = "docs/catalog.md"
 REGISTRY = "docs/id-registry.md"
 LEDGER = "tests/system/ledger.json"
-HISTORY = "docs/run-history.md"
 RD = "docs/requirements-definition.md"
 INTEGRATIONS = "docs/integrations.md"
 ROLES = ("要求定義書", "System Test の台帳", "コードとカタログ", "リポジトリ")
@@ -91,10 +90,8 @@ def plant_automatic(r: Repo) -> None:
 
 
 def plant_manual(r: Repo) -> None:
-    row = "| 202610010000 | 2026-10-01 00:00 | 2026-10-01 01:00 | abc1234 | 完了 | FR-001 | なし | 100% | 60 分 | 100% | 0 | 0 | FR-001 |\n"
-    other = row.replace("abc1234 | 完了", "def5678 | 中断")
-    hist = r.read(HISTORY) if (r.path / HISTORY).exists() else (SOURCE / "tools" / "templates" / "docs" / "run-history.md").read_text(encoding="utf-8")  # 0.5.x leftover
-    r.write(HISTORY, hist.rstrip("\n") + "\n" + row + other)
+    # PARAM-001 is deleted in the ID registry while the requirements definition still uses it -> MANUAL CHK-02
+    sub_line(r, REGISTRY, r"^(\| PARAM-001 \|[^|\n]*\| )使用中( \|)", r"\1削除済み\2")
 
 
 def repaired(r: Repo) -> dict:
@@ -203,7 +200,7 @@ def test_ac242_manual_items_have_chk_location_role_and_next_action(template, tmp
         assert re.match(r"^MANUAL CHK-\d{2} \S+:\d+ ", l), l
         assert any(f"担当: {role}" in l for role in ROLES), l
         assert "次の行動: " in l and l.split("次の行動: ", 1)[1].strip(), l
-    assert any(l.startswith("MANUAL CHK-23 docs/run-history.md:") and "リポジトリ" in l for l in man), text
+    assert any(l.startswith(f"MANUAL CHK-02 {RD}:") and "PARAM-001" in l and "要求定義書" in l for l in man), text
     assert any(l.startswith("MANUAL CHK-11 tests/system/ledger.json:") and "System Test の台帳" in l for l in man), text
     assert any(l.startswith("MANUAL CHK-01 ") and "AC-077" in l and "要求定義書" in l for l in man), text
 
@@ -238,19 +235,6 @@ def test_ac243_verify_hint_and_identical_results_regardless_of_path(template, tm
         assert norm(pa) == norm(pb), args
         assert no_traceback(norm(pa))
     assert snapshot(a, mtime=False) == snapshot(b, mtime=False)
-
-
-# NFR-COMPAT-004 (FR-1046 の制限): the new apply command is refused on a worker branch like --apply
-def test_full_apply_is_refused_on_worker_branch(template, tmp_path):
-    r = fresh(template, tmp_path)
-    git(r.path, "switch", "-q", "-c", "work/r/I-01")
-    plant_automatic(r)
-    before = snapshot(r)
-    proc = r.py("rdfix.py", *APPLY)
-    assert proc.returncode == 2 and "work/<run-id>/<item>" in out(proc)
-    assert snapshot(r) == before
-    git(r.path, "checkout", "-q", "--", ".")
-    git(r.path, "switch", "-q", "main")
 
 
 # ------------------------------------------------------------------------------------------- NFR-REL-002

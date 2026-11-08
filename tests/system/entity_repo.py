@@ -76,11 +76,11 @@ def _base(root: Path, doc_path: str = DOC, cat_path: str = CAT, config_extra: di
         "requirements": doc_path,
         "catalog": cat_path,
         "id_registry": "docs/id-registry.md",
-        "run_history": "docs/run-history.md",
         "ledger": "tests/system/ledger.json",
         "manual_tests": "docs/manual-tests.md",
     }
-    cfg = {"management_files": mf, "base_branch": "main", "work": {"dir": "work", "retention_days": 14}}
+    cfg = {"management_files": mf, "base_branch": "main", "work": {"dir": "work"},
+           "checks": {"profile": "full"}}  # entity CHKs are outside the lite profile (FR-1084)
     cfg.update(config_extra or {})
     (root / "scripts" / "ebak.config.json").write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
 

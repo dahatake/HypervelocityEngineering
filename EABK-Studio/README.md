@@ -1,9 +1,9 @@
 # EABK Studio
 
-EABK Lite のデータ層（要求定義書・カタログ・System Test の台帳・ID 台帳。0.5.x の実行履歴が残っていればそれも）を、Product Manager・Architect・Software Engineer の視点で見て回る、ローカル専用の Web アプリです。
-EABK を使っている**どのリポジトリでも**動きます（このリポジトリに依存しません）。UI は日本語・英語を右上の `JA | EN` で切り替えます。
+EABK Lite のデータ層（要求定義書・カタログ・System Test の台帳・ID 台帳）を、Product Manager・Architect・Software Engineer の視点で見て回る、ローカル専用の Web アプリです。
+EABK を入れた**どのリポジトリでも**動きます（このリポジトリに依存しません）。EABK を使っていない git リポジトリも、コードと PRD から読み取りだけで導出して表示します（下の「EABK なしで使う（コードのモード）」）。UI は日本語・英語を右上の `JA | EN` で切り替えます。
 
-*A local-only web app that lets a product manager explore the EABK Lite data layer (requirements, catalog, system-test ledger, ID registry, and a remaining 0.5.x run history if present) of **any** repository that uses EABK. The UI switches between Japanese and English with the `JA | EN` button.*
+*A local-only web app that lets a product manager explore the EABK Lite data layer (requirements, catalog, system-test ledger, ID registry) of **any** repository with EABK; a git repository without EABK is shown in read-only "code mode", derived from its code and PRD. The UI switches between Japanese and English with the `JA | EN` button.*
 
 > 初めての方は、役割に合うガイドから読んでください: [Product Manager](../users-guide/studio/05-product-manager.md)・[Architect](../users-guide/studio/06-architect.md)・[Software Engineer](../users-guide/studio/07-software-engineer.md)（索引は [users-guide/studio/README.md](../users-guide/studio/README.md)）。各画面が読むデータの一覧は [08-data-reference.md](../users-guide/studio/08-data-reference.md) です。`tools/install.py` で他のリポジトリへ入れると、これらのガイドも一緒に入ります。
 
@@ -21,15 +21,30 @@ python EABK-Studio/studio.py --check                           # データ層が
 
 | オプション | 意味 |
 |---|---|
-| `--repo PATH` | 対象リポジトリ（省略時は現在のフォルダー。親フォルダーへさかのぼって `docs/requirements-definition.md` か `docs/catalog.md` を探します） |
+| `--repo PATH` | 対象リポジトリ。EABK がなくてもかまいません。親フォルダーへさかのぼって `docs/requirements-definition.md` か `docs/catalog.md` を探し、なければ git リポジトリのルートを使います。省略時は、現在のフォルダーにデータ層があるか、コードのモードで見られる git リポジトリならそこ、それ以外は Studio 自身のリポジトリです |
 | `--port N` | 待ち受けポート（既定 8765。使用中なら次の番号） |
 | `--no-open` | ブラウザーを自動で開かない |
 | `--role pm\|architect\|swe` | 最初に開く画面（pm = ダッシュボード、architect = マップ（2D）、swe = 表）。画面右上のロールのボタンと同じ |
-| `--check` | 管理データのファイルの有無と、解析できた件数・警告を表示して終了（データ層があれば 0、なければ 1）。サーバーは起動しません |
+| `--check` | 管理データのファイルの有無と、解析できた件数・警告を表示して終了（データ層があるか、コードのモードで見られれば 0、どちらでもなければ 1）。コードのモードでは `mode: code (...) requirement-docs=… requirements=… linked-to-code=… code-files=… test-files=… components=…` の行も出ます。サーバーは起動しません |
 
-データ層がないフォルダーを `--repo` に指定すると、起動せずに案内を出して終了コード 1 で終わります。
+データ層がなく、コードのモードでも表示するものがないフォルダー（空のフォルダー、git リポジトリでないフォルダー）を `--repo` に指定すると、起動せずに「no EABK data layer … and nothing to show in code mode」と案内を出して終了コード 1 で終わります。
 
-画面右上のリポジトリ名を押すと、起動したまま別のリポジトリへ切り替えられます。データ層のファイルを更新すると、数秒以内に自動で読み直します。
+### EABK なしで使う（コードのモード） / Without EABK (code mode)
+
+EABK を入れていない git リポジトリも見られます（FR-1086）。HVE を clone したフォルダーから実行します。
+
+```powershell
+python EABK-Studio/studio.py --repo C:\path\to\any-git-repo --check   # mode: code (...) の行で、導出できた件数を確認
+python EABK-Studio/studio.py --repo C:\path\to\any-git-repo
+```
+
+- データ層があるリポジトリでは、従来どおりデータ層だけを読みます。
+- データ層がないときは、読み取りだけで次を導出します（何も書き込みません）: Markdown の表の先頭の列と見出しにある要求 ID（`FR-…`・`NFR-…`。`docs/PRD.md` や、名前に prd・requirement・要求・spec を含むファイルを先に読みます）、その ID を書いたコードとテストのファイル（カタログの行の実装ファイル・テストになります）、コンポーネント（共通部品）にまとめたソースのファイル。
+- すべての画面（ダッシュボード・マップ・図式・ソース対応・表）が動きます。台帳・受入基準は空です。
+- 対象は git リポジトリのルートだけです。ただのフォルダーは走査しません。
+- 例: `C:\GitHub\VideoCreator` では `docs/PRD.md` から 103 件の要求、そのうち 56 件がコード・テストにつながり、コードのファイル 78・コンポーネント 6 を表示しました。
+
+画面右上のリポジトリ名を押すと、起動したまま別のリポジトリへ切り替えられます（データ層があるか、コードのモードで見られる git リポジトリ）。データ層のファイルを更新すると、数秒以内に自動で読み直します。
 ファイルの場所は、対象リポジトリの `scripts/ebak.config.json`（なければ `scripts/hve.config.json`）の `management_files` に従います。
 
 ## 画面 / Views
@@ -48,7 +63,7 @@ python EABK-Studio/studio.py --check                           # データ層が
 | ⑧ 表 | 元の行を 要求・設計・証跡・運用 の 4 グループの種別で一覧。セルの ID はリンク（未解決 ID は明示）。並べ替え・絞り込み・CSV |
 | ⑨ 整合性保守 | 要求正本と違うカタログの題名・決定状態を、プレビュー後に更新（下記）。書込みはここだけ |
 
-`#/structure`（7 つのデータ層の現状と理想の差）と `#/consistency`（要求 → AC → 試験 → カタログ → 実装ファイルの欠け）は、URL で開く ⑨ の補助画面です。
+`#/structure`（6 つのデータ層の現状と理想の差）と `#/consistency`（要求 → AC → 試験 → カタログ → 実装ファイルの欠け）は、URL で開く ⑨ の補助画面です。
 
 ### 管理データの種別と主な閲覧場所
 
@@ -73,7 +88,6 @@ python EABK-Studio/studio.py --check                           # データ層が
 | 決定記録 | ダッシュボード | 表 |
 | 監査指摘 | ダッシュボード | 表 |
 | 出典 | マップ | 表 |
-| 実行履歴 | ダッシュボード | 表 |
 
 ### 2D / 3D の切替
 
@@ -90,15 +104,15 @@ python EABK-Studio/studio.py --check                           # データ層が
 | `docs/requirements-definition.md`（と `docs/requirements/*.md`） | 目的・要求・受入基準・PARAM・用語・状態・ペルソナ・外部連携・質問票・決定記録・監査指摘・出典 |
 | `docs/catalog.md` | 機能・共通部品・API・テーブルと、実装ファイル・テストのパス（ソースへの対応はこれだけから作ります） |
 | `tests/system/ledger.json` | System Test のケースと結果 |
-| `docs/id-registry.md`, `docs/run-history.md` | ID 台帳の集計、実行履歴 |
+| `docs/id-registry.md` | ID 台帳の集計 |
 
-ソースコードは**開きません**。カタログに書かれたパスの名前だけを使います。どの画面がどのファイルのどの節・列を読み、どう計算するかは [08-data-reference.md](../users-guide/studio/08-data-reference.md) にあります。サーバーは `127.0.0.1` だけで待ち受け、通常の閲覧・検索・CSV出力・リポジトリ切替では書き込みません。
+データ層があるリポジトリでは、ソースコードを**開きません**。カタログに書かれたパスの名前だけを使います（コードのモードでは、要求 ID を探すためにだけソースを読みます）。どの画面がどのファイルのどの節・列を読み、どう計算するかは [08-data-reference.md](../users-guide/studio/08-data-reference.md) にあります。サーバーは `127.0.0.1` だけで待ち受け、通常の閲覧・検索・CSV出力・リポジトリ切替では書き込みません。
 
 例外は「整合性保守」画面で利用者が差分をプレビューし、`確認して実行` を押した場合だけです。この操作は `docs/catalog.md` の選択した要求行について、`題名` と `決定状態` の2列だけを要求正本へ合わせます。プレビュー後の競合、対象外ファイルへの影響、書込み失敗、`python scripts/verify.py --docs-only` の失敗を検出すると、変更をバイト単位で復元して明示的にエラーを表示します。
 
 ## 保守 / Maintenance
 
-- テスト: `python -m pytest EABK-Studio/tests -q`
+- テスト（HVE のリポジトリだけ。`EABK-Studio/tests/` は導入先には入れません）: `python -m pytest EABK-Studio/tests -q`
 - 整合性保守: `整合性保守 / Maintenance` → 対象要求 → プレビュー → `確認して実行`
 - 構成: `studio.py`（サーバー）、`eabk_model.py`（データ層の読み取りとグラフ化）、`web/`（画面。ビルド不要の ES モジュール。`web/vendor/three.module.min.js` は three.js・MIT）
 - 画面の文言は `web/js/i18n.js` の `ja` / `en` に追加します。

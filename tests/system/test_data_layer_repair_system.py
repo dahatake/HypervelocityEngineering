@@ -58,7 +58,7 @@ def test_ac240_check_inconsistent_exits_1_shows_fix_and_manual_and_writes_nothin
     fixes, manual = d.fix_lines(out(r)), d.manual_lines(out(r))
     for rel in (d.CATALOG, d.REGISTRY, d.LEDGER):
         assert any(rel in l for l in fixes), f"{rel} の自動修復の計画（FIX の行）がない\n{out(r)}"
-    assert any(d.HISTORY in l for l in manual), f"手動対応（MANUAL の行）がない\n{out(r)}"
+    assert any(d.MANUAL in l for l in manual), f"手動対応（MANUAL の行）がない\n{out(r)}"
     assert d.snapshot(clean) == before, "確認だけのコマンドがデータ層のファイル（内容または更新時刻）を変えた"
 
 
@@ -98,31 +98,14 @@ def test_ac241_apply_with_manual_left_applies_automatic_part_and_exits_1(clean):
     d.plant_manual(clean)
     d.commit(clean, "plant")
     protected = d.bytes_of(clean, d.PROTECTED)
-    history = (clean / d.HISTORY).read_bytes()
+    manual_bytes = (clean / d.MANUAL).read_bytes()
     r = d.py(clean, *d.APPLY)
     assert d.no_traceback(r), out(r)
     assert r.returncode == 1, f"手動対応が残るのに exit {r.returncode}\n{out(r)}"
     assert all(d.automatic_repaired(clean).values()), f"自動修復できる分が適用されていない: {d.automatic_repaired(clean)}\n{out(r)}"
-    assert any(d.HISTORY in l for l in d.manual_lines(out(r))), f"残った手動対応が表示されない\n{out(r)}"
-    assert (clean / d.HISTORY).read_bytes() == history, "手動対応のファイルが書き換えられた"
+    assert any(d.MANUAL in l for l in d.manual_lines(out(r))), f"残った手動対応が表示されない\n{out(r)}"
+    assert (clean / d.MANUAL).read_bytes() == manual_bytes, "手動対応のファイルが書き換えられた"
     assert d.bytes_of(clean, d.PROTECTED) == protected, "要求定義書または外部連携カタログが変わった"
-
-
-# FR-1046 AC-241 (abnormal: refusal on a worker branch work/<run-id>/<item>) -> exit 2, nothing written
-def test_ac241_apply_on_worker_branch_is_refused_with_exit_2(clean):
-    d.run(["git", "checkout", "-q", "-b", "work/202610160833/item-1"], clean, check=True)
-    d.plant_automatic(clean)
-    d.commit(clean, "plant")
-    before = d.snapshot(clean)
-    r = d.py(clean, *d.APPLY)
-    assert d.no_traceback(r), out(r)
-    assert r.returncode == 2, f"作業役のブランチでの適用が exit {r.returncode}\n{out(r)}"
-    assert out(r).strip(), "拒否の理由が表示されない"
-    assert {k: v[0] for k, v in d.snapshot(clean).items()} == {k: v[0] for k, v in before.items()}, "拒否したのに書き込んだ"
-    # control: the same state on a non-worker branch is applied (the refusal is caused by the branch only)
-    d.run(["git", "branch", "-m", "run/202610160833"], clean, check=True)
-    r2 = d.py(clean, *d.APPLY)
-    assert r2.returncode == 0 and all(d.automatic_repaired(clean).values()), f"統合ブランチでは適用されるはず\n{out(r2)}"
 
 
 # FR-1046 AC-241 (abnormal: write failure -> NFR-REL-002 cancellation) -> exit 2, everything as before
@@ -160,7 +143,7 @@ def test_ac241_apply_on_clean_data_layer_exits_0_and_protected_files_unchanged(c
 
 # ============================================================================ FR-1045 AC-237 (installer repairs)
 
-def _assert_install_report(r, root, protected, history):
+def _assert_install_report(r, root, protected, manual_bytes):
     text = out(r)
     assert d.no_traceback(r), text
     assert r.returncode == 0, f"導入が失敗した\n{text}"
@@ -168,12 +151,12 @@ def _assert_install_report(r, root, protected, history):
     items = [l for l in text.splitlines() if re.search(r"CHK-\d+", l)]
     for rel in (d.CATALOG, d.REGISTRY, d.LEDGER):
         assert any(rel in l for l in items), f"修復した項目 {rel}（検査項目 ID つき）が表示されない\n{text}"
-    man = [l for l in text.splitlines() if d.HISTORY in l and re.search(r"CHK-\d+", l)]
+    man = [l for l in text.splitlines() if d.MANUAL in l and re.search(r"CHK-\d+", l)]
     assert man, f"残った手動対応（検査項目 ID・位置）が表示されない\n{text}"
-    assert any(re.search(re.escape(d.HISTORY) + r":\d+", l) for l in man), f"手動対応の位置（行）がない\n{text}"
+    assert any(re.search(re.escape(d.MANUAL) + r":\d+", l) for l in man), f"手動対応の位置（行）がない\n{text}"
     assert any(any(role in l for role in d.ROLES) for l in man), f"手動対応の担当の役割がない\n{text}"
     assert re.search(r"不合格|FAIL|fail|NG", text), f"再検査の合否が表示されない\n{text}"
-    assert (root / d.HISTORY).read_bytes() == history, "手動対応のファイルが書き換えられた"
+    assert (root / d.MANUAL).read_bytes() == manual_bytes, "手動対応のファイルが書き換えられた"
     assert d.bytes_of(root, d.PROTECTED) == protected, "要求定義書または外部連携カタログが変わった"
 
 
@@ -185,9 +168,9 @@ def test_ac237_new_install_repairs_and_reports(tmp_path):
     d.commit(root, "plant")
     protected = d.bytes_of(root, d.PROTECTED)
     assert set(protected) == set(d.PROTECTED)
-    history = (root / d.HISTORY).read_bytes()
+    manual_bytes = (root / d.MANUAL).read_bytes()
     r = d.install(root, check=False)
-    _assert_install_report(r, root, protected, history)
+    _assert_install_report(r, root, protected, manual_bytes)
 
 
 # FR-1045 AC-237: update (re-run of the installer) on an installed repository
@@ -196,9 +179,9 @@ def test_ac237_update_install_repairs_and_reports(clean):
     d.plant_manual(clean)
     d.commit(clean, "plant")
     protected = d.bytes_of(clean, d.PROTECTED)
-    history = (clean / d.HISTORY).read_bytes()
+    manual_bytes = (clean / d.MANUAL).read_bytes()
     r = d.install(clean, check=False)
-    _assert_install_report(r, clean, protected, history)
+    _assert_install_report(r, clean, protected, manual_bytes)
 
 
 # FR-1045 AC-237: only automatic inconsistencies -> repaired and the re-check passes
@@ -240,7 +223,7 @@ def test_ac238_no_repair_shows_plan_and_writes_nothing(planted):
     fixes = [l for l in text.splitlines() if re.match(r"^\s*FIX\b", l)]
     for rel in (d.CATALOG, d.REGISTRY, d.LEDGER):
         assert any(rel in l for l in fixes), f"修復の計画に {rel} がない\n{text}"
-    assert any(d.HISTORY in l for l in text.splitlines() if re.match(r"^\s*MANUAL\b", l)), f"検査の結果（手動対応）がない\n{text}"
+    assert any(d.MANUAL in l for l in text.splitlines() if re.match(r"^\s*MANUAL\b", l)), f"検査の結果（手動対応）がない\n{text}"
     assert _bytes(planted) == before, "--no-repair でデータ層のファイルが変わった"
 
 

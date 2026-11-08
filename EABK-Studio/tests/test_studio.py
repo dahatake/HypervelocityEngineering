@@ -1,5 +1,6 @@
 """Tests for EABK Studio: the data-layer parser and the local server. Run: python -m pytest EABK-Studio/tests -q"""
 import json
+import shutil
 import hashlib
 import re
 import subprocess
@@ -185,7 +186,7 @@ def test_management_analysis_is_derived_from_parsed_records(repo):
     model = m.build_model(repo)
     structure = model["analysis"]["structure"]
     assert {layer["name"] for layer in structure["layers"]} == {
-        "要求定義書", "境界別要求", "カタログ", "System Test", "ID 台帳", "実行履歴", "境界間",
+        "要求定義書", "境界別要求", "カタログ", "System Test", "ID 台帳", "境界間",
     }
     assert all(all(layer[key] for key in ("actual", "ideal", "delta", "rule", "reason", "source"))
                for layer in structure["layers"])
@@ -259,12 +260,6 @@ def test_history_has_individual_evidence_records_for_every_progress_category(rep
 | 2026-10-08 | FR-001 | 承認 | 依頼 | run-1 |
 | 2026-10-09 | FR-001 | 継続 | 再確認 | run-2 |
 """, encoding="utf-8")
-    (repo / "docs" / "run-history.md").write_text(
-        "# 実行履歴\n| run-id | 開始 | 終了 | 結果 |\n|---|---|---|---|\n"
-        "| run-1 | 2026-10-08T09:00:00+09:00 | 2026-10-08T10:00:00+09:00 | 完了 |\n"
-        "| run-2 | 2026-10-09T09:00:00+09:00 |  | 失敗 |\n",
-        encoding="utf-8",
-    )
     ledger = json.loads((repo / "tests" / "system" / "ledger.json").read_text(encoding="utf-8"))
     ledger["cases"].append({**ledger["cases"][0], "id": "E2E-002", "status": "not_run",
                             "last_run_at": None})
@@ -275,15 +270,11 @@ def test_history_has_individual_evidence_records_for_every_progress_category(rep
     records = model["analysis"]["history"]
     required_states = {
         "決定記録": {"承認", "継続"},
-        "実行履歴": {"完了", "失敗"},
         "実装登録": {"登録済み", "未登録"},
         "System Test": {"pass", "not_run"},
     }
     for category, states in required_states.items():
         assert {record["status"] for record in records if record["category"] == category} == states
-    run_records = {record["id"]: record for record in records if record["category"] == "実行履歴"}
-    assert run_records["run-1"]["date"] == "2026-10-08T10:00:00+09:00"
-    assert run_records["run-2"]["date"] == "2026-10-09T09:00:00+09:00"
     assert any(record["category"] == "System Test" and record["status"] == "pass"
                and record["date"] == "2026-10-08T10:00:00+09:00" for record in records)
     required_records = [record for record in records if record["category"] in required_states]
@@ -377,6 +368,68 @@ def test_repository_without_data_layer(tmp_path):
     assert model["meta"]["error"] == "no-data-layer" and model["reqs"] == []
 
 
+def _plain_repo(root):
+    """A repository without EABK: a PRD with requirement IDs in a table, code and a test that mention one of them."""
+    (root / "docs").mkdir(parents=True)
+    (root / "docs" / "PRD.md").write_text(
+        "# PRD\n\n| ID | 要件 | 優先度 |\n|---|---|---|\n| FR-ING-01 | 動画を取り込める | M |\n"
+        "| NFR-PERF-01 | 60 分の動画を 25 分以内に処理する | M |\n", encoding="utf-8")
+    (root / "src" / "core").mkdir(parents=True)
+    (root / "src" / "core" / "ingest.py").write_text("# FR-ING-01\ndef ingest():\n    return 1\n", encoding="utf-8")
+    (root / "tests").mkdir()
+    (root / "tests" / "test_ingest.py").write_text("# FR-ING-01\ndef test_ingest():\n    pass\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    return root
+
+
+def _snapshot(root):
+    return {p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+
+
+# FR-1086 AC-470: without a data layer, Studio derives requirements, links and components from the PRD and code
+def test_code_mode_derives_requirements_links_and_components(tmp_path):
+    repo = _plain_repo(tmp_path / "plain")
+    before = _snapshot(repo)
+    model = m.build_model(repo)
+    assert model["meta"]["mode"] == "code" and "error" not in model["meta"]
+    reqs = {r["id"]: r for r in model["reqs"]}
+    assert set(reqs) == {"FR-ING-01", "NFR-PERF-01"}
+    assert reqs["FR-ING-01"]["file"] == "docs/PRD.md" and reqs["FR-ING-01"]["line"] == 5
+    feat = {f["req"]: f for f in model["catalog"]["features"]}
+    assert feat["FR-ING-01"]["impl"] == ["src/core/ingest.py"] and feat["FR-ING-01"]["tests"] == ["tests/test_ingest.py"]
+    assert not feat["NFR-PERF-01"]["impl"]
+    assert {p["name"] for p in model["catalog"]["parts"]} == {"src/core", "tests"}
+    assert model["meta"]["derivedFrom"]["linkedRequirements"] == 1
+    assert _snapshot(repo) == before  # read-only
+
+
+# FR-1086 AC-471: --check and the server accept a repository without EABK; an empty folder is still refused
+def test_check_and_start_accept_code_mode(tmp_path, capsys):
+    repo = _plain_repo(tmp_path / "plain")
+    assert studio.main(["--repo", str(repo), "--check"]) == 0
+    out = capsys.readouterr().out
+    assert "mode: code" in out and "requirements=2" in out and "linked-to-code=1" in out
+    assert m.can_view(repo)
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    assert not m.can_view(empty)
+    assert studio.main(["--repo", str(empty), "--check"]) == 1
+
+
+# FR-1086 AC-471: code mode is limited to a git repository root; a plain folder with files is not walked
+def test_code_mode_needs_a_git_repository(tmp_path):
+    repo = _plain_repo(tmp_path / "plain")
+    shutil.rmtree(repo / ".git")
+    assert not m.can_view(repo) and m.build_model(repo)["meta"]["error"] == "no-data-layer"
+
+
+# FR-1086 AC-472: with a data layer, code mode is never used (the data layer stays the only source)
+def test_data_layer_wins_over_code_mode(repo):
+    (repo / "docs" / "PRD.md").write_text("| ID | 要件 |\n|---|---|\n| FR-ZZZ-01 | 別の要件 |\n", encoding="utf-8")
+    model = m.build_model(repo)
+    assert model["meta"]["mode"] == "eabk" and all(r["id"] != "FR-ZZZ-01" for r in model["reqs"])
+
+
 # FR-001 AC-001: the model exposes every management-data source for traceability.
 def test_model_exposes_management_data_sources(repo):
     model = m.build_model(repo)
@@ -388,13 +441,8 @@ def test_model_exposes_management_data_sources(repo):
 
 # FR-009 AC-009: history, current model data, and integrity records share one model.
 def test_model_includes_history_and_integrity_records(repo):
-    (repo / "docs" / "run-history.md").write_text(
-        "# 実行履歴\n\n| run | 日付 | 状態 |\n|---|---|---|\n| run-1 | 2026-10-09 | 成功 |\n",
-        encoding="utf-8",
-    )
     model = m.build_model(repo)
-    assert model["meta"]["files"]["run_history"] == "docs/run-history.md"
-    assert isinstance(model["runs"], list)
+    assert isinstance(model["analysis"]["history"], list)
     assert model["reqs"][0]["acs"][0]["id"] == "AC-001"
 
 

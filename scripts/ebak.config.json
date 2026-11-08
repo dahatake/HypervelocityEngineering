@@ -4,15 +4,13 @@
     "requirements_dir": "docs/requirements",
     "catalog": "docs/catalog.md",
     "id_registry": "docs/id-registry.md",
-    "run_history": "docs/run-history.md",
     "ledger": "tests/system/ledger.json",
     "manual_tests": "docs/manual-tests.md",
     "integrations": "docs/integrations.md"
   },
   "base_branch": "main",
   "work": {
-    "dir": "work",
-    "retention_days": 14
+    "dir": "work"
   },
   "checks": {
     "_note": "EABK Lite: profile が lite（既定）のときは lite_checks の CHK だけを報告します（構造と追跡性）。full にすると CHK-00〜34 をすべて報告します。プロファイルは rdcheck・verify・rdfix のすべてに同じように効きます（--profile でも切り替えられます）。",

@@ -5,8 +5,7 @@ Usage:
   python scripts/verify.py                 # management data checks + build/lint/test commands
   python scripts/verify.py --docs-only     # management data checks only (requirements, catalog, ledger)
   python scripts/verify.py --quick         # skip commands marked "slow": true
-  python scripts/verify.py --run current   # add CHK-21 for the active run's queue.json
-  python scripts/verify.py --strict        # final / integration gate: warnings that matter become errors
+  python scripts/verify.py --profile full  # report every CHK (default: checks.profile, lite)
   python scripts/verify.py --no-cache      # always run (a PASS on the same clean commit is otherwise reused)
 
 Project commands come from scripts/ebak.config.json -> verify.commands:
@@ -15,8 +14,7 @@ Project commands come from scripts/ebak.config.json -> verify.commands:
 Full logs go to /work (never to /docs or tests); only a short summary is printed.
 
 Cache: when the working tree is clean (no tracked or untracked changes), a PASS is stored in
-/work/.ebak/verify-cache.json under a key made of HEAD, the arguments, scripts/ebak.config.json and the run state
-that the checks read. The same verify on the same commit (e.g. a local run, then CI) is then
+/work/.ebak/verify-cache.json under a key made of HEAD, the arguments and scripts/ebak.config.json. The same verify on the same commit (e.g. a local run, then CI) is then
 answered from the cache. FAIL is never cached. Disable with --no-cache or EBAK_VERIFY_NO_CACHE=1.
 """
 from __future__ import annotations
@@ -41,9 +39,7 @@ _STEP_LOCK = threading.Lock()
 
 
 def log_dir(root: Path, cfg: dict) -> Path:
-    croot = h.conductor_root(root, cfg)
-    rid = h.current_run(croot, cfg)
-    d = h.run_dir(croot, cfg, rid) / "logs" if rid else h.work_dir(root, cfg) / "logs"
+    d = h.work_dir(root, cfg) / "logs"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -95,18 +91,11 @@ def cache_key(root: Path, cfg: dict, args) -> str:
         return ""
     parts = [head.strip(), json.dumps(vars(args), sort_keys=True, default=str),
              json.dumps(cfg, sort_keys=True, ensure_ascii=False), h.TOOLKIT_VERSION]
-    croot = h.conductor_root(root, cfg)
-    rid = h.current_run(croot, cfg)
-    if rid:
-        meta = h.load_meta(croot, cfg, rid)
-        parts.append(f"{rid}:{meta.get('ledger_strict')}:{meta.get('stages_done')}")
-        if args.run:
-            parts.append(json.dumps(h.load_queue(croot, cfg, rid), sort_keys=True, ensure_ascii=False))
     return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
 
 
 def cache_path(root: Path, cfg: dict) -> Path:
-    return h.work_dir(h.conductor_root(root, cfg), cfg) / ".ebak" / "verify-cache.json"
+    return h.work_dir(root, cfg) / ".ebak" / "verify-cache.json"
 
 
 def cache_get(root: Path, cfg: dict, key: str) -> dict:
@@ -193,11 +182,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--docs-only", action="store_true")
     ap.add_argument("--quick", action="store_true")
-    ap.add_argument("--run", default=None)
     ap.add_argument("--base", default=None)
-    ap.add_argument("--strict", action="store_true")
-    ap.add_argument("--strict-ledger", action="store_true")
-    ap.add_argument("--no-strict-ledger", action="store_true")
     ap.add_argument("--show-warnings", action="store_true")
     ap.add_argument("--profile", choices=("lite", "full"), default=None,
                     help="rdcheck の検査の範囲（既定は scripts/ebak.config.json の checks.profile、未設定なら lite）")
@@ -206,7 +191,6 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     root = Path(args.root).resolve() if args.root else h.repo_root()
     cfg = h.load_config(root)
-    h.apply_resource_env(root, cfg)
     key = "" if args.show_warnings else cache_key(root, cfg, args)
     hit = cache_get(root, cfg, key)
     if hit:
@@ -223,16 +207,8 @@ def main(argv=None) -> int:
     rd_args = ["--root", str(root), "check"]
     if args.base:
         rd_args += ["--base", args.base]
-    if args.run:
-        rd_args += ["--run", args.run]
     if args.profile:
         rd_args += ["--profile", args.profile]
-    if args.strict:
-        rd_args.append("--strict")
-    if args.strict_ledger:
-        rd_args.append("--strict-ledger")
-    if args.no_strict_ledger:
-        rd_args.append("--no-strict-ledger")
     if not args.show_warnings:
         rd_args.append("--errors-only")
     import contextlib

@@ -9,12 +9,12 @@ import pytest
 from test_links_wrap_status_ui import ROOT, studio, _open, _impl, make_zoom, sync_api  # noqa: F401
 
 
-# FR-1032 AC-191: with decision and run data all four chip kinds are shown.
-def test_history_has_all_four_chip_kinds(studio):
+# FR-1032 AC-191: with decision data all three chip kinds are shown.
+def test_history_has_all_chip_kinds(studio):
     page = _open(studio, "dashboard")
     page.wait_for_selector('[data-testid="history-chip"]')
     kinds = {c.get_attribute("data-kind") for c in page.locator('[data-testid="history-chip"]').all()}
-    assert {"decision", "run", "requirement", "impl"} <= kinds
+    assert {"decision", "requirement", "impl"} <= kinds
     page.context.close()
 
 

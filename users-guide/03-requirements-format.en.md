@@ -207,7 +207,3 @@ So that parallel branches do not conflict when adding rows at the same time, `me
 The ledger is updated only via `scripts/ledger.py` (do not edit it directly; the `by` in `history` is set with `--by`, default `script`). Cases cannot be deleted. A case that is no longer needed is set to blocked with `ledger.py block --reason`, and the reason is left in history.
 
 Keep the number of requirements, acceptance criteria, and cases optimal (so as not to increase the amount to read, tokens, and test execution time). When a request overlaps an existing requirement, the writer (usually Copilot) looks for similar items with `rdcheck.py similar` and changes the existing item instead of creating a new one. `ledger.py add` refuses to add if there is a valid case that already guarantees the same acceptance criterion (extend the existing case with `ledger.py update`. Add `--new-case-reason "reason"` only when the layer differs and a separate case is truly needed).
-
-## 3.5 Run history (`docs/run-history.md`)
-
-In 0.6.0 (EABK Lite), a new installation does not create this file, and no script appends to it. A table left in a repository updated from 0.5.x is a read-only record of the past (in 0.5.x one row was appended per run; the columns were run-id, start, end, HEAD, result, implemented requirement IDs, BLOCKED, AC pass rate, elapsed time, first-time gate pass rate, AI credits, human interventions, and verified requirements). If the file exists, EABK Studio displays it; duplicate run-ids are detected by CHK-23 and fixed by `rdfix.py --apply`.

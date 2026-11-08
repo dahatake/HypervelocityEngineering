@@ -30,7 +30,7 @@ Enterprise App Build Kit の版の付け方と、版を上げる手順（配布�
    ```
    `TOOLKIT_VERSION` が書き換わり、`CHANGELOG.md` の `[Unreleased]` の下に新しい版の見出しが入ります。引数なしで実行すると、現在の版を表示するだけです。
 4. `CHANGELOG.md` で、`[Unreleased]` に書いた内容を新しい版の見出しの下へ移します。
-5. 配布物（ファイル）を追加・改名・削除した場合は、`tools/install.py` の `MANAGED`・`TEMPLATES`・`OBSOLETE` と、この `users-guide/` を合わせて直します。`users-guide/` の全ファイルは `MANAGED` に列挙し、導入先では `EABK-docs/` に保存されます（導入先の `users-guide/` は編集しません）。
+5. 配布物（ファイル）を追加・改名・削除した場合は、`tools/install.py` の `MANAGED`・`TEMPLATES` と、この `users-guide/` を合わせて直します。`users-guide/` の全ファイルは `MANAGED` に列挙し、導入先では `EABK-docs/` に保存されます（導入先の `users-guide/` は編集しません）。
 6. 版を確認し、commit してタグを付けます。
    ```bash
    python tools/install.py --version     # 例: 0.4.0
@@ -44,7 +44,7 @@ Enterprise App Build Kit の版の付け方と、版を上げる手順（配布�
 
 導入済みのバージョンは `.github/ebak-toolkit.json` の `version` に記録されています。
 
-1. 作業ツリーをきれいにします（未 commit の変更を commit か退避します）。0.5.x から 0.6.0 に上げるときは、先に 9.4 を読みます。
+1. 作業ツリーをきれいにします（未 commit の変更を commit か退避します）。旧版（0.5.x など）から上げるときは、9.4 のクリーンインストールを使います。
 2. 更新が必要かを確認します。必要なら exit 1 になります。
    ```bash
    curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.sh | bash -s -- --check
@@ -60,11 +60,10 @@ Enterprise App Build Kit の版の付け方と、版を上げる手順（配布�
    | 表示 | 意味と対応 |
    |---|---|
    | `UPDATE` | 新しい版に更新しました |
-   | `REMOVE` | 新しい版では配布しなくなったファイルを、変更していなかったので削除しました |
    | `KEEP-LOCAL` | ローカルで変更したファイルは更新していません。差分を確認し、上書きしてよければ `--force` を付けて再実行します（`*.ebak-backup-<日時>` が残ります） |
-   | `PRUNE` | `scripts/ebak.config.json` から、新しい版で使わなくなったキーを削除しました（0.6.0 では `gates`・`limits`・`credits`・`worktree_share` と、旧既定の検証コマンド `toolkit-unit`） |
+   | `注意: この版が配布しないファイルが N 件残っています` | 旧版が入れたファイルです。更新では削除しません。9.4 の `--clean` で入れ直します |
 
-   管理データ（`docs/` と台帳）と `scripts/ebak.config.json` の既存の値は変更されません。`ebak.config.json` には、新しいキーだけが追加され、使わなくなったキーは削除されます（`PRUNE`）。
+   管理データ（`docs/` と台帳）と `scripts/ebak.config.json` の既存の値は変更されません。`ebak.config.json` には新しいキーだけが追加されます（使わなくなったキーは消しません）。
 5. 検証します。インストーラが最後に `python scripts/rdfix.py --full --apply` を 1 回実行します（`--no-repair` で計画だけ、`--skip-verify` で省略）。続けて全体の検証も通します。
    ```bash
    python scripts/verify.py
@@ -75,9 +74,11 @@ Enterprise App Build Kit の版の付け方と、版を上げる手順（配布�
    ```
 7. CI で版のずれを検出するには、`--check` を使います。
 
-## 9.4 0.5.x から 0.6.0（EABK Lite）へ移行する
+## 9.4 旧版から更新する（クリーンインストール）
 
-0.6.0 は互換性のない変更です。オーケストレーション（conductor と作業役、worktree の run、`/build`、役割のゲート）をやめ、規則（AGENTS.md）・データ層・決定的な検査（`verify.py` と CI）・節目の監査（rd-auditor）・EABK Studio だけを残しました。管理データ（要求定義書・カタログ・台帳・ID 台帳）の書式は変わりません。
+インストーラは旧版からの移行の処理（版ごとの削除リストや設定の書き換え）を持ちません。旧版から更新するときは `--clean` でクリーンインストールします。マニフェストに記録された「toolkit が入れたファイル」をすべて消してから入れ直すので、どの版からでも同じ手順です。
+
+0.6.0 は 0.5.x と互換性のない変更です。オーケストレーション（conductor と作業役、worktree の run、`/build`、役割のゲート）をやめ、規則（AGENTS.md）・データ層・決定的な検査（`verify.py` と CI）・節目の監査（rd-auditor）・EABK Studio だけを残しました。管理データ（要求定義書・カタログ・台帳・ID 台帳）の書式は変わりません。
 
 | 0.5.x で使っていたもの | 0.6.0 での代わり |
 |---|---|
@@ -85,15 +86,25 @@ Enterprise App Build Kit の版の付け方と、版を上げる手順（配布�
 | `<run_options>`（`max_hours`・`parallel_workers`・`scope` など） | 不要です。制約を伝えたいときは依頼文に書きます |
 | `approval_policy` の包括承認 | チャットで承認します（例: `FR-031: 承認`） |
 | rd-author だけが要求定義書を編集する | 誰が編集してもかまいません。ID は `next-id.py` でだけ採番し、台帳は `ledger.py` でだけ更新します |
-| `run-state.py`・`integrate.py`・`kpi.py`・`watch.py`・`clean-work.py` | 代わりはありません。進捗と統合は git とプルリクエスト、検査は CI（`ebak-verify`・`ebak-data-layer`）に任せます |
+| `run-state.py`・`integrate.py`・`kpi.py`・`watch.py`・`clean-work.py` | 代わりはありません。進捗と統合は git とプルリクエスト、検査は CI（`ebak-verify`）に任せます |
 | hook（`quality-gates.json`・`prompt-prefix.json`）と定型文の自動付与 | ありません。同じ規則は `verify.py` と CI が検査します。毎回伝えたい前提は、自分の Copilot の instructions に書きます |
-| `docs/run-history.md` | 残っていれば読み取り専用の記録です（EABK Studio が表示します）。新しい行は追記されません |
+| `.github/workflows/ebak-data-layer.yml`（PR・push・毎週の自動修復の commit と Issue。contents・pull-requests・issues の write の権限） | 撤去しました（FR-1017・FR-1018・FR-1019、NFR-SEC-004、NFR-OPS-006 は廃止）。`--clean` で削除されます。CI は検査だけの `ebak-verify`（読み取りの権限）です。修復は手元で `python scripts/rdfix.py --full --apply` を実行し、同じ変更に含めます。読むだけの CI には書き込みの権限が要らず、bot が誰かの PR のブランチへ修復を push すると、ほかの人・PC のブランチが食い違うためです |
+| `rdcheck.py check`・`verify.py` の `--run`・`--strict`・`--strict-ledger`・`--no-strict-ledger`、CHK-21 | 撤去しました（付けると引数のエラーで exit 2）。つまみは検査プロファイル（`checks.profile`・`--profile lite`／`full`）だけです。`--strict` で error になっていた CHK-00・09・13 と、`--strict-ledger` の CHK-10・11 は WARN で、`--profile full --show-warnings` で見られます。要約行から `run=` を外しました |
+| `rdfix.py --apply` の作業役のブランチ（`work/<run-id>/<item>`）での拒否 | 撤去しました。exit 2 は、排他の待ち時間切れ・すべての取り消し・内部エラーだけです |
+| `work.retention_days`（`/work` の 14 日の清掃） | 撤去しました（`--clean` で設定から消えます）。`/work` は不要になったら手で削除します |
+| 既定の `verify.commands`（`toolkit-unit`・`studio-ui` = `python -m pytest -q EABK-Studio/tests`）と、導入先の `EABK-Studio/tests/` | `--clean` で消えます。導入先には Studio のテストを入れません。新しい導入の `verify.commands` は空（`[]`）なので、自分のビルド・テストのコマンドを登録します |
+| `ledger.py run` の結果を run のフォルダーに書く | 結果は `work/system-test/results.json` に書きます（`--results` で変更できます） |
 
 手順:
 
-1. 0.5.x の run が動いていないことを確かめ、作業ツリーをきれいにします。
-2. 9.3 の手順でインストールコマンドを再実行します。変更していない旧ファイル（conductor・rd-author・test-designer・implementer・reviewer の agent、build・build-template・implement-fr・system-test-increment・dedupe の skill、hook のファイル（`.github/hooks/quality-gates.json`・`.github/hooks/prompt-prefix.json`・`scripts/hooks/gate.py`）、`run-state.py`・`integrate.py`・`next-impl.py`・`build-request.py`・`watch.py`・`kpi.py`・`clean-work.py`・`select-tests.py`）は `REMOVE`、変更したものは `KEEP-LOCAL` で残ります（不要なら `--force` で削除・上書き）。設定の旧キー（`gates`・`limits`・`credits`・`worktree_share`・`prompt_prefix`）は `PRUNE` で消えます。要求定義書・台帳・カタログは変わりません。`.github/ebak-prompt-prefix.md` は残りますが、もう読みません。
-   - `WARN-HOOK  <パス>` が出たら、ローカルで変更した hook のファイルが残っています。そのファイルは削除された `gate.py` を呼び、hook がエラーになると Copilot がすべてのツールを拒否します。ファイルを削除してから Copilot のセッションを開き直します。
+1. 0.5.x の run が動いていないことを確かめ、作業ツリーをきれいにします（未 commit の変更があると `--clean` は実行しません）。
+2. 削除する一覧（`CLEAN`）を確かめてから、クリーンインストールします。PowerShell では `-Clean` です。
+   ```bash
+   python tools/install.py --target . --clean --dry-run
+   python tools/install.py --target . --clean
+   ```
+   toolkit が入れたファイル（conductor などの agent、build などの skill、hook のファイル `.github/hooks/*.json`・`scripts/hooks/gate.py`、撤去したスクリプト、`.github/workflows/ebak-data-layer.yml`。変更したものも）・`.ebak-backup-*`・設定・ブロック・`.gitignore`/`.gitattributes` に追記した行・マニフェストを削除し、この版を入れ直します。管理データ・`/work`・アプリのコードとテストは残ります。設定は既定に戻るので、以前の値は `git diff scripts/ebak.config.json` で確かめて戻します。2 回続けて実行しても、2 回目は何も変わりません。
+   - 旧版のデータ層のファイル（0.5.x の `docs/run-history.md`）と `.github/ebak-prompt-prefix.md` は残りますが、もう読みません。不要なら手で削除します。
 3. AGENTS.md と `.github/copilot-instructions.md` のブロックが「Enterprise App Build Kit Lite」の規則に置き換わったことを確かめます。
 4. 0.5.x の run が残した worktree と `work/*` ブランチは自動では消えません。確認して、不要なら手で消します。
    ```bash
@@ -110,4 +121,4 @@ Enterprise App Build Kit の版の付け方と、版を上げる手順（配布�
 
 ## 9.6 版の表記についての注意
 
-0.1.0 に版を整理する前の記録（`toolkit_version: 1.2.0` や `1.3.0`、`docs/run-history.md` の過去の行など）は、当時の表記のまま残しています。導入済みの環境の `.github/ebak-toolkit.json` に `1.3.0` と書かれている場合も、9.3 の手順で更新すると 0.1.0 以降の版に置き換わります。
+0.1.0 に版を整理する前の記録（`toolkit_version: 1.2.0` や `1.3.0` など）は、当時の表記のまま残しています。導入済みの環境の `.github/ebak-toolkit.json` に `1.3.0` と書かれている場合も、9.3 の手順で更新すると 0.1.0 以降の版に置き換わります。

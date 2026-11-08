@@ -2,20 +2,19 @@
 
 # 6. Checks and CI
 
-Quality in EABK Lite comes from deterministic checks. The local `scripts/verify.py` and the CI workflow `ebak-verify` run the same checks. The CI workflow `ebak-data-layer` repairs the data layer automatically, and at milestones rd-auditor audits the meaning. Nothing depends on prompts or personal memory. The rules (AGENTS.md) and the checks live in the repository, so they work the same way for several people on several PCs.
+Quality in EABK Lite comes from deterministic checks. The local `scripts/verify.py` and the CI workflow `ebak-verify` run the same checks. CI only checks; data-layer repairs are made locally with `python scripts/rdfix.py --full --apply` and included in the same change. At milestones rd-auditor audits the meaning. Nothing depends on prompts or personal memory. The rules (AGENTS.md) and the checks live in the repository, so they work the same way for several people on several PCs.
 
 | Layer | When | What it does | Does it stop work? |
 |---|---|---|---|
 | `verify.py` | Before finishing a change (rule in AGENTS.md) | Data-layer checks plus build and test commands | Reports with exit 1 |
 | CI `ebak-verify` | Push, pull request | The same checks as `verify.py` | Workflow failure |
-| CI `ebak-data-layer` | PR, push, manual, weekly | Data-layer check and automatic repair; an Issue for what it cannot fix | Repair commit or Issue |
 | Audit (rd-auditor) | When you ask at a milestone | Contradictions between requirements, drift from goals, vague wording | No (findings only) |
 
 ## 6.1 There are no hooks
 
 EABK Lite has no hooks and does not add a preamble to requests automatically. Nothing denies tool calls or sends work back, and there are no gates based on roles, edit scope, or branches. Whether the rules are followed is confirmed by verify and the CI checks. If you want a standing preamble, put it in your own Copilot instructions.
 
-If you update from an older version and a locally modified hook file is kept, the installer prints `WARN-HOOK  <path>`. Delete the file and reopen the Copilot session ([7.4](07-troubleshooting.en.md#74-install-and-update)).
+When updating from an older version, use `--clean` (clean install); it also deletes the old hook files ([7.4](07-troubleshooting.en.md#74-install-and-update)).
 
 ## 6.2 Check profiles (lite and full)
 
@@ -23,12 +22,12 @@ A profile selects which CHKs `rdcheck.py check`, `verify.py`, and `rdfix.py` rep
 
 | Profile | CHKs reported | When to use |
 |---|---|---|
-| `lite` (default) | The CHKs in `checks.lite_checks` (by default CHK-01, 02, 03, 05, 09, 12, 17, 19, 24) | Everyday changes, `verify.py`, CI ebak-verify and ebak-data-layer |
+| `lite` (default) | The CHKs in `checks.lite_checks` (by default CHK-01, 02, 03, 05, 09, 12, 17, 19, 24) | Everyday changes, `verify.py`, CI ebak-verify |
 | `full` | All of CHK-00 to CHK-34 | Milestone audits (rd-auditor runs with `--profile full --show-warnings`), when you want to see format warnings, when tidying a newly written requirements definition |
 
-- The scope is set by `checks.profile` in `scripts/ebak.config.json`. To change it for one run, pass `--profile lite|full` (it takes precedence over the setting). Example: `python scripts/verify.py --docs-only --profile full --show-warnings`.
+- The scope is set by `checks.profile` in `scripts/ebak.config.json`. To change it for one run, pass `--profile lite|full` (it takes precedence over the setting). The profile is the only check knob. Example: `python scripts/verify.py --docs-only --profile full --show-warnings`.
 - In lite, CHKs outside the scope affect neither the output nor the exit code. Lite looks only at structure and traceability (duplicate and reused IDs, existence of referenced targets, links between ACs and tests, protection of System Tests).
-- The summary line is `rdcheck: errors=N warnings=M base=… run=… profile=lite`.
+- The summary line is `rdcheck: errors=N warnings=M base=… profile=lite`.
 - The profile applies the same way, with no exception, to `rdcheck.py check`, `verify.py`, and `rdfix.py` (including `--full`). So `rdfix.py --full` passes exactly when `verify.py --docs-only` passes with the same profile (mechanical repairs such as catalog sync run the same way under either profile).
 
 ## 6.3 Checks performed by verify
@@ -37,7 +36,7 @@ These are the checks run by `scripts/verify.py`. CHKs with ● in the "lite" col
 
 | ID | lite | What is checked | Severity | How to fix |
 |---|---|---|---|---|
-| CHK-00 | | The requirements definition is missing | warn (error with `--strict`) | Create the requirements definition (skill `requirement-definition`) |
+| CHK-00 | | The requirements definition is missing | warn | Create the requirements definition (skill `requirement-definition`) |
 | CHK-01 | ● | Duplicate IDs. IDs not in the ID registry (IDs assigned by hand) | error | Reassign with `next-id.py`. For existing documents, use `next-id.py --sync --adopt` |
 | CHK-02 | ● | Reuse of a deleted or missing-number ID | error | Allocate a new ID with `next-id.py` |
 | CHK-03 | ● | An AC does not reference an existing requirement | error | Write it under the requirement's heading, or add `対応する要求:` |
@@ -47,10 +46,10 @@ These are the checks run by `scripts/verify.py`. CHKs with ● in the "lite" col
 | CHK-07 | | A catalog requirement ID is not in the requirements definition / decision status or title does not match / a row is missing for an approved, pending-approval, or on-hold requirement / rows for the same requirement are duplicated / the feature table is missing | error | Align with the requirements definition using `rdfix.py --apply` (6.4) |
 | CHK-08 | | A file written in the catalog does not exist | error | Fix the path or mark it "not implemented". Renames and deletions can be followed with `rdfix.py --apply` |
 | CHK-09 | ● | The ID of an implemented MUST requirement appears in neither the test code nor manual-tests (warn if not implemented) | error / warn | Write `FR-012 AC-031` in the test name or a comment |
-| CHK-10 | | System ACs and ledger cases do not correspond in both directions | warn (error with `--strict-ledger` or `--strict`) | Add cases to the ledger (`ledger.py`). Block the cases of ACs that are no longer in scope with `ledger.py block` |
+| CHK-10 | | System ACs and ledger cases do not correspond in both directions | warn | Add cases to the ledger (`ledger.py`). Block the cases of ACs that are no longer in scope with `ledger.py block` |
 | CHK-11 | | `ac_digests` does not match the AC text | Same as above | Review the cases and run `ledger.py digests --update` |
 | CHK-12 | ● | Deleting a ledger case, changing command or ac_ids without a reason, a decrease in asserts in tests/system | error | Revert. Make changes with `ledger.py update --reason` |
-| CHK-13 | | Ambiguous words in new or changed requirements and ACs | warn (error for MUST requirements with `--strict`) | Rephrase into observable terms |
+| CHK-13 | | Ambiguous words in new or changed requirements and ACs | warn | Rephrase into observable terms |
 | CHK-14 | | Numbers and units are hard-coded | warn | Make them PARAMs and reference them as `{PARAM-xxx}` |
 | CHK-15 | | A prohibited synonym from the glossary is used | warn | Fix to the correct term |
 | CHK-16 | | A reference to an undefined PARAM, or a PARAM not in the PARAM table | error | Add it to the PARAM table |
@@ -58,9 +57,8 @@ These are the checks run by `scripts/verify.py`. CHKs with ● in the "lite" col
 | CHK-18 | | A BLOCKED AC does not reference an unanswered Q, TBD, or conflict / references an answered Q | error | Write the cause of the block / reflect the answer and remove BLOCKED |
 | CHK-19 | ● | A requirement ID or AC ID in code or tests is not in the requirements definition (paths in `checks.id_scan_exclude` are excluded; by default docs, scripts, SVG diagrams, `EABK-Studio/**`, Spec Kit `specs/**/*.md`, `.specify/**`, and so on) | error | Fix the ID (delete remnants of deprecated IDs). For test data or reference material, add the path to `id_scan_exclude` |
 | CHK-20 | | The default-constraints section, the required columns of the persona table, a requirement's structured fields, or the verification level of an approved AC is missing. The decision status is not a prescribed value | error | Use the format in [03-requirements-format.en.md](03-requirements-format.en.md) |
-| CHK-21 | | (Only with `--run`; a remnant of 0.5.x runs) whether the requirement of a done item is listed in the catalog as implemented, and its system AC cases are pass | error | Fix the catalog and the ledger |
 | CHK-22 | | An approved decision record points to none of a request, a Q, an approval request, or a blanket approval as its rationale (or points to a nonexistent Q) | error | Fix the rationale |
-| CHK-23 | | `/work` is not in .gitignore. Temporary files are committed in docs or tests. run-ids in `docs/run-history.md` are duplicated | error | `rdfix.py --apply` adds `/work/` and removes duplicate rows. Move temporary files to /work |
+| CHK-23 | | `/work` is not in .gitignore. Temporary files are committed in docs or tests | error | `rdfix.py --apply` adds `/work/`. Move temporary files to /work |
 | CHK-24 | ● | Missing reference target: an ID written in the body or tables of the requirements definition, or in the catalog's API, table, and shared-component tables, is not defined in the requirements definition (IDs that the ID registry shows as deleted or deprecated are allowed in the change history, decision records, and audit findings). The catalog references a deprecated or rejected requirement (warn) | error / warn | Fix the ID, or define the referenced target |
 | CHK-25 | | A structured field does not point to a definition: the target entity is in neither the glossary table nor the state table. The related state is not in its state table. A `{PARAM-xxx}` in the body or ACs is not in the referenced-parameters field (a PARAM in the field but unused is a warn) | error / warn | Define it in the glossary or state table, or fix the field |
 | CHK-26 | | Orphaned definitions: a PARAM or source (SRC) referenced from nowhere, or an entity in the state table that is not the target entity of any requirement | warn | Add a reference, or deprecate it if unneeded |
@@ -79,10 +77,10 @@ The output is one finding per line (`ERROR CHK-07 docs/catalog.md:12 …`), foll
 
 ## 6.4 Automatic repair of data-layer inconsistencies (rdfix)
 
-Among the mismatches between the data-layer files (requirements definition, catalog, ID registry, System Test ledger, run history, `.gitignore`), those that follow mechanically from the requirements definition can be fixed through the common entry point `python scripts/rdfix.py --full --apply` (`--full` alone only checks).
+Among the mismatches between the data-layer files (requirements definition, catalog, ID registry, System Test ledger, `.gitignore`), those that follow mechanically from the requirements definition can be fixed through the common entry point `python scripts/rdfix.py --full --apply` (`--full` alone only checks).
 
-- There are three callers, with the same result: the CI workflow ebak-data-layer, the installer (once after installing by default; `--no-repair` plans only, `--skip-verify` does nothing), and manual runs.
-- Exit codes: 0 (pass / repaired), 1 (manual items left / repairs planned), 2 (not run / cancelled). Exit 2 happens when run on a 0.5.x worker branch (`work/<run-id>/<item>`), on lock-wait timeout, on a write failure, when the requirements definition or the external integration catalog changed, or on a new error; every change is undone.
+- There are two callers, with the same result: the installer (once after installing by default; `--no-repair` plans only, `--skip-verify` does nothing) and manual runs. CI does not repair (6.5).
+- Exit codes: 0 (pass / repaired), 1 (manual items left / repairs planned), 2 (not run / cancelled). Exit 2 happens on lock-wait timeout, on a write failure, when the requirements definition or the external integration catalog changed, on a new error, or on an unexpected error; every change is undone.
 - The requirements definition is the source of truth. rdfix never changes it. The ID registry is fixed through `next-id.py` and the ledger through `ledger.py`, with ledger changes kept in `history`.
 - When verify fails and there are inconsistencies that can be fixed automatically, a `HINT rdfix: …` line is printed.
 - Inconsistencies that need a judgment are not fixed; they are shown as `MANUAL <CHK> <location> <message>（担当: <kind of work>）次の行動: …`. The "担当" (in charge) is one of `要求定義書` (requirements definition), `System Test の台帳` (System Test ledger), `コードとカタログ` (code and catalog), or `リポジトリ` (repository), naming which files the fix is about. Examples: the AC text changed (CHK-11; review the ledger cases), reuse of a deleted or missing-number ID (CHK-02), an ID not in the ID registry (CHK-01; it may have been assigned by hand).
@@ -93,9 +91,8 @@ Among the mismatches between the data-layer files (requirements definition, cata
 | catalog | Align decision status and title of the feature table with the requirements definition. Add requirement rows. Delete rows for requirements not in the requirements definition (with no files written) and duplicate rows. Re-point references to renamed files and remove references to missing files. Set implementation files of deprecated requirements whose code is gone to "none". Align "using requirement IDs" of the shared-components table with the feature table | CHK-07, CHK-08, CHK-17, CHK-27 |
 | ledger | Missing case fields, align `requirement_ids` with the AC's "corresponding requirement", add missing `ac_digests` and remove unused ones | CHK-10, CHK-11 |
 | gitignore | Add `/work/` | CHK-23 |
-| history | Remove rows of `docs/run-history.md` duplicated by merge=union (only in repositories updated from 0.5.x) | CHK-23 |
 
-Run `--apply` on the default branch (or your own working branch).
+Run `--apply` on the branch of the change the repair should be part of.
 
 ## 6.5 CI
 
@@ -103,9 +100,9 @@ Run `--apply` on the default branch (or your own working branch).
 
 `.github/workflows/ebak-verify.yml` runs `scripts/verify.sh --show-warnings` on pull requests and pushes to main. The check scope follows `checks.profile` (lite by default). It also runs the build and test commands registered in `verify.commands`. Add the toolchain they need before the verify step ([4.11](04-customization.en.md#411-ci)).
 
-### ebak-data-layer
+### Repair locally (CI does not repair)
 
-`.github/workflows/ebak-data-layer.yml` runs `verify.py --docs-only` on PRs, pushes to main, manual runs, and a weekly schedule. On failure, it repairs with `rdfix.py --full --apply` and checks again. If that passes, it commits the repair (to the PR branch for PRs from the same repository, otherwise to `eabk/data-layer-fix` with a PR). If not, it creates an Issue labeled `eabk-data-layer`. It never changes the requirements definition. Details and how to disable it are in [4.11](04-customization.en.md#data-layer-workflow-ebak-data-layer).
+CI only checks; it creates no repair commits and no Issues. If `ebak-verify` fails, run `python scripts/rdfix.py --full --apply` locally and push the repair in the same change (the requirements definition is never changed). CI that only reads needs no write permission, and a bot pushing fixes onto someone's PR branch would make the branches of other people and PCs diverge. The `.github/workflows/ebak-data-layer.yml` of earlier versions is deleted when you update from an older version with `--clean` (clean install; [4.11](04-customization.en.md#411-ci)).
 
 ## 6.6 Milestone audit (rd-auditor)
 

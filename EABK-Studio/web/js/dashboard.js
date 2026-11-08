@@ -136,9 +136,7 @@ export function mount(host) {
           listTiers(hierarchy().items, {
             itemNode: (it) => el('div', { class: 'tier-item', role: 'treeitem', 'data-testid': 'tier-item', 'data-id': it.id },
               store.nodes.has(it.id) ? xrefLink(it.id, it.id) : el('span', { class: 'mono' }, it.id), it.title ? el('span', { class: 'tier-item-title' }, ` ${it.title}`) : null),
-          })),
-        el('div', { class: 'card', style: { gridColumn: '1 / -1' } }, cardHeading('progress', t('dash.runs')),
-          m.runs.length ? el('div', { style: { overflow: 'auto' } }, runsTable(m.runs)) : el('div', { class: 'empty' }, t('none')))));
+          }))));
     viz.sync();
   };
   render();
@@ -148,10 +146,4 @@ export function mount(host) {
 
 function cardHeading(kind, label) {
   return el('h3', { class: 'card-heading' }, businessIcon(kind, label), el('span', {}, label));
-}
-
-function runsTable(runs) {
-  const keys = Object.keys(runs[0]).filter((k) => !k.startsWith('_')).slice(0, 7);
-  return el('table', { class: 't' }, el('thead', {}, el('tr', {}, keys.map((k) => el('th', {}, k)))),
-    el('tbody', {}, runs.slice(-8).reverse().map((r) => el('tr', {}, keys.map((k) => el('td', {}, el('div', { class: 'clamp' }, (r[k] || '').slice(0, 160))))))));
 }

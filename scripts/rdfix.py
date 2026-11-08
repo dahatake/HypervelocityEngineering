@@ -4,7 +4,7 @@
 Usage:
   python scripts/rdfix.py                         # show the plan only (dry run)
   python scripts/rdfix.py --apply                 # write the fixes, then re-check with rdcheck
-  python scripts/rdfix.py --only catalog,ledger   # registry | catalog | ledger | gitignore | history
+  python scripts/rdfix.py --only catalog,ledger   # registry | catalog | ledger | gitignore
   python scripts/rdfix.py --adopt --apply         # also register IDs missing from the ID registry (CHK-01)
   python scripts/rdfix.py --json
 
@@ -18,17 +18,16 @@ What is fixed (derived data follows the requirements definition, which is never 
   ledger    tests/system/ledger.json  missing fields, requirement_ids, missing / orphan ac_digests
                                     -> through ledger.py with history
   gitignore .gitignore              /work/ (CHK-23)
-  history   docs/run-history.md     rows duplicated by merge=union (CHK-23)
 What needs a judgment (changed AC text, reused or hand-numbered IDs, ...) is listed as MANUAL with the role
 that fixes it. Output: "FIX <CHK> <loc> <msg>" / "MANUAL <CHK> <loc> <msg>（担当: role）" and one summary line.
-Exit code: 0 = nothing left to fix automatically, 1 = fixes pending (dry run) or not converged, 2 = refused.
+Exit code: 0 = nothing left to fix automatically, 1 = fixes pending (dry run) or not converged.
 
 Full check / repair (FR-1046, NFR-REL-002, NFR-REL-003) - the data-layer check (rdcheck) and the repair plan in one run:
   python scripts/rdfix.py --full                  # check only: never writes, never waits for the lock
   python scripts/rdfix.py --full --apply          # check -> repair -> re-check (until converged, PARAM-026 rounds)
   python scripts/rdfix.py --full [--apply] --json # the same result as JSON (one object, fields per item)
   Exit code: 0 = pass / repaired, 1 = manual items left / repairs planned / not converged,
-             2 = not run or cancelled (worker branch, lock wait timeout, everything undone, internal error).
+             2 = not run or cancelled (lock wait timeout, everything undone, internal error).
   Safety of --full --apply: one repair at a time per repository (lock file work/.ebak/rdfix.lock with the PID;
   waits up to PARAM-027 seconds, a lock left by a dead process is taken over); every write is a temp file + os.replace;
   the requirements definition and docs/integrations.md are compared byte-for-byte before / after; a write failure,
@@ -64,7 +63,7 @@ def _strip_dot_slash(p: str) -> str:
         p = p[2:]
     return p
 
-TARGETS = ("registry", "catalog", "ledger", "gitignore", "history")
+TARGETS = ("registry", "catalog", "ledger", "gitignore")
 CATALOG_TEMPLATE = (
     "# カタログ\n\n"
     "既存の機能・API・テーブル・共通部品の対応表です。1 行 1 項目の短い表にし、詳細はリンク先のファイルに任せます。\n"
@@ -75,7 +74,7 @@ CATALOG_TEMPLATE = (
     "|---|---|---|---|---|---|\n"
 )
 CATALOG_STATES = ("承認済み", "承認待ち", "保留")
-GITIGNORE_HEADER = "# Enterprise App Build Kit: temporary run files (kept 14 days)"
+GITIGNORE_HEADER = "# Enterprise App Build Kit: temporary files (logs, evidence, notes)"
 
 
 @dataclass
@@ -409,7 +408,7 @@ class Fixer:
         rc, out = self.git_ls_files()
         for f in (out.splitlines() if rc == 0 else []):
             if (f.startswith("docs/") or f.startswith("tests/")) and rx.search(f):
-                self.act("MANUAL", "CHK-23", f, f"一時ファイルが commit されています。/{wd}/runs/<run-id>/ へ移し `git rm --cached` します",
+                self.act("MANUAL", "CHK-23", f, f"一時ファイルが commit されています。/{wd}/ へ移し `git rm --cached` します",
                          "リポジトリ", "gitignore")
         gi = self.root / ".gitignore"
         lines = h.read_text(gi).splitlines() if gi.exists() else []
@@ -424,45 +423,12 @@ class Fixer:
             h.write_text_atomic(gi, text + ("\n" if text else "") + f"{GITIGNORE_HEADER}\n/{wd}/\n")
         self.writers.append(write)
 
-    # ------------------------------------------------------------------ run history
-    def fix_history(self) -> None:
-        rel = h.mf(self.cfg, "run_history")
-        path = self.root / rel
-        if not path.exists():
-            return
-        text = h.read_text(path)
-        ed = LineEdits(text)
-        lines = ed.lines
-        for tb in h.parse_tables(h.strip_comments(text).splitlines()):
-            c = tb.col("run-id", "run_id")
-            if c is None:
-                continue
-            seen: Dict[str, int] = {}
-            for ln, cells in tb.rows:
-                rid = h.strip_md(cells[c]) if c < len(cells) else ""
-                if not rid:
-                    continue
-                if rid in seen:
-                    if lines[ln - 1].strip() == lines[seen[rid] - 1].strip():
-                        ed.set(ln - 1, None)
-                        self.act("FIX", "CHK-23", f"{rel}:{ln}", f"run-id {rid} の重複した行（merge=union の名残り）を取り除きます", "", "history")
-                    else:
-                        self.act("MANUAL", "CHK-23", f"{rel}:{ln}", f"run-id {rid} の行が {seen[rid]} 行目と内容が違います。正しい 1 行を残します", "リポジトリ", "history")
-                    continue
-                seen[rid] = ln
-        if ed.dirty:
-            self.writers.append(lambda: h.write_text_atomic(path, ed.text()))
-
 
 # ---------------------------------------------------------------------- entry points
 
 def count_fixable(root: Path, cfg: dict) -> int:
     """Number of automatic fixes available (used by verify.py for a hint). Never writes."""
     return sum(1 for a in Fixer(root, cfg, False, set(TARGETS)).plan() if a.kind == "FIX")
-
-
-def is_work_branch(root: Path) -> bool:
-    return bool(re.match(r"^work/[^/]+/[^/]+$", h.current_branch(root)))
 
 
 def rdcheck_summary(root: Path) -> Tuple[int, List[str]]:
@@ -491,7 +457,7 @@ ROLE_ACTION = {
 }
 CHK_OWNER = {"CHK-08": "コードとカタログ", "CHK-09": "コードとカタログ", "CHK-17": "コードとカタログ", "CHK-19": "コードとカタログ",
              "CHK-27": "コードとカタログ", "CHK-10": "System Test の台帳", "CHK-11": "System Test の台帳", "CHK-12": "System Test の台帳",
-             "CHK-21": "リポジトリ", "CHK-23": "リポジトリ"}
+             "CHK-23": "リポジトリ"}
 CHK_HINT = {
     "CHK-00": "要求定義書を作成します",
     "CHK-01": "`next-id.py` で採番し直します（正しい ID と確認できたら `rdfix.py --full --apply --adopt` で取り込みます）",
@@ -511,7 +477,6 @@ CHK_HINT = {
     "CHK-18": "ブロックの原因を書くか、回答を反映して BLOCKED を外します",
     "CHK-19": "コード・テストの ID を直します（廃止した ID の残骸は削除します）",
     "CHK-20": "要求定義書の形式（構造化欄・検証レベル・決定状態）に合わせます",
-    "CHK-21": "統合をやり直します",
     "CHK-22": "決定記録の根拠（依頼・Q・承認依頼・包括承認）を直します",
     "CHK-23": "`.gitignore` に `/work/` を足し、一時ファイルを /work に移します。重複した run-id は正しい 1 行を残します",
     "CHK-24": "ID を直すか、参照先を定義します",
@@ -637,7 +602,7 @@ class Inspection:
 def inspect(root: Path, cfg: dict, adopt: bool, only: Set[str]) -> Inspection:
     """One data-layer inspection: rdcheck (same as `verify.py --docs-only`) and the repair plan, sharing one parse."""
     rdc = h.load_script("rdcheck")
-    ck = rdc.Checker(root, cfg, h.default_base(root, cfg), None, False, None)
+    ck = rdc.Checker(root, cfg, h.default_base(root, cfg))
     errors = [f for f in ck.run_all() if f.level == "ERROR"]
     fx = Fixer(root, cfg, adopt, only, doc=ck.doc)
     if getattr(ck, "_files", None) is not None:
@@ -1084,7 +1049,7 @@ def _owner_of_file(root: Path, cfg: dict, rel: str) -> str:
     mfs = cfg["management_files"]
     if rel == h.mf(cfg, "ledger") or rel.startswith("tests/system/"):
         return "System Test の台帳"
-    if rel in (h.mf(cfg, "run_history"), ".gitignore"):
+    if rel == ".gitignore":
         return "リポジトリ"
     if rel == h.mf(cfg, "catalog"):
         return "コードとカタログ"
@@ -1167,13 +1132,10 @@ def run_full(root: Path, cfg: dict, args, only: Set[str]) -> int:
     state: Dict[str, object] = {"tx": None, "attempted": []}
     lock: Optional[RepairLock] = None
     try:
-        if args.apply and is_work_branch(root):
-            return rep.finish(2, "refused", "作業役のブランチ（work/<run-id>/<item>。0.5.x の run の名残）では --apply しません。"
-                                            "既定のブランチの作業ツリーで実行します")
         broken = scan_broken_input(root, cfg)
         if not h.is_git_repo(root):
             rep.info("INFO rdfix: git の管理下にないディレクトリです。git の情報を要する検査（CHK-12 の台帳の変更履歴・"
-                     "CHK-21・CHK-23 の commit 済みの一時ファイル）と修復は省き、それ以外は git リポジトリと同じに行います")
+                     "CHK-23 の commit 済みの一時ファイル）と修復は省き、それ以外は git リポジトリと同じに行います")
         if broken:
             rep.info("INFO rdfix: 読めない入力があるため、確認・修復の計画を立てず、何も書き込まずに止めます（下の各ファイルは書き換えません）")
             return rep.finish(1, "manual", manual=_dedupe(broken))
@@ -1300,10 +1262,6 @@ def main(argv=None) -> int:
         ap.error(f"--only は {', '.join(TARGETS)} から選びます（不明: {', '.join(sorted(bad))}）")
     if args.full:
         return run_full(root, cfg, args, only)
-    if args.apply and is_work_branch(root):
-        print("ERROR rdfix: 作業役のブランチ（work/<run-id>/<item>。0.5.x の run の名残）では --apply しません。"
-              "既定のブランチの作業ツリーで実行します")
-        return 2
     fx = Fixer(root, cfg, args.adopt, only)
     actions = fx.plan()
     ext_results, ext_skipped, ext_errors = extpoints.run(root, cfg, "rdfix")  # FR-1082

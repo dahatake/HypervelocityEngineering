@@ -213,10 +213,6 @@ def _build_sample(path: Path) -> Path:
     studio = repo.path / "EABK-Studio"
     if studio.exists():
         shutil.rmtree(studio)
-    cfg_path = repo.path / "scripts" / "ebak.config.json"
-    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
-    cfg["verify"]["commands"] = [c for c in cfg["verify"]["commands"] if c.get("name") != "studio-ui"]
-    cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     repo.py("next-id.py", "--sync", "--adopt", check=True)
     repo.commit("sample requirements")
     return repo.path

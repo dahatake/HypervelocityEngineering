@@ -40,7 +40,7 @@ def test_ledger_lifecycle_and_digest(sample):
     assert cid == "E2E-001"
     led = json.loads(sample.read("tests/system/ledger.json"))
     assert led["cases"][0]["status"] == "not_run" and led["ac_digests"]["AC-001"].startswith("sha256:")
-    assert sample.py("rdcheck.py", "check", "--base", "none", "--strict-ledger").returncode == 0
+    assert "CHK-1" not in sample.py("rdcheck.py", "check", "--base", "none").stdout  # CHK-10/11 settled
 
     assert sample.py("ledger.py", "update", "E2E-001", "--command", "x").returncode != 0  # reason required
     assert sample.py("ledger.py", "set", "E2E-001", "pass").returncode != 0  # pass only from a run
@@ -52,11 +52,11 @@ def test_ledger_lifecycle_and_digest(sample):
 
     rd = sample.read("docs/requirements-definition.md").replace("入力済みの値が失われない", "入力済みの値と添付が失われない")
     sample.write("docs/requirements-definition.md", rd)
-    proc = sample.py("rdcheck.py", "check", "--base", "none", "--strict-ledger")
-    assert proc.returncode == 1 and "CHK-11" in proc.stdout
+    proc = sample.py("rdcheck.py", "check", "--base", "none")
+    assert "WARN CHK-11" in proc.stdout
     assert sample.py("ledger.py", "digests").returncode == 1
     sample.py("ledger.py", "digests", "--update", check=True)
-    assert sample.py("rdcheck.py", "check", "--base", "none", "--strict-ledger").returncode == 0
+    assert "CHK-11" not in sample.py("rdcheck.py", "check", "--base", "none").stdout
 
 
 def test_ledger_run_no_record_and_failure(sample):

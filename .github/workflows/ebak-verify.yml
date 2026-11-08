@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: install pytest (used by the default verify command studio-ui and most Python projects)
+      - name: install pytest (for Python projects; add your own toolchain for verify.commands below)
         run: python -m pip install pytest
       # Add the toolchain your verify.commands need (for example actions/setup-node + npm ci) above this step.
       - name: verify

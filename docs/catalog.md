@@ -14,19 +14,19 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1010 | 清掃の診断と再開 | 廃止 | なし | 未実装 | なし |
 | NFR-OPS-005 | 所有権と保護状態にもとづく安全な削除 | 廃止 | なし | 未実装 | なし |
 | NFR-COMPAT-001 | Windows・報告・配布文書の一貫性 | 廃止 | なし | 未実装 | なし |
-| FR-1017 | データ層の妥当性検査の自動実行 | 承認済み（依頼 2026-10-14） | [`.github/workflows/ebak-data-layer.yml`](docs/../.github/workflows/ebak-data-layer.yml) | `tests/system/test_data_layer_workflow_system.py` | データ層検査、配布同期対象 |
-| FR-1018 | 不整合の自動修復と修復の反映 | 承認済み（依頼 2026-10-14） | [`.github/workflows/ebak-data-layer.yml`](docs/../.github/workflows/ebak-data-layer.yml) | `tests/system/test_data_layer_workflow_system.py` | データ層修復、データ層検査 |
-| FR-1019 | 直せない不整合の Issue 化 | 承認済み（依頼 2026-10-14） | [`.github/workflows/ebak-data-layer.yml`](docs/../.github/workflows/ebak-data-layer.yml) | `tests/system/test_data_layer_workflow_system.py` | データ層修復 |
-| NFR-SEC-004 | データ層ワークフローの最小権限と書き込みの安全性 | 承認済み（依頼 2026-10-14） | [`.github/workflows/ebak-data-layer.yml`](docs/../.github/workflows/ebak-data-layer.yml) | `tests/system/test_data_layer_workflow_system.py` | 配布同期対象 |
-| NFR-OPS-006 | データ層ワークフローの配布と利用者向け文書 | 承認済み（依頼 2026-10-14） | [`.github/workflows/ebak-data-layer.yml`](docs/../.github/workflows/ebak-data-layer.yml)、`tools/install.py`、`README.md`、`users-guide/04-customization.md` | `tests/toolkit/test_install.py`、`tests/system/test_data_layer_workflow_system.py` | 配布同期対象 |
-| FR-1044 | データ層の確認・修復の共通の入口 | 承認済み（包括承認 2026-10-16・approval_policy） | [`.github/workflows/ebak-data-layer.yml`](docs/../.github/workflows/ebak-data-layer.yml)、`tools/install.py`、`scripts/rdfix.py` | `tests/toolkit/test_repair_entrypoints.py`、`tests/integration/test_repair_entrypoints_it.py`、`tests/system/test_data_layer_repair_system.py` | データ層修復、データ層検査 |
+| FR-1017 | データ層の妥当性検査の自動実行 | 廃止 | なし | 未実装 | なし |
+| FR-1018 | 不整合の自動修復と修復の反映 | 廃止 | なし | 未実装 | なし |
+| FR-1019 | 直せない不整合の Issue 化 | 廃止 | なし | 未実装 | なし |
+| NFR-SEC-004 | データ層ワークフローの最小権限と書き込みの安全性 | 廃止 | なし | 未実装 | なし |
+| NFR-OPS-006 | データ層ワークフローの配布と利用者向け文書 | 廃止 | なし | tests/toolkit/test_install.py | なし |
+| FR-1044 | データ層の確認・修復の共通の入口 | 承認済み（包括承認 2026-10-16・approval_policy） | tools/install.py, scripts/rdfix.py | `tests/toolkit/test_repair_entrypoints.py`、`tests/integration/test_repair_entrypoints_it.py`、`tests/system/test_data_layer_repair_system.py` | データ層修復、データ層検査 |
 | FR-1045 | インストール時のデータ層の確認と自動修復 | 承認済み（依頼 2026-10-16） | `tools/install.py` | `tests/toolkit/test_repair_entrypoints.py`、`tests/integration/test_repair_entrypoints_it.py`、`tests/system/test_data_layer_repair_system.py` | データ層修復、配布同期対象 |
 | FR-1046 | 手動のデータ層の確認と修復のコマンド | 承認済み（依頼 2026-10-16） | `scripts/rdfix.py`、`scripts/verify.py`、`users-guide/05-scripts-reference.md` | `tests/system/test_data_layer_repair_system.py`、`tests/toolkit/test_rdfix_full.py`、`tests/integration/test_data_layer_repair.py` | データ層修復、データ層検査 |
 | NFR-REL-002 | 自動修復の安全性（要求定義書の保護・書き込みの原子性・取り消し） | 承認済み（包括承認 2026-10-16・approval_policy） | `scripts/rdfix.py` | `tests/toolkit/test_rdfix_full.py`、`tests/integration/test_data_layer_repair.py`、`tests/system/test_data_layer_repair_system.py` | データ層修復 |
 | NFR-REL-003 | 自動修復の冪等性・収束・排他 | 承認済み（包括承認 2026-10-16・approval_policy） | `scripts/rdfix.py` | `tests/toolkit/test_rdfix_full.py`、`tests/integration/test_data_layer_repair.py` | データ層修復 |
 | NFR-REL-004 | 壊れた入力と git でないディレクトリでの確認・修復 | 承認済み（包括承認 2026-10-16・approval_policy） | `scripts/rdfix.py`、`scripts/ebaklib.py` | `tests/toolkit/test_rdfix_robust.py`、`tests/integration/test_data_layer_repair.py` | データ層修復 |
 | NFR-PERF-005 | データ層の確認・修復の速さ | 承認済み（依頼 2026-10-16） | `scripts/rdfix.py`、`scripts/ebaklib.py` | `tests/toolkit/test_rdfix_robust.py`、`tests/integration/test_data_layer_repair.py` | データ層修復、データ層検査 |
-| NFR-COMPAT-004 | 既存のデータ層の検査・修復の挙動の維持 | 承認済み（包括承認 2026-10-16・approval_policy） | `scripts/rdfix.py`、[`.github/workflows/ebak-data-layer.yml`](docs/../.github/workflows/ebak-data-layer.yml) | `tests/toolkit/test_repair_entrypoints.py`、`tests/integration/test_repair_entrypoints_it.py`、`tests/toolkit/test_rdfix.py`、`tests/system/test_data_layer_workflow_system.py` | データ層修復 |
+| NFR-COMPAT-004 | 既存のデータ層の検査・修復の挙動の維持 | 承認済み（包括承認 2026-10-16・approval_policy） | scripts/rdfix.py | tests/toolkit/test_repair_entrypoints.py, tests/integration/test_repair_entrypoints_it.py, tests/toolkit/test_rdfix.py | データ層修復 |
 | NFR-OPS-007 | データ層の確認・修復の配布と利用者向け文書 | 承認済み（包括承認 2026-10-16・approval_policy） | tools/install.py, scripts/ebaklib.py, README.md, CHANGELOG.md, users-guide/04-customization.md, users-guide/05-scripts-reference.md, users-guide/06-quality-gates.md, users-guide/07-troubleshooting.md | `tests/toolkit/test_repair_entrypoints.py`、`tests/integration/test_repair_entrypoints_it.py`、`tests/toolkit/test_version.py` | 配布同期対象 |
 | NFR-COR-001 | 再現性 | 廃止 | 未実装 | 未実装 | なし |
 | NFR-COR-002 | エラーの明確性 | 廃止 | 未実装 | 未実装 | なし |
@@ -98,7 +98,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1075 | 所有者なし run の救済の厳格化 | 廃止 | なし | 未実装 | なし |
 | FR-1076 | 主ツリーで run を置いたときの別 session のゲート対象外 | 廃止 | なし | 未実装 | なし |
 | FR-1077 | /build template 状態の session ごとの分離 | 廃止 | なし | 未実装 | なし |
-| FR-1081 | 定型文の自動付与（Prompt ごとの内部の指示と既定文の配布） | 廃止 | なし | 未実装 | 配布同期対象 |
+| FR-1081 | 定型文の自動付与（Prompt ごとの内部の指示と既定文の配布） | 廃止 | なし | 未実装 | なし |
 | NFR-OPS-009 | 並列開始の統合試験 | 廃止 | なし | 未実装 | なし |
 | NFR-OPS-010 | 排他の安全性・配布・文書 | 廃止 | なし | tests/toolkit/test_install.py | なし |
 | FR-1066 | ヘッダー常設の表示モード切替（2D・3D・Graph） | 承認済み | `EABK-Studio/web/js/dim.js`、`EABK-Studio/web/js/app.js`、`EABK-Studio/web/js/diagrams.js`、`EABK-Studio/web/js/entities.js`、`EABK-Studio/web/js/i18n.js`、`EABK-Studio/web/index.html`、`EABK-Studio/web/app.css` | `EABK-Studio/tests/test_header_dim_ui.py`、`tests/system/e2e/test_studio_header_dim_3d_part1_system.py` | 2D・3D 切替、意味的ズーム |
@@ -115,8 +115,9 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | NFR-UX-018 | 動的な可視化の性能・外部依存なし・安全な更新 | 承認済み | `EABK-Studio/web/js/viz.js` | `EABK-Studio/tests/test_dynamic_viz_ui.py`、`tests/system/e2e/test_studio_dynamic_viz_system.py` | 動的可視化の小部品 |
 | FR-1082 | データ層の検査へのプロジェクト固有の拡張の登録と実行の確認 | 承認済み | `scripts/extpoints.py`、`scripts/rdcheck.py`、`scripts/rdfix.py`、`scripts/verify.py`、`scripts/ebak.config.json`、`tools/install.py`、`users-guide/04-customization.md`、`users-guide/04-customization.en.md` | `tests/integration/test_extension_points_it.py`、`tests/system/test_extension_points_system.py` | データ層検査、データ層修復、配布同期対象 |
 | FR-1083 | toolkit 更新時の利用側の配線の脱落警告 | 承認済み | `tools/install.py`、`users-guide/04-customization.md`、`users-guide/04-customization.en.md` | `tests/integration/test_extension_points_it.py` | 配布同期対象 |
-| FR-1084 | EABK Lite の検査プロファイル（lite／full） | 承認済み | 未実装 | 未実装 | - |
-| FR-1085 | オーケストレーションを持たない配布と旧版からの移行 | 承認済み | 未実装 | 未実装 | - |
+| FR-1084 | EABK Lite の検査プロファイル（lite／full） | 承認済み | `scripts/rdcheck.py`、`scripts/verify.py`、`scripts/rdfix.py` | `tests/toolkit/test_lite.py` | - |
+| FR-1085 | オーケストレーションを持たない配布と旧版からの移行 | 承認済み | `tools/install.py` | `tests/toolkit/test_install.py` | - |
+| FR-1086 | EABK を導入していないリポジトリの表示（コードのモード） | 承認済み | `EABK-Studio/eabk_model.py`、`EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | - |
 
 
 ## API・イベント
@@ -135,12 +136,12 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 |---|---|---|---|
 | 3D カメラのプリセット | `EABK-Studio/web/js/camera3d.js` | 9 種のプリセット表 `CAMERA_PRESETS`（落ち着き→派手。Shot Size×Camera Angle×Camera Movement×Motion Character の 4 要素・語彙・別名表。1 か所）、操作部品 `createCameraRig`（`camera-presets`・`camera-detail`・`data-camera-auto`・`data-reduced-motion`・`window.__eabk3d.camera()`）、動きの軽減で Static、手動操作・Esc・停止ボタンで自動動作を止める、性能不足（PARAM-047 未満）で Static へ縮退（保存値は書かない）、コマンド検索の `cameraCommands()`。WebGL 版（map3d.js）と Canvas 版（sz3d.js）が共用 | FR-1070、FR-1071、NFR-UX-015 |
 | 3D 種別かたち・演出スタイル | `EABK-Studio/web/js/shapes3d.js` | 3D のノード種別 → かたち（three.js 標準ジオメトリの組合せ）の対応表 `SHAPE_OF`（1 か所。凡例・3D の描画・テストが参照）、InstancedMesh による描画、凡例（`legend-3d`）、演出スタイルの切替（`style-toggle`。保存は localStorage `eabk-studio.style3d` にスタイル名のみ）。未知の種別は `default`（その他） | FR-1068、FR-1069 |
-| 配布同期対象 | `tools/install.py` | EABK Lite の配布物（規則・データ層のスクリプト・rd-auditor・定型文の hook・Studio）をインストール対象へ同期し、0.5.x のオーケストレーションのファイルと設定のキーを撤去する管理対象。外部連携カタログの雛形（TEMPLATES。なければ作成）と検査・チェックリスト（MANAGED）も配る | FR-1017、FR-1037、FR-1038、FR-1039、FR-1045、FR-1078、FR-1081、FR-1082、FR-1083、NFR-OPS-006、NFR-OPS-007、NFR-SEC-004 |
+| 配布同期対象 | `tools/install.py` | EABK Lite の配布物（規則・データ層のスクリプト・rd-auditor・Studio）をインストール対象へ同期する管理対象。旧版からの移行の処理は持たず、`--clean`（クリーンインストール）でマニフェストに記録されたファイル・設定・ブロック・追記を削除してから入れ直す。外部連携カタログの雛形（TEMPLATES。なければ作成）と検査・チェックリスト（MANAGED）も配る | FR-1037、FR-1038、FR-1039、FR-1045、FR-1078、FR-1082、FR-1083、NFR-OPS-007 |
 | git ls-files 並行取得 | `scripts/ebaklib.py` | `tracked_files` で tracked・untracked 一覧を ThreadPoolExecutor で並行取得し、rdcheck/rdfix は同一引数の呼び出しを 1 回にする | NFR-PERF-003、NFR-COMPAT-002 |
 | System Test の選択 | `scripts/ledger.py` | `select_cases` が `--select changed` で git diff の追加・変更行の要求 ID・AC ID を優先してケースを選び、ケースごとに理由を出力する。共通コード・解析不能・ID なしは広げる（従来の選択を含む） | NFR-PERF-003 |
 | 外部連携カタログ解析・検査 | `scripts/ebaklib.py`、`scripts/rdcheck.py`、`scripts/next-id.py` | `docs/integrations.md` の解析（`parse_integrations`）、CHK-28 の検査（必須欄・16 観点の欄・値の形式・TBD・方向・状態・要求との対応・認証情報の値らしい文字列）、`trace INT-xxx`、`next-id.py INT` の採番と ID 台帳の同期 | FR-1035、FR-1036、FR-1037 |
-| データ層検査 | `scripts/verify.py` | `--docs-only` でデータ層の妥当性を検査する | FR-1017、FR-1018、FR-1044、FR-1046、FR-1078、FR-1082、NFR-PERF-005 |
-| データ層修復 | `scripts/rdfix.py` | 要求定義書を変更せずデータ層の不整合を自動修復し、残りを手動対応として示す | FR-1018、FR-1019、FR-1044、FR-1045、FR-1046、FR-1082、NFR-COMPAT-004、NFR-PERF-005、NFR-REL-002、NFR-REL-003、NFR-REL-004 |
+| データ層検査 | `scripts/verify.py` | `--docs-only` でデータ層の妥当性を検査する | FR-1044、FR-1046、FR-1078、FR-1082、NFR-PERF-005 |
+| データ層修復 | `scripts/rdfix.py` | 要求定義書を変更せずデータ層の不整合を自動修復し、残りを手動対応として示す | FR-1044、FR-1045、FR-1046、FR-1082、NFR-COMPAT-004、NFR-PERF-005、NFR-REL-002、NFR-REL-003、NFR-REL-004 |
 | メタデータ定義と階層・関係索引 | `scripts/metadata.json`、`scripts/ebaklib.py`、`scripts/rdcheck.py` | 欄名・必須/任意・許容値の定義（metadata.json）、領域の欄・一覧表・割り当て表の検査（CHK-29/30）、列名の一致（CHK-31）、節の項目数の警告（CHK-32）、`rdcheck.py list --area/--by-area`、種類つきの関係の索引（`rdcheck.py index`。保存せず都度生成） | FR-1057、FR-1058、FR-1059、NFR-UX-014 |
 | 階層の導出 | `EABK-Studio/eabk_model.py`、`scripts/rdcheck.py` | 種類→区分→領域→項目の階層を `derive_hierarchy` で 1 か所から導出する（要求の区分は ID 接頭辞、領域は各要求の領域の欄、領域のないデータは既存の節・分類、定まらないものだけ「未分類」。割り当て表は持たず都度生成）。`/api/model` の `model.hierarchy`、`rdcheck.py hierarchy [--json]` | FR-1062 |
 | 階層の共通 JS 部品 | `EABK-Studio/web/js/hier.js` | 全画面で使う階層の描画（見出し・件数・開閉・未分類・JA/EN の名称・キーボード操作・aria 属性・記号で示す開閉）。`renderTiers` / `buildTree` / `tierName`。0 件でも見出しを出す `hier.empty` を持つ | FR-1062、FR-1063 |
@@ -211,7 +212,6 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | 機能・API・テーブル・共通部品 | `docs/catalog.md` | 対象リポジトリのカタログ | FR-001、FR-007、FR-009 |
 | System Test 台帳 | `tests/system/ledger.json` | 対象リポジトリの台帳 | FR-001、FR-009、NFR-OPS-002 |
 | ID 台帳 | `docs/id-registry.md` | 対象リポジトリの ID 台帳 | FR-001、FR-009、NFR-OPS-004 |
-| 実行履歴 | `docs/run-history.md` | 対象リポジトリの実行履歴 | FR-009 |
 
 ## 共通部品
 
@@ -236,7 +236,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 
 実在する配置だけを書く（書式は `EABK-Studio/eabk_model.py` の `parse_placements`、FR-1034）。
 
-- 配置先: PC内のフォルダ / 場所: docs/ / アプリ: EABK toolkit のスクリプト、EABK Studio サーバー / データ: 要求定義書、カタログ、ID 台帳、実行履歴、手動テスト手順
+- 配置先: PC内のフォルダ / 場所: docs/ / アプリ: EABK toolkit のスクリプト、EABK Studio サーバー / データ: 要求定義書、カタログ、ID 台帳、手動テスト手順
 - 配置先: PC内のフォルダ / 場所: work/ / アプリ: EABK toolkit のスクリプト / データ: 実行ごとの作業記録（work/runs/）、ログ（work/logs/）
 - 配置先: PC内のフォルダ / 場所: tests/system/ / アプリ: EABK toolkit のスクリプト / データ: System Test 台帳（ledger.json）
 - 配置先: ブラウザ Local Storage / キー: eabk-studio.lang / アプリ: EABK Studio 画面 / データ: 表示言語（ja か en）

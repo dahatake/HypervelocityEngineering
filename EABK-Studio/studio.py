@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """EABK Studio: local web viewer for the EABK data layer of any repository.
 
-    python EABK-Studio/studio.py --repo <path-to-a-repo-that-uses-EABK>
+    python EABK-Studio/studio.py --repo <path-to-any-repo>   # with EABK: data layer; without: code mode
 
 Only the Python standard library is needed. The server listens on 127.0.0.1.
 Normal viewing is read-only; an explicit maintenance confirmation can update
@@ -306,7 +306,7 @@ class Handler(BaseHTTPRequestHandler):
         if not raw or not p.is_dir():
             return self.send_json({"error": "not-a-directory"}, HTTPStatus.BAD_REQUEST)
         root = eabk_model.find_root(p)
-        if not eabk_model.has_data_layer(root):
+        if not eabk_model.can_view(root):
             return self.send_json({"error": "no-data-layer", "repo": str(root)}, HTTPStatus.UNPROCESSABLE_ENTITY)
         STATE.set_root(root)
         self.send_json({"repo": str(root)})
@@ -351,23 +351,30 @@ def format_report(report: dict) -> str:
     c = report["counts"]
     lines.append(
         f"  parsed: requirements={c['requirements']} acceptance-criteria={c['acceptanceCriteria']} "
-        f"catalog-rows={c['catalogFeatures']} ledger-cases={c['ledgerCases']} runs={c['runs']} "
+        f"catalog-rows={c['catalogFeatures']} ledger-cases={c['ledgerCases']} "
         f"warnings={len(report['warnings'])}")
     lines += [f"    warning: {w}" for w in report["warnings"][:10]]
+    if report.get("mode") == "code" and report.get("derivedFrom"):
+        d = report["derivedFrom"]
+        lines.append(f"  mode: code (no EABK data layer; derived read-only from the repository) "
+                     f"requirement-docs={', '.join(d['requirementDocs']) or '-'} requirements={d['requirements']} "
+                     f"linked-to-code={d['linkedRequirements']} code-files={d['codeFiles']} test-files={d['testFiles']} "
+                     f"components={d['components']}")
     lines.append("  result: OK - start the viewer with `python EABK-Studio/studio.py --repo <repo>`" if report["ok"]
                  else "  result: " + no_data_message(report["root"]))
     return "\n".join(lines)
 
 
 def no_data_message(root) -> str:
-    return (f"no EABK data layer in {root} (docs/requirements-definition.md, docs/catalog.md or tests/system/ledger.json). "
-            f"Pass a repository that uses EABK with --repo, or see {GUIDE}")
+    return (f"no EABK data layer in {root} (docs/requirements-definition.md, docs/catalog.md or tests/system/ledger.json), "
+            f"and nothing to show in code mode (no source files, no requirement IDs in markdown). "
+            f"Pass a repository with --repo, or see {GUIDE}")
 
 
 def main(argv=None) -> int:
     global STATE
-    ap = argparse.ArgumentParser(description="EABK Studio - viewer for the EABK data layer")
-    ap.add_argument("--repo", default=None, help="repository that uses EABK (default: current directory)")
+    ap = argparse.ArgumentParser(description="EABK Studio - viewer for the EABK data layer (or, without EABK, for the code and PRD)")
+    ap.add_argument("--repo", default=None, help="repository to view, with or without EABK (default: current directory)")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-open", action="store_true", help="do not open the browser")
     ap.add_argument("--role", choices=sorted(ROLE_ROUTES), default=None,
@@ -379,12 +386,12 @@ def main(argv=None) -> int:
         root = eabk_model.find_root(Path(args.repo))
     else:
         cwd_root = eabk_model.find_root(Path.cwd())
-        root = cwd_root if eabk_model.has_data_layer(cwd_root) else eabk_model.find_root(HERE.parent)
+        root = cwd_root if eabk_model.can_view(cwd_root) else eabk_model.find_root(HERE.parent)
     if args.check:
         report = eabk_model.data_layer_report(root)
         print(format_report(report))
         return 0 if report["ok"] else 1
-    if not eabk_model.has_data_layer(root):
+    if not eabk_model.can_view(root):
         print(no_data_message(root), file=sys.stderr)
         return 1
     STATE = State(root)

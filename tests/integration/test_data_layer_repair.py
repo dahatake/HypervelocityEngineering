@@ -16,7 +16,7 @@ TOOLKIT = Path(__file__).resolve().parents[1] / "toolkit"
 # FR-1046 AC-242 AC-243 / NFR-REL-002 AC-244 AC-245 AC-246 AC-247 / NFR-REL-003 AC-248 AC-249 AC-250
 # NFR-REL-004 AC-251 AC-252 AC-253 / NFR-PERF-005 AC-254 AC-255
 EXPECTED = {
-    "test_rdfix_full.py": 15,
+    "test_rdfix_full.py": 14,  # 0.6.0: the worker-branch refusal test went with the refusal (FR-1085 AC-474)
     "test_rdfix_robust.py": 7,
 }
 AC_TESTS = {

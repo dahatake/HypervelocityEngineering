@@ -170,17 +170,6 @@ def _long_repo(tmp_path):
         for i in range(30)
     )
     doc.write_text(doc.read_text(encoding="utf-8") + extra + decisions, encoding="utf-8")
-    # 実行履歴（docs/run-history.md と同じ列。長い要求 ID 列・多数行）
-    rows = "".join(
-        f"| 20261015{i:04d} | 2026-10-15T05:00 | 2026-10-15T05:30 | abc{i:04d} | " + "長い結果" * 12
-        + f" | {', '.join(f'FR-{900 + j}' for j in range(8))}, {long_id}{i} | 0 | 1/2 | 0.5h | 1/1 | 未取得 | 1 | 1/1 |\n"
-        for i in range(30)
-    )
-    (repo / "docs" / "run-history.md").write_text(
-        "# 実行履歴\n\n| run-id | 開始 | 終了 | HEAD | 結果 | 実装した要求 ID | BLOCKED | AC pass 率 | 経過時間 | 1 回目のゲート通過率 | AI クレジット | 人の介入 | 検証済み要求 |\n"
-        "|---|---|---|---|---|---|---|---|---|---|---|---|---|\n" + rows,
-        encoding="utf-8",
-    )
     return repo
 
 
@@ -192,7 +181,7 @@ def test_ac191_dashboard_chips_stay_inside_their_boxes_with_long_data(browser, t
         page.goto(f"{url}/#/dashboard")
         page.wait_for_load_state("networkidle")
         kinds = {c.get_attribute("data-kind") for c in page.locator('[data-testid="history-chip"]').all()}
-        assert {"decision", "run", "requirement", "impl"} <= kinds
+        assert {"decision", "requirement", "impl"} <= kinds
         bad = page.evaluate(
             """() => [...document.querySelectorAll('[data-testid="history-chip"]')].filter(c => {
                 const b = c.closest('[data-testid="history-box"]'); if (!b) return true;

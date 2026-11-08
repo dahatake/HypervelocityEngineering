@@ -27,7 +27,7 @@ EXPECTED_KINDS = {  # AC-280 ［ASSUMPTION］ の分け方
     "要求": ["目的", "要求", "受入基準", "PARAM", "質問"],
     "設計": ["エンティティ", "共通部品", "API", "テーブル", "外部連携", "用語", "ペルソナ"],
     "証跡": ["試験ケース", "ファイル", "出典"],
-    "運用": ["決定記録", "監査指摘", "実行履歴"],
+    "運用": ["決定記録", "監査指摘"],
 }
 
 
@@ -121,7 +121,7 @@ def test_ac280_kinds_are_grouped_under_four_headings(page):
         for kind in EXPECTED_KINDS[g]:
             assert grp.first.get_by_text(kind, exact=False).count() >= 1, f"{g} に {kind} がない"
             seen.append(kind)
-    assert len(seen) == len(set(seen)) == 18  # AC 本文の列挙: 5+7+3+3
+    assert len(seen) == len(set(seen)) == 17  # AC 本文の列挙: 5+7+3+2
     # 見出しなしのフラットなタブ列がない: すべてのタブがグループの内側にある
     tabs = page.locator("#view [role=tab]")
     in_group = page.locator("#view [role=group] [role=tab]")

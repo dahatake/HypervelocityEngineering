@@ -22,10 +22,10 @@ EABK Lite は、**規則（AGENTS.md）＋データ層（要求定義書・カ�
 | 3 | [管理データの書式](03-requirements-format.md) | 要求定義書・カタログ・ID 台帳・System Test の台帳のフォーマットを知りたい |
 | 4 | [設定とカスタマイズ](04-customization.md) | ビルド・テストのコマンド、検査の範囲（`lite`／`full`）を調整したい。MCP Server・plugin（Work IQ・Azure など）を使いたい |
 | 5 | [スクリプトリファレンス](05-scripts-reference.md) | `scripts/` の各コマンドの使い方を知りたい |
-| 6 | [検査項目と CI](06-quality-gates.md) | verify（CHK-xx）と CI（`ebak-verify`・`ebak-data-layer`）の意味と直し方を知りたい |
+| 6 | [検査項目と CI](06-quality-gates.md) | verify（CHK-xx）と CI（`ebak-verify`。検査だけ）の意味と、`rdfix.py` での直し方を知りたい |
 | 7 | [トラブルシューティング](07-troubleshooting.md) | 検査が失敗した・CI が落ちた・インストールがうまくいかない |
 | 8 | [導入の段取りとロードマップ](08-roadmap.md) | チームへの入れ方と、Lite の後に確かめること |
-| 9 | [バージョンアップの手順](09-versioning.md) | 版を上げる（配布元）、導入済みのリポジトリを更新する（利用者）、0.5.x から 0.6.0 へ移行する |
+| 9 | [バージョンアップの手順](09-versioning.md) | 版を上げる（配布元）、導入済みのリポジトリを更新する（利用者）、旧版からクリーンインストールで更新する |
 | 10 | [既存のアプリを導入する](10-adopting-existing-apps.md) | 既存のコード・設計書から、棚卸し → 逆生成の要求（承認待ち）→ 現状の挙動の固定でデータ層を整える。方式の調査と適合の検証 |
 | 11 | [外部連携カタログ](11-integration-catalog.md) | API・ファイル・DB・イベントでの外部連携を `docs/integrations.md` に記録し、追加・変更・廃止・検査（`verify.py --docs-only`）の手順を知りたい |
 
@@ -65,7 +65,7 @@ EABK Lite は、**規則（AGENTS.md）＋データ層（要求定義書・カ�
 | 検証コマンド・検査の範囲を設定する | [4](04-customization.md)、[6](06-quality-gates.md) |
 | 検査が失敗した・CI が落ちた | [7](07-troubleshooting.md)。Studio が動かないなら [S4](studio/04-troubleshooting.md) |
 | 既存のアプリに導入する | [10](10-adopting-existing-apps.md)、段取りは [8](08-roadmap.md) |
-| toolkit を更新する・0.5.x から移行する | [9](09-versioning.md) |
+| toolkit を更新する・旧版からクリーンインストールする | [9](09-versioning.md) |
 | データ層を図・表で見る | [S1](studio/01-first-steps.md)、[S2](studio/02-screens.md) |
 
 ## README の各節へのリンク
@@ -83,4 +83,4 @@ EABK Lite は、**規則（AGENTS.md）＋データ層（要求定義書・カ�
 - 章番号は、第 1 部が `1`〜`11`、第 2 部が `S1`〜`S8` です。節は `4.4`・`S8.5.2` のように章番号に続けます。他のガイドから参照するときも、この記号を使います。
 - 配布元のリポジトリでは `users-guide/` です。`tools/install.py` で導入したリポジトリでは `EABK-docs/` に入ります（導入先の `users-guide/` は触りません）。ガイド内のリンクは、配布元の位置を基準にした相対パスです。
 - 実画面の画像は `studio/images/`、採取条件は [studio/screen-images.json](studio/screen-images.json)、再採取は `studio/capture-screens.py` です。EABK 本体の図は `images/` にあります。
-- ファイルを追加・改名したら、`tools/install.py` の `MANAGED`（と、消すものは `OBSOLETE`）を合わせて直します（[9](09-versioning.md)）。
+- ファイルを追加・改名したら、`tools/install.py` の `MANAGED` を合わせて直します（旧版の削除リストは持ちません。旧版からは `--clean`）（[9](09-versioning.md)）。

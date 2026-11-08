@@ -31,13 +31,12 @@ DEFAULT_CONFIG: dict = {
         "requirements_dir": "docs/requirements",
         "catalog": "docs/catalog.md",
         "id_registry": "docs/id-registry.md",
-        "run_history": "docs/run-history.md",
         "ledger": "tests/system/ledger.json",
         "manual_tests": "docs/manual-tests.md",
         "integrations": "docs/integrations.md",
     },
     "base_branch": "main",
-    "work": {"dir": "work", "retention_days": 14},
+    "work": {"dir": "work"},
     "verify": {"commands": [], "timeout_sec": 1800},
     "system_test": {"jobs": "auto", "serial_patterns": ["default_port"]},
     "checks": {
@@ -148,17 +147,7 @@ def pid_alive(pid: int) -> bool:
     return True
 
 
-def lock_orphaned(path: Path) -> bool:
-    """True when the lock file names a PID that is no longer running (the holder crashed or was killed)."""
-    try:
-        txt = path.read_text().strip()
-    except OSError:
-        return False
-    return txt.isdigit() and not pid_alive(int(txt))
-
-
 CLAIM_LOCK_WAIT_SEC = 10  # PARAM-053: upper bound for waiting on the start-claim / meta lock
-CLAIM_TTL_SEC = 300
 
 
 class LockBusy(RuntimeError):
@@ -231,73 +220,6 @@ class FileLock:
             except OSError:
                 pass
             self._fd = None
-
-
-def primary_tree_of(root: Path) -> Path:
-    """The primary checkout of the repository that `root` belongs to (root itself when it is not a linked worktree)."""
-    g = root / ".git"
-    if g.is_file():
-        # `.git` の gitdir: <common>/worktrees/<name> と、その中の commondir から、git を起動せずに求める（1 回 60〜100 ms）
-        try:
-            txt = g.read_text(encoding="utf-8").strip()
-            if txt.startswith("gitdir:"):
-                gd = Path(txt.split(":", 1)[1].strip())
-                gd = gd if gd.is_absolute() else root / gd
-                cd = (gd / "commondir").read_text(encoding="utf-8").strip()
-                common = Path(cd) if Path(cd).is_absolute() else gd / cd
-                return common.resolve().parent
-        except OSError:
-            pass
-        rc, out = git(["rev-parse", "--git-common-dir"], root)
-        if rc == 0 and out.strip():
-            common = Path(out.strip())
-            common = common if common.is_absolute() else root / common
-            return common.resolve().parent
-    return root
-
-
-def start_claims_file(root: Path, cfg: dict) -> Path:
-    return work_dir(primary_tree_of(root), cfg) / ".ebak" / "start-claims.json"
-
-
-def start_claims_lock(root: Path, cfg: dict, wait: float = CLAIM_LOCK_WAIT_SEC) -> FileLock:
-    return FileLock(start_claims_file(root, cfg).with_name("start-claims.lock"), wait)
-
-
-_QUOTES = "\"'`"
-
-
-def start_ident_from_text(args_text: str) -> str:
-    """Identifier of one `run-state.py start` command: hash of its arguments with quotes and blanks removed, so the
-    hook (which sees the command line) and start (which sees argv) compute the same value."""
-    norm = "".join(ch for ch in args_text if not ch.isspace() and ch not in _QUOTES)
-    return hashlib.sha1(norm.encode("utf-8")).hexdigest()[:16]
-
-
-def start_ident_from_command(cmd: str) -> Optional[str]:
-    """Identifier taken from a shell command line; None when it cannot be determined reliably (variables, substitution)."""
-    m = re.search(r"run-state\.py['\"]?\s+start\b", cmd)
-    if not m:
-        return None
-    rest, out, q = cmd[m.end():], [], ""
-    for ch in rest:
-        if q:
-            if ch == q:
-                q = ""
-            out.append(ch)
-        elif ch in "\"'":
-            q = ch
-            out.append(ch)
-        elif ch in "|;&<>\r\n":
-            if ch in "<>" and out and out[-1].isdigit() and (len(out) == 1 or out[-2].isspace()):
-                out.pop()  # file descriptor of a redirection such as 2>&1
-            break
-        else:
-            out.append(ch)
-    text = "".join(out)
-    if "$" in text or "`" in text:
-        return None
-    return start_ident_from_text(text)
 
 
 def new_run_id() -> str:
@@ -471,58 +393,7 @@ def git(args: List[str], cwd: Path) -> Tuple[int, str]:
 
 # --------------------------------------------------------------------------- machine resources
 
-def total_memory_gb() -> float:
-    try:
-        if os.name == "nt":
-            import ctypes
 
-            class MS(ctypes.Structure):
-                _fields_ = [("l", ctypes.c_ulong), ("m", ctypes.c_ulong), ("tp", ctypes.c_ulonglong), ("ap", ctypes.c_ulonglong),
-                            ("tpf", ctypes.c_ulonglong), ("apf", ctypes.c_ulonglong), ("tv", ctypes.c_ulonglong),
-                            ("av", ctypes.c_ulonglong), ("ae", ctypes.c_ulonglong)]
-            s = MS()
-            s.l = ctypes.sizeof(MS)
-            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(s))
-            return s.tp / 2 ** 30
-        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / 2 ** 30
-    except (OSError, ValueError, AttributeError):
-        return 8.0
-
-
-def auto_workers(cpus: Optional[int] = None, mem_gb: Optional[float] = None) -> int:
-    """Number of parallel implementers this machine can feed: 2 cores and 6 GB each, at least 2, at most 8."""
-    cpus = cpus or os.cpu_count() or 4
-    mem_gb = mem_gb if mem_gb is not None else total_memory_gb()
-    return max(2, min(8, cpus // 2, int(mem_gb // 6)))
-
-
-def cpu_share(workers: int, cpus: Optional[int] = None) -> int:
-    """CPU threads per worker: 1.5 x cores / workers. Measured with vitest on 20 cores x 8 workers: all cores 361 s
-    (a test timed out), 2 threads 404 s, 4 threads 371 s without timeouts - a mild oversubscription keeps the machine busy."""
-    cpus = cpus or os.cpu_count() or 4
-    return max(1, min(cpus, round(cpus * 1.5 / max(1, workers))))
-
-
-def apply_resource_env(root: Path, cfg: dict) -> int:
-    """Hand each parallel worker an equal CPU share so that N test runners do not each start one thread per core
-    (the cause of vitest `Timeout calling "onTaskUpdate"` under 5 workers). Variables the user already set win.
-    Returns the share."""
-    workers = 1
-    try:
-        croot = conductor_root(root, cfg)
-        rid = current_run(croot, cfg)
-        if rid:
-            workers = int(str(load_meta(croot, cfg, rid).get("options", {}).get("parallel_workers", 1)))
-    except (ValueError, OSError, KeyError, TypeError):
-        workers = 1
-    share = cpu_share(workers)
-    for k, v in (
-        ("HVE_CPUS", share), ("VITEST_MAX_WORKERS", share), ("VITEST_MAX_THREADS", share), ("VITEST_MAX_FORKS", share),
-        ("PYTEST_XDIST_AUTO_NUM_WORKERS", share), ("CARGO_BUILD_JOBS", share), ("GOMAXPROCS", share),
-        ("CMAKE_BUILD_PARALLEL_LEVEL", share), ("MAKEFLAGS", f"-j{share}"),
-    ):
-        os.environ.setdefault(k, str(v))
-    return share
 def repo_root(start: Optional[Path] = None) -> Path:
     start = Path(start or os.getcwd()).resolve()
     # a .git directory (or the .git file of a worktree/submodule) marks the root; no process is needed
@@ -1228,7 +1099,6 @@ def shared_ac_cases(data: dict) -> Dict[str, List[str]]:
     return {a: ids for a, ids in by_ac.items() if len(ids) > 1}
 
 
-
 # --------------------------------------------------------------------------- registry
 
 # --------------------------------------------------------------------------- integration catalog (FR-1035)
@@ -1361,206 +1231,3 @@ def work_dir(root: Path, cfg: dict) -> Path:
     return root / cfg["work"]["dir"]
 
 
-def current_run(root: Path, cfg: dict) -> Optional[str]:
-    p = work_dir(root, cfg) / "current-run.txt"
-    if p.exists():
-        rid = read_text(p).strip()
-        return rid or None
-    return None
-
-
-def run_dir(root: Path, cfg: dict, run_id: str) -> Path:
-    return work_dir(root, cfg) / "runs" / run_id
-
-
-def load_meta(root: Path, cfg: dict, run_id: str) -> dict:
-    return read_json(run_dir(root, cfg, run_id) / "meta.json", default={}) or {}
-
-
-def save_meta(root: Path, cfg: dict, run_id: str, meta: dict) -> None:
-    write_json(run_dir(root, cfg, run_id) / "meta.json", meta)
-
-
-IDLE_GAP_MINUTES = 45.0
-
-
-def idle_gap_seconds(cfg: Optional[dict]) -> float:
-    try:
-        v = float(((cfg or {}).get("limits") or {}).get("idle_gap_minutes", IDLE_GAP_MINUTES))
-    except (TypeError, ValueError):
-        v = IDLE_GAP_MINUTES
-    return v * 60 if v > 0 else 0.0
-
-
-def touch_heartbeat(root: Path, cfg: dict, run_id: str, now: Optional[float] = None) -> float:
-    """Mark the run as alive (called by the hooks on every tool call; only a utime on one file). When the previous
-    mark is older than limits.idle_gap_minutes (default 45; 0 = off) the machine was asleep or the host app suspended
-    (or nobody was working), so the gap is added to meta.idle_sec and elapsed_hours() does not count it against
-    max_hours. Returns the seconds added."""
-    now = time.time() if now is None else now
-    p = run_dir(root, cfg, run_id) / ".heartbeat"
-    try:
-        prev = p.stat().st_mtime
-    except OSError:
-        prev = None
-    try:
-        if prev is None:
-            p.write_text("", encoding="utf-8")
-        os.utime(p, (now, now))
-    except OSError:
-        return 0.0
-    thr = idle_gap_seconds(cfg)
-    if prev is None or not thr or now - prev < thr:
-        return 0.0
-    meta = load_meta(root, cfg, run_id)
-    if not meta or meta.get("status") != "active":
-        return 0.0
-    gap = round(now - prev)
-    meta["idle_sec"] = int(meta.get("idle_sec", 0) or 0) + gap
-    gaps = meta.setdefault("idle_gaps", [])
-    if len(gaps) < 50:
-        fmt = lambda t: _dt.datetime.fromtimestamp(t).astimezone().isoformat(timespec="seconds")
-        gaps.append({"from": fmt(prev), "to": fmt(now), "sec": gap})
-    save_meta(root, cfg, run_id, meta)
-    return float(gap)
-
-
-def load_queue(root: Path, cfg: dict, run_id: str) -> dict:
-    q = read_json(run_dir(root, cfg, run_id) / "queue.json", default=None)
-    return q or {"run_id": run_id, "items": []}
-
-
-def conductor_root(root: Path, cfg: dict) -> Path:
-    """Inside a worker worktree (<conductor>/work/worktrees/<x>) return the conductor tree."""
-    parts = root.resolve().parts
-    wd = cfg["work"]["dir"]
-    for i in range(len(parts) - 2, 0, -1):
-        if parts[i] == wd and i + 1 < len(parts) and parts[i + 1] == "worktrees":
-            return Path(*parts[:i])
-    return root
-
-
-def parse_options_text(text: str) -> Dict[str, str]:
-    out: Dict[str, str] = {}
-    for line in text.splitlines():
-        m = re.match(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*[:：]\s*(.*?)\s*$", line)
-        if m:
-            out[m.group(1)] = m.group(2)
-    return out
-
-
-MAX_HOURS_DEFAULT = 2.5
-MAX_HOURS_CAP = 3.0
-RESERVE_MINUTES = 30
-
-
-def time_limits(cfg: Optional[dict]) -> Tuple[float, float, float]:
-    """(default hours, cap hours, reserve hours) from cfg['limits']; invalid values fall back to the built-ins."""
-    lim = (cfg or {}).get("limits") or {}
-
-    def num(key: str, fallback: float) -> float:
-        try:
-            v = float(lim.get(key))
-        except (TypeError, ValueError):
-            return fallback
-        return v if v > 0 else fallback
-
-    cap = num("max_hours_cap", MAX_HOURS_CAP)
-    return min(num("max_hours_default", MAX_HOURS_DEFAULT), cap), cap, num("reserve_minutes", RESERVE_MINUTES) / 60.0
-
-
-def effective_max_hours(options: Optional[dict], cfg: Optional[dict] = None) -> float:
-    """max_hours of a run, clamped to limits.max_hours_cap (config; default 3 h)."""
-    default, cap, _ = time_limits(cfg)
-    try:
-        v = float((options or {}).get("max_hours") or default)
-    except (TypeError, ValueError):
-        v = default
-    if v <= 0:
-        v = default
-    return min(v, cap)
-
-
-def _is_link(p: Path) -> bool:
-    if p.is_symlink():
-        return True
-    return bool(getattr(p, "is_junction", lambda: False)())
-
-
-def unshare_dirs(wt: Path, cfg: dict) -> int:
-    """Remove the share links made by share_dirs (never touches the link target). Call before deleting a worktree."""
-    n = 0
-    for rel in (cfg.get("worktree_share") or {}).get("dirs", []):
-        p = wt / rel
-        if p.exists() or p.is_symlink():
-            if _is_link(p):
-                try:
-                    p.unlink() if p.is_symlink() else os.rmdir(p)
-                    n += 1
-                except OSError:
-                    pass
-    return n
-
-
-def primary_worktree(root: Path) -> Optional[Path]:
-    rc, out = git(["worktree", "list", "--porcelain"], root)
-    if rc != 0:
-        return None
-    for line in out.splitlines():
-        if line.startswith("worktree "):
-            return Path(line.split(" ", 1)[1].strip())
-    return None
-
-
-def share_dirs(src_root: Path, wt: Path, cfg: dict) -> List[str]:
-    """Link dependency dirs (node_modules ...) of a pooled worktree to an installed copy instead of
-    installing them again (parallel `npm ci` took ~45 min each). The copy is taken from src_root, else from
-    the primary working tree. Linked only when the lock/manifest files next to the dir are identical; otherwise
-    the worktree keeps (or builds) its own copy. Returns notes."""
-    conf = cfg.get("worktree_share") or {}
-    notes: List[str] = []
-    if not conf.get("enabled", True) or src_root.resolve() == wt.resolve():
-        return notes
-    primary = primary_worktree(src_root)
-    roots = [src_root] + ([primary] if primary and primary.resolve() != src_root.resolve() else [])
-    for rel in conf.get("dirs", []):
-        dst = wt / rel
-        if _is_link(dst) or dst.exists():
-            continue  # already shared, or the worktree has its own copy
-        parent = Path(rel).parent
-        found = [r for r in roots if (r / rel).is_dir()]
-        if not found:
-            notes.append(f"NOTE: 共有元 {rel} がありません。依存の導入（npm ci など）を主の作業ツリーで 1 回だけ行ってください（worktree では行わない）")
-            continue
-        src_dir = None
-        for r in found:
-            if all(((r / parent / f).read_bytes() if (r / parent / f).exists() else b"") ==
-                   ((wt / parent / f).read_bytes() if (wt / parent / f).exists() else b"")
-                   for f in ("package.json", "package-lock.json")):
-                src_dir = r / rel
-                break
-        if src_dir is None:
-            notes.append(f"NOTE: {rel} は共有しません（package.json / package-lock.json が共有元と異なる）。この worktree の依存を導入してください")
-            continue
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            if os.name == "nt":
-                rc, out = run(["cmd", "/c", "mklink", "/J", str(dst), str(src_dir.resolve())])
-                if rc != 0:
-                    raise OSError(out.strip()[:120])
-            else:
-                os.symlink(src_dir.resolve(), dst, target_is_directory=True)
-            notes.append(f"SHARED: {rel} -> {src_dir.resolve()}（導入済みの依存を共有。再導入しない）")
-        except OSError as e:
-            notes.append(f"NOTE: {rel} の共有に失敗しました: {e}")
-    return notes
-
-
-def allows(value: Optional[str]) -> bool:
-    """Interpret run_options values such as 'する' / '作業ブランチへ push する' / 'しない'."""
-    if not value:
-        return False
-    v = value.strip()
-    if re.search(r"しない|使わない|^no$|^false$|^off$|^なし$", v, re.I):
-        return False
-    return bool(re.search(r"する|使う|^yes$|^true$|^on$", v, re.I))

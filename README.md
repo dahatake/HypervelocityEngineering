@@ -23,7 +23,7 @@ GitHub Copilot（VS Code・Copilot CLI・GitHub Copilot app・cloud agent）で�
 | **Architect**（設計の整合・境界・品質の基準を決める） | データ層の書式と検査の範囲（検査プロファイル）を決める。節目に監査を頼む | ① [概要](#概要) → ② [管理データの書式](users-guide/03-requirements-format.md) → ③ [設定とカスタマイズ](users-guide/04-customization.md) → ④ [検査項目と監査](users-guide/06-quality-gates.md) → ⑤ [Studio: Architect](users-guide/studio/06-architect.md) |
 | **Software Engineer**（toolkit を導入・運用し、実装・テストを確かめる） | インストールする。検証コマンドを登録する。verify と CI の失敗を直す | ① [インストール](#インストール) → ② [Quickstart](#quickstart) → ③ [スクリプトリファレンス](users-guide/05-scripts-reference.md) → ④ [トラブルシューティング](users-guide/07-troubleshooting.md) → ⑤ [Studio: Software Engineer](users-guide/studio/07-software-engineer.md) |
 
-0.5.x から更新する場合は、先に [0.5.x からの移行](#05x-からの移行) を読んでください。
+旧版（0.5.x など）から更新する場合は、先に [旧版からの更新（クリーンインストール）](#旧版からの更新クリーンインストール) を読んでください。
 
 ## 目次
 
@@ -32,7 +32,7 @@ GitHub Copilot（VS Code・Copilot CLI・GitHub Copilot app・cloud agent）で�
 - [概要](#概要)
 - [インストール](#インストール)
 - [Quickstart](#quickstart)
-- [0.5.x からの移行](#05x-からの移行)
+- [旧版からの更新（クリーンインストール）](#旧版からの更新クリーンインストール)
 - [EABK Studio（データ層のビューアー）](#eabk-studioデータ層のビューアー)
 - [詳細ドキュメント](#詳細ドキュメント)
 - [用語](#用語)
@@ -56,7 +56,7 @@ EABK Lite は、次の 5 つでこれらを防ぎます。
 |---|---|
 | **リポジトリに入る規則** | `AGENTS.md` と `.github/copilot-instructions.md` に短い規則を書きます（下の「規則」）。どの人・PC・クライアントの Copilot も同じ規則を読みます。 |
 | **データ層** | 要求定義書・カタログ・外部連携カタログ・ID 台帳・System Test の台帳を、決まったパスのファイルとして git で管理します。 |
-| **決定的な検査** | `scripts/verify.py`（手元）と CI の `ebak-verify`・`ebak-data-layer` が、同じ検査をします。ID の採番（`next-id.py`）と台帳の更新（`ledger.py`）もスクリプトで行います。 |
+| **決定的な検査** | `scripts/verify.py`（手元）と CI の `ebak-verify` が、同じ検査をします。ID の採番（`next-id.py`）と台帳の更新（`ledger.py`）もスクリプトで行います。 |
 | **節目の手動監査** | 意味の矛盾は機械では見つけにくいので、節目に `rd-auditor` に監査を頼みます。毎回の依頼では動かしません。 |
 | **可視化** | EABK Studio で、要求・カタログ・試験の状態を図と表で見ます。 |
 
@@ -83,8 +83,7 @@ EABK Lite は、次の 5 つでこれらを防ぎます。
 .github/
   agents/        rd-auditor.agent.md … 節目に利用者が選んで頼む、読み取り専用の監査役
   skills/        requirement-definition（要求定義の手順。誰が使ってもよい）/ rd-audit / adopt-existing
-  workflows/     ebak-verify.yml … push・PR で verify を実行
-                 ebak-data-layer.yml … データ層の検査と自動修復（下の「データ層ワークフロー（ebak-data-layer）」）
+  workflows/     ebak-verify.yml … push・PR で verify を実行（検査だけ。修復は手元で rdfix）
 scripts/         決定的スクリプト（Python 3.9 以上。標準ライブラリだけを使用）
   verify.py / verify.ps1 / verify.sh   データ層の検査（検査プロファイル）＋ビルド・テストのコマンド
   rdcheck.py  rdfix.py  next-id.py  ledger.py  summarize.py  adopt.py  entities.py  extpoints.py  ebaklib.py
@@ -104,22 +103,21 @@ EABK Lite には hook も、依頼への定型文の自動付与もありませ�
 |---|---|---|
 | 手元 | `python scripts/verify.py`（データ層の検査＋ `verify.commands` のビルド・テスト）。`--docs-only` でデータ層だけ | 完了の前（`AGENTS.md` の規則） |
 | CI | `.github/workflows/ebak-verify.yml`（`scripts/verify.sh --show-warnings`） | push・PR のたび |
-| CI | `.github/workflows/ebak-data-layer.yml`（検査と自動修復） | PR・push・手動・毎週 |
 | 節目 | `rd-auditor`（意味の監査。読み取り専用） | 利用者が頼んだとき |
 
 検査プロファイルは `scripts/ebak.config.json` の `checks.profile` で決めます。
 
 - `lite`（既定）: `checks.lite_checks` の CHK だけを報告します。既定は `CHK-01, CHK-02, CHK-03, CHK-05, CHK-09, CHK-12, CHK-17, CHK-19, CHK-24`（構造と追跡性）です。ほかの CHK は出力にも終了コードにも影響しません。
 - `full`: CHK-00〜34 をすべて報告します。
-- `rdcheck.py check` と `verify.py` に `--profile lite|full` を付けると、設定より優先します。要約行は `rdcheck: errors=N warnings=M base=… run=… profile=lite` の形です。
+- `rdcheck.py check` と `verify.py` に `--profile lite|full` を付けると、設定より優先します。要約行は `rdcheck: errors=N warnings=M base=… profile=lite` の形です。
 - 書式の警告（CHK-13 曖昧語、CHK-14 数値の直書き、CHK-15 禁止同義語）などは full でだけ出ます。見たいときは `python scripts/verify.py --docs-only --profile full --show-warnings` を実行します（rd-auditor の監査もこれを使います）。
 - プロファイルは `rdcheck.py check`・`verify.py`・`rdfix.py`（`--full` を含む）に同じように効きます。そのため `rdfix.py --full` は、同じプロファイルの `verify.py --docs-only` が合格するときに合格します（カタログの同期などの機械的な修復は、どのプロファイルでも同じように行います）。
 
 ### データ層の修復（rdfix）
 
-verify が見つけたデータ層のファイル間の不整合（カタログの決定状態のずれ、ID 台帳の状態、マージで重複した行、名前が変わったファイルの参照など）のうち、要求定義書から機械的に決まるものは、共通の入口 `python scripts/rdfix.py --full`（確認）と `python scripts/rdfix.py --full --apply`（検査→修復→再検査）で直せます。入口は 3 つ（GitHub Actions のワークフロー・インストーラ・手動）で、どこから呼んでも同じ検査・同じ修復・同じ結果です。
+verify が見つけたデータ層のファイル間の不整合（カタログの決定状態のずれ、ID 台帳の状態、マージで重複した行、名前が変わったファイルの参照など）のうち、要求定義書から機械的に決まるものは、共通の入口 `python scripts/rdfix.py --full`（確認）と `python scripts/rdfix.py --full --apply`（検査→修復→再検査）で直せます。入口は 2 つ（インストーラ・手動）で、どこから呼んでも同じ検査・同じ修復・同じ結果です。CI（`ebak-verify`）は検査だけで、修復しません。不合格なら手元で `python scripts/rdfix.py --full --apply` を実行し、修復を同じ変更に含めて push します。読むだけの CI には書き込みの権限が要らず、bot が誰かの PR のブランチへ修復を push すると、ほかの人・PC のブランチと食い違うためです。
 
-- 終了コードは 0 = 合格・修復済み、1 = 手動対応が残る・修復の計画あり、2 = 実行しなかった・取り消した（排他の待ち時間切れ・書き込み失敗・0.5.x の名残の作業ブランチ `work/…/…` の上での実行など。すべて元に戻します）。exit 2 のときは、既定のブランチで実行し直します。
+- 終了コードは 0 = 合格・修復済み、1 = 手動対応が残る・修復の計画あり、2 = 実行しなかった・取り消した（排他の待ち時間切れ・すべて取り消した・内部エラー。書き込んだものは元に戻します）。exit 2 のときは、ほかの適用が終わるのを待ってから実行し直します。
 - 同じリポジトリでは、適用を同時に 1 つだけ実行します（排他）。
 - 要求定義書と `docs/integrations.md` は変更しません。判断が要るもの（AC の本文の変更、ID の再利用など）は `MANUAL` として、作業の種類（`要求定義書`・`System Test の台帳`・`コードとカタログ`・`リポジトリ`）と次の行動とともに示します。例: `MANUAL CHK-11 tests/system/ledger.json AC-001 の本文が…（担当: System Test の台帳）次の行動: …`。
 
@@ -191,8 +189,9 @@ python tools/install.py --target /path/to/your-repo
 | `--target <dir>` | `-Target` | インストール先（既定: カレントディレクトリ） |
 | `--dry-run` | `-DryRun` | 何も書き込まず、実行する操作だけを表示します |
 | `--check` | `-Check` | 更新が必要かどうかを確認します（必要なら exit 1。CI でバージョンのずれを検出できます） |
+| `--clean` | `-Clean` | クリーンインストール: toolkit が入れたファイル（旧版のもの・変更したものも）・`*.ebak-backup-*`・設定・ブロック・追記した行・マニフェストをすべて削除してから、この版を入れ直します。管理データ・`/work`・アプリのコードとテストは残します。未 commit の変更があると実行しません（[旧版からの更新](#旧版からの更新クリーンインストール)） |
 | `--force` | `-Force` | ローカルで変更した toolkit のファイルも上書き・削除します（`*.ebak-backup-<日時>` を残します） |
-| `--no-ci` | `-NoCi` | `.github/workflows/ebak-verify.yml` と `ebak-data-layer.yml` をインストールしません |
+| `--no-ci` | `-NoCi` | `.github/workflows/ebak-verify.yml` をインストールしません |
 | `--no-repair` | `-NoRepair` | 導入後のデータ層の自動修復をせず、検査と修復の計画だけを表示します（書き込みません） |
 | `--skip-verify` | — | 導入後のデータ層の検査も修復も行いません |
 | `--uninstall` | `-Uninstall` | 変更していない toolkit のファイル、`AGENTS.md` などのブロック、マニフェスト、空になったフォルダーを削除します（管理データと設定は残します）。`uninstall.ps1` / `uninstall.sh` でも実行できます |
@@ -202,10 +201,10 @@ python tools/install.py --target /path/to/your-repo
 
 | 種類 | ファイル | 再実行時の扱い |
 |---|---|---|
-| toolkit のファイル | `.github/agents/rd-auditor.agent.md`、`.github/skills/`（`requirement-definition`・`rd-audit`・`adopt-existing`）、`.github/workflows/ebak-verify.yml`・`ebak-data-layer.yml`、`scripts/*.py`・`verify.ps1`・`verify.sh`、`EABK-Studio/`（ビューアー本体・テスト）、`EABK-docs/`（このリポジトリの `users-guide/` と同じ内容。EABK Studio のガイドは `EABK-docs/studio/`。導入先の `users-guide/` は触りません） | 変更していなければ新しいバージョンに更新します。ローカルで変更していれば**そのまま残します**（`KEEP-LOCAL`。`--force` で上書き） |
+| toolkit のファイル | `.github/agents/rd-auditor.agent.md`、`.github/skills/`（`requirement-definition`・`rd-audit`・`adopt-existing`）、`.github/workflows/ebak-verify.yml`、`scripts/*.py`・`verify.ps1`・`verify.sh`、`EABK-Studio/`（ビューアー本体。Studio のテストは入れません）、`EABK-docs/`（このリポジトリの `users-guide/` と同じ内容。EABK Studio のガイドは `EABK-docs/studio/`。導入先の `users-guide/` は触りません） | 変更していなければ新しいバージョンに更新します。ローカルで変更していれば**そのまま残します**（`KEEP-LOCAL`。`--force` で上書き） |
 | 管理データの雛形 | `docs/requirements-definition.md`、`docs/catalog.md`、`docs/integrations.md`（外部連携カタログ。任意）、`docs/id-registry.md`、`tests/system/ledger.json` | **存在しない場合だけ**作成します。既存のファイルは上書きしません |
 | 設定 | `scripts/ebak.config.json` | なければ作成します。あれば新しいキーだけを追加し、利用者が設定した値は変更しません |
-| 追記 | `.gitignore` に `/work/`、`.gitattributes` に `docs/id-registry.md merge=union` など | 足りない行だけを追記します |
+| 追記 | `.gitignore` に `/work/`（見出し `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`）、`.gitattributes` に `docs/id-registry.md merge=union` | 足りない行だけを追記します |
 | ブロック | `AGENTS.md`、`.github/copilot-instructions.md` に `<!-- ebak-abk:begin -->`〜`end` で囲んだ規則（[上の「規則」](#規則agentsmd-に入るブロック)） | ブロックの中だけを置き換えます。ブロック外の記述は変更しません |
 | マニフェスト | `.github/ebak-toolkit.json` | バージョンと、インストールしたファイルのハッシュ（更新・削除の判定に使います） |
 
@@ -217,7 +216,7 @@ python tools/install.py --target /path/to/your-repo
    ```bash
    git add -A && git commit -m "Add Enterprise App Build Kit"
    ```
-2. `scripts/ebak.config.json` の `verify.commands` に、ビルド・静的解析・テストのコマンドを登録します（[設定とカスタマイズ](users-guide/04-customization.md)）。空のままでも、Copilot に「この技術スタックの標準的なビルドとテストのコマンドを `verify.commands` に登録して」と頼めます。
+2. `scripts/ebak.config.json` の `verify.commands`（新しい導入では空の `[]`）に、ビルド・静的解析・テストのコマンドを登録します（[設定とカスタマイズ](users-guide/04-customization.md)）。空のままでも、Copilot に「この技術スタックの標準的なビルドとテストのコマンドを `verify.commands` に登録して」と頼めます。
 3. CI でアプリのツールチェーン（Node.js など）が必要な場合は、`.github/workflows/ebak-verify.yml` の verify ステップの前にセットアップのステップを追加します。
 4. 既存の要求定義書がある場合は、その ID を ID 台帳に取り込みます。
    ```bash
@@ -236,7 +235,7 @@ curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/m
 curl -fsSL .../tools/install.sh | bash -s -- --check
 ```
 
-0.5.x から更新するときの変化は [0.5.x からの移行](#05x-からの移行) を参照してください。
+更新は、この版が配布するファイルだけを扱います。旧版が入れて今の版が配布しないファイルは削除せずに残し、件数を「注意」で表示します。旧版から更新するときは `--clean` を使います（[旧版からの更新（クリーンインストール）](#旧版からの更新クリーンインストール)）。
 
 ### アンインストール・クリーンアップ
 
@@ -268,7 +267,7 @@ toolkit を clone 済みの場合は `python tools/install.py --target /path/to/
 | toolkit のファイル（`.github/agents`・`skills`・`workflows/ebak-*.yml`、`scripts/*.py` など）と旧版のファイル | 変更していなければ削除（変更していれば `KEEP-LOCAL` で残す。`--force` で削除） | 同じ |
 | `AGENTS.md`・`.github/copilot-instructions.md` のブロック | ブロックだけを削除（ほかに記述がなければファイルごと削除） | 同じ |
 | マニフェスト `.github/ebak-toolkit.json`、空になったフォルダー、削除した `.py` の `__pycache__` | 削除 | 削除 |
-| 管理データ（`docs/requirements-definition.md`・`catalog.md`・`integrations.md`・`id-registry.md`・`manual-tests.md`・`docs/requirements/`、0.5.x から残る `run-history.md`、`tests/system/ledger.json`）。パスは `scripts/ebak.config.json` の `management_files` に従います | 残す | 削除 |
+| 管理データ（`docs/requirements-definition.md`・`catalog.md`・`integrations.md`・`id-registry.md`・`manual-tests.md`・`docs/requirements/`・`tests/system/ledger.json`）。パスは `scripts/ebak.config.json` の `management_files` に従います | 残す | 削除 |
 | `scripts/ebak.config.json`、`/work`、`*.ebak-backup-*` | 残す | 削除 |
 | `.gitignore` の `/work/`、`.gitattributes` の `merge=union` の行 | 残す | 追記した行だけを削除（空になればファイルごと削除） |
 | System Test のコード（`tests/system/` の台帳以外）、アプリのコード、`docs/` のほかの文書 | 残す | 残す |
@@ -296,7 +295,8 @@ GitHub Copilot には、agents・skills・hooks をまとめて配布する標�
 | `Python 3.9 以上が必要です` | Python をインストールし、`python --version` が通ることを確認します |
 | `git リポジトリではありません` | `git init -b main` してから実行します |
 | `KEEP-LOCAL` が表示された | ローカルで変更したファイルは更新・削除していません。差分を確認し、上書き・削除してよければ `--force` を付けて再実行します |
-| `WARN-HOOK  <パス>` が表示された | 旧版の hook のファイル（`.github/hooks/*.json`）をローカルで変更していたので残しました（`KEEP-LOCAL`）。このファイルは削除された `scripts/hooks/gate.py` を呼びます。hook がエラーになると Copilot がすべてのツールの呼び出しを拒否するので、このファイルを削除してから Copilot のセッションを開き直します |
+| `この版が配布しないファイルが N 件残っています` と表示された | 旧版が入れたファイルです。更新では削除しません。`--clean` で入れ直します（[旧版からの更新](#旧版からの更新クリーンインストール)） |
+| `--clean の前に、未 commit の変更を commit するか退避します` | `git status` で確かめ、commit するか `git stash` してから再実行します |
 
 ---
 
@@ -312,7 +312,7 @@ GitHub Copilot には、agents・skills・hooks をまとめて配布する標�
 
 1. **ふだんどおり Copilot に依頼します**。VS Code・Copilot CLI・GitHub Copilot app・cloud agent のどれでも、既定のエージェントのままでかまいません（例: 「延滞が 3 日を超えたら本人と上長に通知する機能を追加して」）。
 2. **Copilot が規則に従って同じ変更で更新します**。`AGENTS.md` の規則に従い、要求定義書の要求と受入基準・カタログ・テスト・コードを同じ変更の中で更新し、`python scripts/verify.py` を exit 0 にします。新しい ID は `next-id.py`、台帳は `ledger.py` で更新します。差分を確認し、承認が必要な要求はチャットで承認します。
-3. **push・PR で CI が同じ検査をします**。`ebak-verify` と `ebak-data-layer` が、手元と同じ検査を実行します。
+3. **push・PR で CI が同じ検査をします**。`ebak-verify` が手元と同じ検査を実行します（検査だけで、修復の commit はしません）。データ層が不合格なら、手元で `python scripts/rdfix.py --full --apply` を実行して同じ変更に含めます。
 4. **節目に rd-auditor に監査を頼みます**。機能のまとまりが終わったとき・リリースの前などに、Agent に `rd-auditor` を選んで「差分を監査して」「全量を 3 回で監査して」などと頼みます。差分の既定は `base_branch`（既定 `main`）との差分です。サブエージェントを使えるクライアントでは指定の回数を並行して多数決します。結果は `work/audit/<日時>/report.md` に出ます。指摘を反映するかは利用者が判断し、別の変更で直します。
 5. **状況は EABK Studio で見ます**（任意）。`python EABK-Studio/studio.py --role pm` などで、要求・カタログ・試験の状態を図と表で確かめます（[EABK Studio](#eabk-studioデータ層のビューアー)）。
 
@@ -324,41 +324,52 @@ EABK Lite は依頼に定型文を自動で付けません。毎回伝えたい�
 
 `python scripts/adopt.py scan` で棚卸しし、`python scripts/adopt.py request` で Copilot のチャットにそのまま貼れる依頼文（`<constraints>` の節つき。既定は「実装: しない」「承認: 厳格」）を `work/import/adopt-<日時>.md` に作ります。逆生成した要求は「承認待ち」で入り、利用者が承認します（[既存のアプリを導入する](users-guide/10-adopting-existing-apps.md)）。
 
-### データ層ワークフロー（ebak-data-layer）
-
-`.github/workflows/ebak-data-layer.yml`（ebak-data-layer）は、プルリクエスト、main への push、手動実行（workflow_dispatch）、毎週 1 回の定期実行（schedule）で `python scripts/verify.py --docs-only` を実行します。
-
-- 不合格のとき、共通の入口 `python scripts/rdfix.py --full --apply` で自動修復して再検査し、合格した場合だけ修復を commit します。要求定義書は変更しない設計です。同一リポジトリの PR では当該 PR のブランチへ、main への push と定期実行では修復用ブランチ（`eabk/data-layer-fix`）と PR に反映します。
-- 修復後も直らないときは、ラベル `eabk-data-layer` つきで失敗の要約と実行へのリンクを含む Issue を作成します（同じ内容の未解決 Issue があればコメント）。
-- 権限は contents・pull-requests・issues の write だけで、fork からの PR では検査だけを行います。bot の修復 commit では再修復しません。
-- 無効化するには、ファイルを削除するか Actions 画面で Disable します（インストール時は `--no-ci`）。詳細は `users-guide/04-customization.md`。
-
 ---
 
-## 0.5.x からの移行
+## 旧版からの更新（クリーンインストール）
 
-0.6.0（EABK Lite）では、オーケストレーション（conductor と作業役、worktree の run、`/build`、役割ごとのゲート）を撤去しました。同じインストールコマンドで更新すると、次のようになります。
+インストーラは旧版からの移行の処理を持ちません。旧版（0.5.x など）から更新するときは、`--clean` でクリーンインストールします。版ごとの削除リストを持たず、マニフェスト（`.github/ebak-toolkit.json`）に記録された「toolkit が入れたファイル」をすべて消してから入れ直すので、どの版からでも同じ手順です。
 
-| 0.5.x | 0.6.0 での扱い |
+```bash
+git status                                    # 未 commit の変更がないこと（あると実行しません）
+python tools/install.py --target . --clean --dry-run   # 削除する一覧（CLEAN）を確認
+python tools/install.py --target . --clean
+git diff                                      # 結果を確認して commit（git restore で戻せます）
+```
+
+PowerShell では `-Clean`、`install.sh` では `--clean` です。
+
+| 対象 | `--clean` での扱い |
 |---|---|
-| `/build` で conductor に依頼 | 既定のエージェントにふだんどおり依頼します（[推奨の進め方](#推奨の進め方)） |
-| `<run_options>`（`max_hours`・`approval_policy`・`parallel_workers`・`scope` など） | 不要です。包括承認（`approval_policy`）の代わりに、チャットで承認します |
-| conductor・rd-author・test-designer・implementer・reviewer、`build`・`build-template`・`implement-fr`・`system-test-increment`・`dedupe` の skill | 利用者が変更していなければ削除します（`REMOVE`）。変更していれば残します（`KEEP-LOCAL`。`--force` で削除） |
-| hook（`.github/hooks/quality-gates.json`・`.github/hooks/prompt-prefix.json`・`scripts/hooks/gate.py`）と定型文の自動付与 | 0.6.0 には hook がありません。変更していなければ削除します（`REMOVE`）。変更した hook の設定が残ると（`KEEP-LOCAL`）、`WARN-HOOK  <パス>` を表示します。削除された `gate.py` を呼ぶので hook がエラーになり、Copilot がすべてのツールを拒否します。そのファイルを削除し、Copilot のセッションを開き直します。導入先の `.github/ebak-prompt-prefix.md` はそのまま残りますが、もう読みません |
-| `run-state.py`・`integrate.py`・`kpi.py`・`watch.py`・`clean-work.py` など | 削除します。代わりはありません（状態と統合は git と CI に任せます） |
-| 設定のキー `gates`・`limits`・`credits`・`worktree_share`・`prompt_prefix` | 削除します（`PRUNE` と表示） |
-| `docs/run-history.md` | 残っていれば読み取り専用の記録です（Studio で表示でき、`rdfix.py` は重複行を従来どおり直します）。新しい導入では作りません |
-| 0.5.x の run が残した worktree と `work/*` ブランチ | 自動では消しません。`git worktree list`・`git branch --list "work/*"` で確認し、手で削除します |
+| toolkit が入れたファイル（マニフェストに記録されたもの、この版が配布するもの。旧版の conductor・作業役・hook・`gate.py` などを含む。ローカルで変更したものも） | 削除して、この版のファイルを入れ直します |
+| `*.ebak-backup-*`、`scripts/ebak.config.json` | 削除し、設定は既定で作り直します（以前の値は `git diff scripts/ebak.config.json` で確かめ、必要な値を戻します） |
+| `AGENTS.md`・`.github/copilot-instructions.md` のブロック、`.gitignore`・`.gitattributes` に toolkit が追記した行 | 削除して入れ直します。ブロックの外の記述は残します |
+| 管理データ（要求定義書・カタログ・外部連携カタログ・ID 台帳・`tests/system/ledger.json`）、`/work`、アプリのコードとテスト | 残します |
 
-要求定義書・台帳・カタログは更新で変更しません。詳しくは [バージョンアップの手順](users-guide/09-versioning.md) と [CHANGELOG.md](CHANGELOG.md) を参照してください。
+- 2 回続けて実行しても、2 回目は何も変わりません。
+- 旧版のデータ層のファイル（0.5.x の `docs/run-history.md` など）はデータとして残ります。不要なら手で削除します。
+- 0.5.x の run が残した worktree と `work/*` ブランチは消しません。`git worktree list`・`git branch --list "work/*"` で確認し、手で削除します。
+- `--clean` を使わずに同じインストールコマンドで更新すると、旧版のファイル（hook を含む）は残ります。旧版の hook が残ると削除された `gate.py` を呼び、Copilot がツールを拒否することがあるので、旧版からは `--clean` を使います。
+
+0.5.x からの使い方の変化:
+
+| 0.5.x | 0.6.0（EABK Lite） |
+|---|---|
+| `/build` で conductor に依頼、`<run_options>` | 既定のエージェントにふだんどおり依頼し、承認はチャットで返します（[推奨の進め方](#推奨の進め方)） |
+| hook・定型文の自動付与・役割ごとのゲート | ありません。毎回伝えたい前提は自分の Copilot の instructions に書きます |
+| `run-state.py`・`integrate.py`・`kpi.py`・`watch.py`・`clean-work.py` など | ありません（状態と統合は git と CI に任せます） |
+| データ層の自動修復のワークフロー `ebak-data-layer.yml` | CI は検査だけの `ebak-verify` です。修復は手元で `python scripts/rdfix.py --full --apply` を実行し、同じ変更に含めます |
+| `rdcheck.py check`・`verify.py` の `--run`・`--strict`・`--strict-ledger`・`--no-strict-ledger` | ありません（付けると引数のエラーで exit 2）。つまみは検査プロファイル（`checks.profile`・`--profile lite`／`full`）だけです |
+
+詳しくは [バージョンアップの手順](users-guide/09-versioning.md) と [CHANGELOG.md](CHANGELOG.md) を参照してください。
 
 ---
 
 ## EABK Studio（データ層のビューアー）
 
-**EABK Studio**（`EABK-Studio/`）は、EABK が管理するデータ層（要求定義書・カタログ・System Test の台帳・ID 台帳、0.5.x から残る実行履歴）を、**図・表・検索**で見て回る、ローカル専用の Web アプリです。toolkit の一部として、インストールすると対象リポジトリに入ります。
+**EABK Studio**（`EABK-Studio/`）は、EABK が管理するデータ層（要求定義書・カタログ・System Test の台帳・ID 台帳）を、**図・表・検索**で見て回る、ローカル専用の Web アプリです。toolkit の一部として、インストールすると対象リポジトリに入ります。
 
-- **読み取り専用**です。ソースコードは開かず、`127.0.0.1` だけで待ち受けます。唯一の書き込みは、「整合性保守」でプレビューを確認して実行した、`docs/catalog.md` の題名・決定状態だけです。
+- **読み取り専用**です。データ層があるリポジトリではソースコードの中身を読まず（下の「コードのモード」では、要求 ID を探すためにだけ読みます）、`127.0.0.1` だけで待ち受けます。唯一の書き込みは、「整合性保守」でプレビューを確認して実行した、`docs/catalog.md` の題名・決定状態だけです。
 - Python 3.9 以上の標準ライブラリだけで動きます（追加のインストールなし）。データ層のファイルを更新すると、数秒で画面が読み直されます。
 - 要求・カタログ・試験の状態を、人が理解し、判断するための窓です。要求や実装の変更は、Copilot に依頼します。
 
@@ -384,6 +395,22 @@ python EABK-Studio/studio.py --role pm    # ブラウザーが開く。--role �
 
 Windows では `.\EABK-Studio\start.ps1 -Role pm`、macOS / Linux では `./EABK-Studio/start.sh . 8765 --role pm` でも起動できます。詳細は [EABK-Studio/README.md](EABK-Studio/README.md)、スクリプトのオプションは [スクリプトリファレンス](users-guide/05-scripts-reference.md) です。
 
+### EABK なしで Studio を使う（コードのモード）
+
+EABK を入れていない git リポジトリも見られます（FR-1086）。この toolkit（HVE）を clone したフォルダーから、対象のリポジトリのルートを `--repo` に指定します。
+
+```bash
+python EABK-Studio/studio.py --repo <任意の git リポジトリ> --check   # mode: code (...) requirement-docs=… requirements=… linked-to-code=… code-files=… test-files=… components=…
+python EABK-Studio/studio.py --repo <任意の git リポジトリ>
+```
+
+- データ層があるリポジトリでは、従来どおりデータ層を読みます。
+- データ層がないときは、読み取りだけで次を導出します: Markdown の表の先頭の列と見出しにある要求 ID（`FR-…`・`NFR-…`。`docs/PRD.md` や、名前に prd・requirement・要求・spec を含むファイルを先に読みます）、その ID を書いたコードとテストのファイル（カタログの行の実装ファイル・テスト）、コンポーネント（共通部品）にまとめたソースのファイル。
+- すべての画面（ダッシュボード・マップ・図式・ソース対応・表）が動きます。台帳と受入基準は空です。
+- 対象は git リポジトリのルートだけです（ただのフォルダーは走査しません）。空のフォルダーや git でないフォルダーは「no EABK data layer … and nothing to show in code mode」と表示して exit 1 で終わります。
+- `--repo` を省略したときの対象は、現在のフォルダー（データ層があるか、コードのモードで見られる git リポジトリのとき）、それ以外は Studio 自身のリポジトリです。画面右上のリポジトリの切り替えも同じ条件です。
+- 例: `C:\GitHub\VideoCreator` では `docs/PRD.md` から 103 件の要求、そのうち 56 件がコード・テストにつながり、コードのファイル 78・コンポーネント 6 を表示しました。
+
 ---
 
 ## 詳細ドキュメント
@@ -400,7 +427,7 @@ Windows では `.\EABK-Studio\start.ps1 -Role pm`、macOS / Linux では `./EABK
 | 6 | [検査項目と監査](users-guide/06-quality-gates.md) | verify の CHK の意味と直し方、rdfix、rd-auditor の監査を知りたい |
 | 7 | [トラブルシューティング](users-guide/07-troubleshooting.md) | verify・CI・修復が失敗した |
 | 8 | [導入ロードマップ](users-guide/08-roadmap.md) | 試行から本番運用までの段取りを知りたい |
-| 9 | [バージョンアップの手順](users-guide/09-versioning.md) | 版を上げる（配布元）、導入済みのリポジトリを更新する（利用者）。0.5.x からの移行 |
+| 9 | [バージョンアップの手順](users-guide/09-versioning.md) | 版を上げる（配布元）、導入済みのリポジトリを更新する（利用者）。旧版からのクリーンインストール |
 | 10 | [既存のアプリを導入する](users-guide/10-adopting-existing-apps.md) | 既存のコード・設計書から、棚卸し → 逆生成の要求（承認待ち）→ 現状の挙動の固定でデータ層を整える |
 | 11 | [外部連携カタログ](users-guide/11-integration-catalog.md) | 外部アプリ・データとの連携を `docs/integrations.md`（任意）に記録する。追加・変更・廃止・検査の手順 |
 | 参考 | [EABK Studio のガイド](users-guide/studio/README.md) | データ層を図・表で見たい。役割別の手順と、各画面が読むデータを知りたい |

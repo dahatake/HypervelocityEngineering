@@ -178,7 +178,7 @@ function buildHistory() {
   }));
   // FR-1032 / FR-1031: record chips wrap inside their box; each chip's ID is a link.
   // i18n-data: the category names of the history records are managed-data values (shown as written)
-  const KIND = { 決定記録: 'decision', 実行履歴: 'run', 要求状態: 'requirement', 実装登録: 'impl' };
+  const KIND = { 決定記録: 'decision', 要求状態: 'requirement', 実装登録: 'impl' };
   const chipBoxes = Object.entries(KIND).map(([label, kind]) => {
     const records = (m.analysis.history || []).filter((r) => r.category === label);
     const chip = (r) => {

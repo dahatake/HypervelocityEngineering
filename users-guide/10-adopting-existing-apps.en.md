@@ -4,6 +4,8 @@
 
 This chapter gives the procedure for using this toolkit with an app that already has source code, design documents, and tests, and the rationale for the approach chosen. Unlike new development (building from requirements), **there is no source of truth for requirements yet**, so you prepare the data layer (the requirements definition, the catalog, and the System Test ledger) first.
 
+> To just look around before adopting, you can use EABK Studio's code mode without installing the toolkit. From an HVE clone, `python EABK-Studio/studio.py --repo <existing repository>` shows, read-only, the requirement IDs in `docs/PRD.md` and the like, the code and tests that mention them, and the components ([README](../README.en.md#using-studio-without-eabk-code-mode)).
+
 ## 10.1 Summary (the shortest way to use it)
 
 ```text

@@ -5,7 +5,8 @@
 This is a list of **which file, which section, column, or field** each EABK Studio screen and feature reads, and **how it calculates** what it displays. Use it when you want to check the basis of a number or diagram ("What is this 62% a percentage of?").
 The content was verified against the implementation (`EABK-Studio/eabk_model.py`, `studio.py`, `web/js/*.js`).
 
-- Studio reads **only data-layer files**. It does not open the contents of source code. It uses the **path strings** written in the catalog and the ledger merely as names (S8.1, S8.8).
+- In a repository with a data layer, Studio reads **only data-layer files**. It does not open the contents of source code. It uses the **path strings** written in the catalog and the ledger merely as names (S8.1, S8.8).
+- In a git repository without a data layer, Studio derives a read-only model in code mode ("Code mode" after S8.1).
 - Normal browsing is read-only. The only thing Studio writes is `docs/catalog.md`, and only when you confirm and run "Consistency maintenance" (S8.9).
 - Communication is `127.0.0.1` only (S8.10).
 
@@ -20,13 +21,26 @@ You can change the locations with `management_files` in the target repository's 
 | `catalog` | `docs/catalog.md` | Parses tables (features, APIs, tables, common parts) | 2D/3D, Placement, Source mapping, Consistency, Maintenance |
 | `ledger` | `tests/system/ledger.json` | Parsed as JSON | Dashboard, Tables (test cases), Consistency, Structure |
 | `id_registry` | `docs/id-registry.md` | Parses tables (counts and structure judgments) | Dashboard, Structure |
-| `run_history` | `docs/run-history.md` | Parses tables | Dashboard, Tables (run history), Structure |
 | `manual_tests` | `docs/manual-tests.md` | **Existence check only** (the contents are not parsed) | None (only the `--check` listing and the model's `meta.files`) |
 
 - At startup, you can run `python EABK-Studio/studio.py --check` to see which files were found and how many items were parsed ([04-troubleshooting.en.md](04-troubleshooting.en.md)).
 - Requirements are collected from **both** `docs/requirements-definition.md` and `docs/requirements/*.md`. If the same ID appears two or more times, the first one is used, and the rest are reported as duplicates on the Structure screen.
 - How things look when a file is missing is described in S8.7.
-- Basis for not reading code contents: the test `test_nothing_outside_the_data_layer_is_read` (`EABK-Studio/tests/test_studio.py`) verifies that requirement IDs written in files under `src/` are not read.
+- Basis for not reading code contents: the test `test_nothing_outside_the_data_layer_is_read` (`EABK-Studio/tests/test_studio.py` in the HVE repository) verifies that, in a repository with a data layer, requirement IDs written in files under `src/` are not read (so does `test_data_layer_wins_over_code_mode`).
+
+### Code mode (a git repository without a data layer, FR-1086)
+
+At the root of a git repository that has none of `docs/requirements-definition.md`, `docs/catalog.md`, and `tests/system/ledger.json`, Studio derives the following, read-only. Nothing is written.
+
+| What is derived | What is read | How it appears in the model |
+|---|---|---|
+| Requirements | Requirement IDs (`FR-…`, `NFR-…`) in the first column of tables and in headings of markdown files tracked by git (or not ignored). Files whose names contain prd, requirement, 要求 or spec (such as `docs/PRD.md`) are read first, then files under `docs/`, then the rest; the first definition found wins | Requirements (title from the next column of the same row or the heading text) |
+| Links from requirements to code and tests | Source files that mention the requirement ID | Implementation files / tests of the feature rows in the catalog |
+| Components | Source files grouped by location | Shared parts |
+
+- Every screen works. The ledger and acceptance criteria are empty.
+- `--check` prints `mode: code (...) requirement-docs=… requirements=… linked-to-code=… code-files=… test-files=… components=…`.
+- A folder that is not a git repository is never walked. If there is nothing to show, it exits 1 ([01-first-steps.en.md](01-first-steps.en.md)).
 
 ## S8.2 Items Extracted from the Requirements Definition
 
@@ -81,7 +95,6 @@ Tables in `docs/catalog.md` are identified by the **column names in the header r
 |---|---|
 | `tests/system/ledger.json` | In `cases[]`: `id`, `requirement_ids`, `ac_ids`, `title`, `layer`, `command`, `canary`, `status`, `last_commit`, `last_run_at`, `evidence`; plus `ac_digests`. A case's line number is derived from the position of its `"id"` in the file |
 | `docs/id-registry.md` | All rows of tables whose leading columns are `ID`, `種別`, and `状態` (or `使用状態`) |
-| `docs/run-history.md` | All rows of tables whose leading column is `run-id` (all columns are kept as strings) |
 
 Paths written in `command` appear in the diagrams as **names** of test files (the files are not opened).
 
@@ -106,8 +119,7 @@ Paths written in `command` appear in the diagrams as **names** of test files (th
 | Implementation by boundary | Requirements' source file × catalog | For each file name (without extension) in which requirements are written, implementation-registered ÷ number of requirements |
 | Verification level of acceptance criteria | The AC's `検証レベル` | Number of ACs per level (empty is `-`) |
 | System Test and ID registry | Ledger / ID registry | Number of cases per `status`. For the ID registry, counts per type:status |
-| Run history | `docs/run-history.md` | The last 8 rows, newest first. Up to the first 7 columns |
-| Design/development history and progress | Decision log, run history, requirements, catalog, ledger | Counts by category (decision log / run history / requirement status / implementation registration / System Test) × status. Pressing one shows the file:line of the underlying records on the right (with links that open in VS Code) |
+| Design/development history and progress | Decision log, requirements, catalog, ledger | Counts by category (decision log / requirement status / implementation registration / System Test) × status. Pressing one shows the file:line of the underlying records on the right (with links that open in VS Code) |
 
 ### S8.5.2 2D Map and 3D Map (`#/map2d`, `#/map3d`)
 
@@ -202,11 +214,10 @@ On every tab, selecting a row highlights it in the diagram (you can narrow down 
 | Decision log (`decisions`) | Decision log table | Date, target, decision, rationale, run |
 | Audit findings (`audits`) | Audit findings table | ID, date, category, severity, location, summary, status |
 | Sources (`sources`) | Source table | ID, document, version, category |
-| Run history (`runs`) | `docs/run-history.md` | The first 8 columns of the table (column names as in the file) |
 
 ### S8.5.8 Structure (`#/structure`)
 
-This page does not appear in the navigation (open it by URL). For each of the **7 data layers**, it compares the current state (number of parsed items) with the ideal (the judgment criteria) and lists rows judged one record at a time.
+This page does not appear in the navigation (open it by URL). For each of the **6 data layers**, it compares the current state (number of parsed items) with the ideal (the judgment criteria) and lists rows judged one record at a time.
 
 | Layer | Data read | Main judgments (kind of difference) |
 |---|---|---|
@@ -214,7 +225,6 @@ This page does not appear in the navigation (open it by URL). For each of the **
 | Catalog | Features table × requirements | Surplus (a row with no matching requirement), duplicate (multiple rows for the same requirement), reference inconsistency (decision status differs from the requirement), valid |
 | System Test | Ledger × requirements, ACs, PARAMs | Duplicate (case ID), reference inconsistency (undefined requirement or AC, AC's parent requirement mismatch, digest of AC body does not match the ledger's `ac_digests`), valid |
 | ID registry | ID registry × requirements, ACs, goals | Surplus (an ID with no definition), reference inconsistency (prefix and kind mismatch), duplicate, valid |
-| Run history | `run-history.md` × requirements, cases | Reference inconsistency (refers to a nonexistent requirement or case), duplicate (run-id), valid |
 | Cross-boundary | External integration table | Missing (method, direction, or system of record is empty), duplicate, valid |
 
 - Each row carries a `根拠` (basis; file:line).
@@ -291,20 +301,20 @@ Data read: the requirement's `決定状態`, the AC's `検証レベル` and `BLO
 
 "◎" is a primary input; "○" is a supplementary input.
 
-| Screen / feature | Requirements definition (including `requirements/`) | Catalog | Ledger | ID registry | Run history |
-|---|---|---|---|---|---|
-| Dashboard | ◎ | ◎ (implementation registration) | ◎ (pass rate) | ○ (counts) | ◎ |
-| 2D / 3D map | ◎ | ◎ | ○ (cases) | | |
-| Diagrams | ◎ | ○ (component diagram) | | | |
-| Placement | ◎ | ◎ | | | |
-| Placement (runtime environment) | ○ (external integrations) | ◎ (names of implementation files) | | | |
-| Source mapping | ○ | ◎ | ○ (paths in command) | | |
-| Tables | ◎ | ◎ | ◎ | | ◎ |
-| Structure | ◎ | ◎ | ◎ | ◎ | ◎ |
-| Consistency | ◎ | ◎ | ◎ | | |
-| Consistency maintenance | ◎ (source of truth) | ◎ (target; written to) | | | |
-| Search, detail panel | ◎ | ◎ | ○ | | |
-| Implementation status | ◎ (decision status, AC) | ◎ (implementation files) | ◎ (case status) | | |
+| Screen / feature | Requirements definition (including `requirements/`) | Catalog | Ledger | ID registry |
+|---|---|---|---|---|
+| Dashboard | ◎ | ◎ (implementation registration) | ◎ (pass rate) | ○ (counts) |
+| 2D / 3D map | ◎ | ◎ | ○ (cases) | |
+| Diagrams | ◎ | ○ (component diagram) | | |
+| Placement | ◎ | ◎ | | |
+| Placement (runtime environment) | ○ (external integrations) | ◎ (names of implementation files) | | |
+| Source mapping | ○ | ◎ | ○ (paths in command) | |
+| Tables | ◎ | ◎ | ◎ | |
+| Structure | ◎ | ◎ | ◎ | ◎ |
+| Consistency | ◎ | ◎ | ◎ | |
+| Consistency maintenance | ◎ (source of truth) | ◎ (target; written to) | | |
+| Search, detail panel | ◎ | ◎ | ○ | |
+| Implementation status | ◎ (decision status, AC) | ◎ (implementation files) | ◎ (case status) | |
 
 ## S8.7 How Things Look When Something Is Missing
 
@@ -313,7 +323,7 @@ Data read: the requirement's `決定状態`, the AC's `検証レベル` and `BLO
 | No requirements definition or requirement files, and no catalog | `--check` exits with code 1. On startup it shows guidance and exits. If you switch after startup, it does not switch and shows "Data layer not found" |
 | No catalog | Implementation registered % is 0. Source mapping and Placement are empty ("The catalog has no file mapping") |
 | No ledger, or the JSON is broken | Tests passed % is 0 and there are 0 test cases. If it is broken, a warning (`ledger is not valid JSON`) is recorded |
-| No ID registry or run history | The corresponding sections are empty. The Structure layers show "0 items to judge" |
+| No ID registry | The corresponding sections are empty. The Structure layers show "0 items to judge" |
 | `実装ファイル` is `—` or 未実装 | The requirement's implementation is none (unregistered). Consistency shows "One layer missing" |
 | Tables with different column names | Tables that cannot be identified are not read. See the `--check` count (0 items) and "画面に出ない" (nothing shows on screen) in `04-troubleshooting.en.md` |
 

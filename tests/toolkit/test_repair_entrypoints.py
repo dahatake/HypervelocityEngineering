@@ -29,7 +29,7 @@ def template(tmp_path_factory):
     git(path, "add", "-A")
     git(path, "commit", "-q", "-m", "init")
     run([sys.executable, str(INSTALL), "--target", str(path), "--skip-verify"], path, check=True)
-    cfg_path = path / "scripts" / "ebak.config.json"  # every CHK: the planted manual item is CHK-23 (FR-1084)
+    cfg_path = path / "scripts" / "ebak.config.json"  # every CHK: the planted automatic item is CHK-07 (FR-1084)
     cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
     cfg.setdefault("checks", {})["profile"] = "full"
     cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -66,11 +66,11 @@ def plant_auto(r: Repo):
 
 
 def plant_manual(r: Repo):
-    # two run-history rows with the same run-id and different contents -> manual (merge=union leftovers)
-    row = "| 202610010000 | 2026-10-01 00:00 | 2026-10-01 01:00 | abc1234 | 完了 | FR-001 | なし | 100% | 60 分 | 100% | 0 | 0 | FR-001 |\n"
-    other = row.replace("abc1234 | 完了", "def5678 | 中断")
-    hist = r.read("docs/run-history.md") if (r.path / "docs/run-history.md").exists() else (SOURCE / "tools" / "templates" / "docs" / "run-history.md").read_text(encoding="utf-8")  # 0.5.x leftover
-    r.write("docs/run-history.md", hist.rstrip("\n") + "\n" + row + other)
+    # PARAM-001 is deleted in the ID registry while the requirements definition still uses it -> MANUAL CHK-02
+    reg = r.read("docs/id-registry.md")
+    new, n = re.subn(r"^(\| PARAM-001 \|[^|\n]*\| )使用中( \|)", r"\1削除済み\2", reg, count=1, flags=re.M)
+    assert n == 1, reg
+    r.write("docs/id-registry.md", new)
 
 
 def layer_bytes(r: Repo):
@@ -91,21 +91,15 @@ def text(p):
     return (p.stdout or "") + (p.stderr or "")
 
 
-# FR-1044 AC-236: the workflow and the installer repair only through the common entry
-def test_ac236_workflow_and_installer_use_only_the_common_entry():
-    wf = WF.read_text(encoding="utf-8")
-    runs = re.findall(r"run:\s*(.+)", wf)
-    assert "python scripts/rdfix.py --full --apply" in runs
-    assert not any(re.search(r"rdfix\.py\s+--apply", r) for r in runs), "共通の入口を通さない rdfix.py --apply が残っている"
-    assert not re.search(r"(ledger|next-id)\.py", wf), "ワークフローが独自の修復手順を持つ"
+# FR-1044 AC-236: the installer repairs only through the common entry (0.6.0: there is no repairing workflow)
+def test_ac236_installer_uses_only_the_common_entry():
+    assert not WF.exists()
     src = INSTALL.read_text(encoding="utf-8")
     assert '"--full"' in src and "rdfix.py" in src
     assert "verify.py" not in src.split("def run_data_layer")[1].split("def main")[0]
     # exactly one call of the data layer from main (no extra verify after it)
     assert src.count("run_data_layer(") == 2  # definition + the single call
     assert "run_verify" not in src
-    # the safety net of FR-1018 stays
-    assert "git checkout -- docs/requirements-definition.md" in wf
 
 
 # FR-1044 AC-236: the pass/fail of the common entry equals verify --docs-only
@@ -121,10 +115,10 @@ def test_ac236_entry_result_matches_verify_docs_only(template, tmp_path, plant):
     assert (v == 0) == (f == 0)
 
 
-# FR-1044 AC-235: workflow call, installer and the manual command give the same bytes and report
+# FR-1044 AC-235: the installer and the manual command give the same bytes and report
 def test_ac235_three_entries_repair_identically(template, tmp_path):
     results = {}
-    for name in ("manual", "workflow", "installer"):
+    for name in ("manual", "installer"):
         r = fresh(template, tmp_path, name)
         plant_auto(r)
         plant_manual(r)
@@ -135,8 +129,8 @@ def test_ac235_three_entries_repair_identically(template, tmp_path):
             p = r.py("rdfix.py", "--full", "--apply")
             assert p.returncode == 1, text(p)
         results[name] = (layer_bytes(r), sorted(set(re.findall(r"(?:FIX|MANUAL) (CHK-\d+) (\S+)", text(p)))))
-    assert results["manual"] == results["workflow"] == results["installer"]
-    assert any(f == "docs/run-history.md:" or f.startswith("docs/run-history.md") for _, f in results["manual"][1])
+    assert results["manual"] == results["installer"]
+    assert any(f.startswith(f"{RD}:") for _, f in results["manual"][1])
 
 
 # FR-1045 AC-237 / AC-239: repaired, reported, requirements definition untouched, exit 0 even with manual items left
@@ -150,7 +144,7 @@ def test_ac237_ac239_install_repairs_reports_and_keeps_exit_code(template, tmp_p
     assert p.returncode == 0, t
     assert "承認待ち" not in r.read(CATALOG).split("FR-001")[1].split("\n")[0]
     assert (r.path / RD).read_bytes() == rd
-    assert re.search(r"MANUAL CHK-\d+ docs/run-history.md:\d+", t) and "リポジトリ" in t
+    assert re.search(r"MANUAL CHK-02 docs/requirements-definition.md:\d+", t) and "要求定義書" in t
     assert re.search(r"合否: 不合格", t)
     assert "python scripts/rdfix.py --full --apply" in t and (r.path / "scripts" / "rdfix.py").exists()
 
@@ -172,15 +166,25 @@ def test_ac238_no_repair_and_skip_verify(template, tmp_path):
         assert layer_bytes(r) == before
 
 
-# FR-1045 AC-239 / NFR-COMPAT-004 AC-256: a cancelled repair (worker branch -> exit 2) leaves the toolkit and the data layer
+# FR-1045 AC-239 / NFR-COMPAT-004 AC-256: a repair that is not run (lock wait timeout -> exit 2) leaves the toolkit
+# and the data layer, and the installer's exit code does not depend on it
 def test_ac239_ac256_cancelled_repair_keeps_toolkit_and_exit_code(template, tmp_path):
+    from test_rdfix_full import hold_lock
     r = fresh(template, tmp_path)
+    cfg_path = r.path / "scripts" / "ebak.config.json"
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    cfg["repair"] = {"lock_wait_sec": 1}
+    cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     plant_auto(r)
-    git(r.path, "checkout", "-q", "-b", "work/run1/item")
     before = layer_bytes(r)
-    direct = r.py("rdfix.py", "--full", "--apply")
-    assert direct.returncode == 2 and layer_bytes(r) == before
-    p = install(r)
+    holder = hold_lock(r, 60)
+    try:
+        direct = r.py("rdfix.py", "--full", "--apply")
+        assert direct.returncode == 2 and layer_bytes(r) == before, text(direct)
+        p = install(r)
+    finally:
+        holder.kill()
+        holder.communicate()
     assert p.returncode == 0, text(p)
     assert layer_bytes(r) == before
     assert "rdfix.py --full" in text(p) and (r.path / "scripts" / "rdfix.py").exists()
@@ -201,7 +205,7 @@ def test_ac257_managed_version_and_documents():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     for rel in ("scripts/rdfix.py", "scripts/ebaklib.py", "scripts/rdcheck.py", "scripts/next-id.py", "scripts/ledger.py",
-                ".github/workflows/ebak-data-layer.yml", "tools/install.py"):
+                "tools/install.py"):
         assert rel in mod.MANAGED, rel
     ver = re.search(r'TOOLKIT_VERSION = "(\d+)\.(\d+)\.(\d+)"', (SOURCE / "scripts" / "ebaklib.py").read_text(encoding="utf-8"))
     assert tuple(map(int, ver.groups())) > (0, 4, 0)

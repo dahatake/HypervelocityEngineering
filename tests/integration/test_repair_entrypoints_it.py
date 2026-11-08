@@ -15,11 +15,9 @@ def _read(rel):
     return (SOURCE / rel).read_text(encoding="utf-8")
 
 
-# FR-1044 AC-236: the workflow and the installer repair only through `rdfix.py --full --apply`
-def test_fr1044_ac236_workflow_and_installer_call_only_the_common_entry():
-    runs = re.findall(r"run:\s*(.+)", WF.read_text(encoding="utf-8"))
-    assert "python scripts/rdfix.py --full --apply" in runs
-    assert not any(re.search(r"rdfix\.py\s+--apply", r) for r in runs)
+# FR-1044 AC-236: the installer repairs only through `rdfix.py --full --apply` (0.6.0: no repairing workflow)
+def test_fr1044_ac236_installer_calls_only_the_common_entry():
+    assert not WF.exists()
     src = INSTALL.read_text(encoding="utf-8")
     body = src.split("def run_data_layer")[1].split("def main")[0]
     assert '"--full"' in body and "rdfix.py" in body and "verify.py" not in body
@@ -47,7 +45,6 @@ def test_nfr_compat_004_ac256_existing_options_kept():
     src = _read("scripts/rdfix.py")
     for opt in ('"--apply"', '"--only"', '"--adopt"', '"--json"', '"--full"'):
         assert f"add_argument({opt}" in src
-    assert "is_work_branch(root)" in src
 
 
 # NFR-OPS-007 AC-257: MANAGED, version and user documents
@@ -56,7 +53,7 @@ def test_nfr_ops_007_ac257_managed_version_and_documents():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     for rel in ("scripts/rdfix.py", "scripts/ebaklib.py", "scripts/rdcheck.py", "scripts/next-id.py", "scripts/ledger.py",
-                ".github/workflows/ebak-data-layer.yml", "tools/install.py"):
+                "tools/install.py"):
         assert rel in mod.MANAGED, rel
     ver = re.search(r'TOOLKIT_VERSION = "(\d+)\.(\d+)\.(\d+)"', _read("scripts/ebaklib.py"))
     assert tuple(map(int, ver.groups())) > (0, 4, 0)

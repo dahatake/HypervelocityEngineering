@@ -23,7 +23,7 @@ Up to 0.5.x, development ran as long "runs" in which conductor had worker agents
 | **Architect** (decides design consistency, boundaries, and quality criteria) | Decide the data-layer format and the check scope (check profile). Ask for audits at milestones | ① [Overview](#overview) → ② [Management data format](users-guide/03-requirements-format.en.md) → ③ [Settings and customization](users-guide/04-customization.en.md) → ④ [Checks and audits](users-guide/06-quality-gates.en.md) → ⑤ [Studio: Architect](users-guide/studio/06-architect.en.md) |
 | **Software Engineer** (installs and operates the toolkit, verifies implementation and tests) | Install it. Register verify commands. Fix verify and CI failures | ① [Installation](#installation) → ② [Quickstart](#quickstart) → ③ [Scripts reference](users-guide/05-scripts-reference.en.md) → ④ [Troubleshooting](users-guide/07-troubleshooting.en.md) → ⑤ [Studio: Software Engineer](users-guide/studio/07-software-engineer.en.md) |
 
-If you are updating from 0.5.x, read [Migrating from 0.5.x](#migrating-from-05x) first.
+If you are updating from an older version (such as 0.5.x), read [Updating from an older version (clean install)](#updating-from-an-older-version-clean-install) first.
 
 ## Table of contents
 
@@ -32,7 +32,7 @@ If you are updating from 0.5.x, read [Migrating from 0.5.x](#migrating-from-05x)
 - [Overview](#overview)
 - [Installation](#installation)
 - [Quickstart](#quickstart)
-- [Migrating from 0.5.x](#migrating-from-05x)
+- [Updating from an older version (clean install)](#updating-from-an-older-version-clean-install)
 - [EABK Studio (data-layer viewer)](#eabk-studio-data-layer-viewer)
 - [Detailed documentation](#detailed-documentation)
 - [Glossary](#glossary)
@@ -56,7 +56,7 @@ EABK Lite prevents these with five means.
 |---|---|
 | **Rules in the repository** | Short rules go into `AGENTS.md` and `.github/copilot-instructions.md` (see "Rules" below). Every Copilot, on any person, PC, or client, reads the same rules. |
 | **Data layer** | The requirements definition, the catalog, the integration catalog, the ID registry, and the System Test ledger are files at fixed paths managed in git. |
-| **Deterministic checks** | `scripts/verify.py` (local) and the CI workflows `ebak-verify` and `ebak-data-layer` run the same checks. ID assignment (`next-id.py`) and ledger updates (`ledger.py`) are also done by scripts. |
+| **Deterministic checks** | `scripts/verify.py` (local) and the CI workflow `ebak-verify` run the same checks. ID assignment (`next-id.py`) and ledger updates (`ledger.py`) are also done by scripts. |
 | **Manual milestone audits** | Semantic contradictions are hard to find mechanically, so ask `rd-auditor` for an audit at milestones. It does not run on every request. |
 | **Visualization** | EABK Studio shows the state of requirements, the catalog, and tests as diagrams and tables. |
 
@@ -83,8 +83,7 @@ These few lines are the only always-loaded instructions. Long procedures live in
 .github/
   agents/        rd-auditor.agent.md … read-only auditor you choose and ask at milestones
   skills/        requirement-definition (requirements procedure; anyone may use it) / rd-audit / adopt-existing
-  workflows/     ebak-verify.yml … runs verify on push and PR
-                 ebak-data-layer.yml … data-layer check and auto-repair ("Data layer workflow (ebak-data-layer)" below)
+  workflows/     ebak-verify.yml … runs verify on push and PR (check only; repair locally with rdfix)
 scripts/         deterministic scripts (Python 3.9+, standard library only)
   verify.py / verify.ps1 / verify.sh   data-layer checks (check profile) + build / test commands
   rdcheck.py  rdfix.py  next-id.py  ledger.py  summarize.py  adopt.py  entities.py  extpoints.py  ebaklib.py
@@ -104,22 +103,21 @@ EABK Lite has no hooks and does not add any preamble to requests automatically. 
 |---|---|---|
 | Local | `python scripts/verify.py` (data-layer checks + build / test in `verify.commands`). `--docs-only` for the data layer only | Before finishing (rule in `AGENTS.md`) |
 | CI | `.github/workflows/ebak-verify.yml` (`scripts/verify.sh --show-warnings`) | Every push and PR |
-| CI | `.github/workflows/ebak-data-layer.yml` (check and auto-repair) | PR, push, manual, weekly |
 | Milestone | `rd-auditor` (semantic audit, read-only) | When you ask |
 
 The check profile is set by `checks.profile` in `scripts/ebak.config.json`.
 
 - `lite` (default): reports only the CHKs in `checks.lite_checks`. The default is `CHK-01, CHK-02, CHK-03, CHK-05, CHK-09, CHK-12, CHK-17, CHK-19, CHK-24` (structure and traceability). Other CHKs affect neither the output nor the exit code.
 - `full`: reports all of CHK-00 to CHK-34.
-- `--profile lite|full` on `rdcheck.py check` and `verify.py` overrides the setting. The summary line looks like `rdcheck: errors=N warnings=M base=… run=… profile=lite`.
+- `--profile lite|full` on `rdcheck.py check` and `verify.py` overrides the setting. The summary line looks like `rdcheck: errors=N warnings=M base=… profile=lite`.
 - Format warnings (CHK-13 vague words, CHK-14 hard-coded numbers, CHK-15 forbidden synonyms) and the like appear only in full. To see them, run `python scripts/verify.py --docs-only --profile full --show-warnings` (the rd-auditor audit uses this too).
 - The profile applies the same way to `rdcheck.py check`, `verify.py`, and `rdfix.py` (including `--full`). So `rdfix.py --full` passes exactly when `verify.py --docs-only` passes with the same profile (the mechanical repairs themselves run regardless of the profile).
 
 ### Data-layer repair (rdfix)
 
-Of the inconsistencies between data-layer files that verify finds (drift in the catalog's decision state, ID registry states, rows duplicated by merges, references to renamed files, and so on), those mechanically determined by the requirements definition can be fixed through the common entry point `python scripts/rdfix.py --full` (check) and `python scripts/rdfix.py --full --apply` (check → repair → re-check). There are three entry points (the GitHub Actions workflow, the installer, and manual), and wherever it is called from, the checks, repairs, and results are the same.
+Of the inconsistencies between data-layer files that verify finds (drift in the catalog's decision state, ID registry states, rows duplicated by merges, references to renamed files, and so on), those mechanically determined by the requirements definition can be fixed through the common entry point `python scripts/rdfix.py --full` (check) and `python scripts/rdfix.py --full --apply` (check → repair → re-check). There are two entry points (the installer and manual), and wherever it is called from, the checks, repairs, and results are the same. CI (`ebak-verify`) only checks and never repairs. If it fails, run `python scripts/rdfix.py --full --apply` locally and push the repair in the same change. CI that only reads needs no write permission, and a bot pushing fixes onto someone's PR branch would make the branches of other people and PCs diverge.
 
-- Exit codes: 0 = pass / repaired, 1 = manual items remain / repairs planned, 2 = not run / cancelled (lock wait timeout, write failure, running on a leftover 0.5.x worker branch `work/…/…`, and so on; everything is undone). On exit 2, run it again on the default branch.
+- Exit codes: 0 = pass / repaired, 1 = manual items remain / repairs planned, 2 = not run / cancelled (lock wait timeout, everything undone, internal error; anything written is undone). On exit 2, wait for the other apply to finish and run it again.
 - Only one apply runs at a time per repository (lock).
 - The requirements definition and `docs/integrations.md` are never changed. Items needing judgment (a changed AC text, a reused ID, and so on) are shown as `MANUAL` with the kind of work (`requirements definition`, `System Test ledger`, `code and catalog`, `repository`) and the next action. Example: `MANUAL CHK-11 tests/system/ledger.json AC-001 の本文が…（担当: System Test の台帳）次の行動: …`.
 
@@ -191,8 +189,9 @@ python tools/install.py --target /path/to/your-repo
 | `--target <dir>` | `-Target` | Install destination (default: current directory) |
 | `--dry-run` | `-DryRun` | Writes nothing; only shows the operations it would perform |
 | `--check` | `-Check` | Checks whether an update is needed (exit 1 if so; lets CI detect version drift) |
+| `--clean` | `-Clean` | Clean install: deletes every file the toolkit installed (including files from older versions and files you modified), `*.ebak-backup-*`, the settings, the blocks, the appended lines and the manifest, then installs this version again. Keeps the management data, `/work`, and your application code and tests. Refuses to run when there are uncommitted changes ([Updating from an older version](#updating-from-an-older-version-clean-install)) |
 | `--force` | `-Force` | Also overwrites or removes toolkit files you modified locally (keeps `*.ebak-backup-<datetime>`) |
-| `--no-ci` | `-NoCi` | Does not install `.github/workflows/ebak-verify.yml` and `ebak-data-layer.yml` |
+| `--no-ci` | `-NoCi` | Does not install `.github/workflows/ebak-verify.yml` |
 | `--no-repair` | `-NoRepair` | Skips the post-install data-layer auto-repair and only shows the check and the repair plan (writes nothing) |
 | `--skip-verify` | — | Neither checks nor repairs the data layer after installing |
 | `--uninstall` | `-Uninstall` | Removes unmodified toolkit files, the blocks in `AGENTS.md` etc., the manifest, and emptied folders (keeps management data and settings). Also available as `uninstall.ps1` / `uninstall.sh` |
@@ -202,10 +201,10 @@ python tools/install.py --target /path/to/your-repo
 
 | Kind | Files | On re-run |
 |---|---|---|
-| Toolkit files | `.github/agents/rd-auditor.agent.md`, `.github/skills/` (`requirement-definition`, `rd-audit`, `adopt-existing`), `.github/workflows/ebak-verify.yml` / `ebak-data-layer.yml`, `scripts/*.py`, `verify.ps1`, `verify.sh`, `EABK-Studio/` (viewer and tests), `EABK-docs/` (same content as this repository's `users-guide/`; the EABK Studio guide is `EABK-docs/studio/`; the target's own `users-guide/` is not touched) | Updated to the new version if unmodified. If modified locally, **left as is** (`KEEP-LOCAL`; `--force` overwrites) |
+| Toolkit files | `.github/agents/rd-auditor.agent.md`, `.github/skills/` (`requirement-definition`, `rd-audit`, `adopt-existing`), `.github/workflows/ebak-verify.yml`, `scripts/*.py`, `verify.ps1`, `verify.sh`, `EABK-Studio/` (the viewer; Studio's tests are not installed), `EABK-docs/` (same content as this repository's `users-guide/`; the EABK Studio guide is `EABK-docs/studio/`; the target's own `users-guide/` is not touched) | Updated to the new version if unmodified. If modified locally, **left as is** (`KEEP-LOCAL`; `--force` overwrites) |
 | Management data templates | `docs/requirements-definition.md`, `docs/catalog.md`, `docs/integrations.md` (integration catalog, optional), `docs/id-registry.md`, `tests/system/ledger.json` | Created **only if missing**. Existing files are never overwritten |
 | Settings | `scripts/ebak.config.json` | Created if missing. If present, only new keys are added; values you set are not changed |
-| Appended lines | `/work/` in `.gitignore`; `docs/id-registry.md merge=union` and others in `.gitattributes` | Only missing lines are appended |
+| Appended lines | `/work/` in `.gitignore` (header `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`); `docs/id-registry.md merge=union` in `.gitattributes` | Only missing lines are appended |
 | Block | The rules enclosed in `<!-- ebak-abk:begin -->` … `end` in `AGENTS.md` and `.github/copilot-instructions.md` ([Rules above](#rules-the-block-that-goes-into-agentsmd)) | Only the inside of the block is replaced. Text outside the block is not changed |
 | Manifest | `.github/ebak-toolkit.json` | The version and hashes of installed files (used to decide updates and removals) |
 
@@ -217,7 +216,7 @@ At the end of an install or update, the data-layer common entry point `python sc
    ```bash
    git add -A && git commit -m "Add Enterprise App Build Kit"
    ```
-2. Register build, static analysis, and test commands in `verify.commands` of `scripts/ebak.config.json` ([Settings and customization](users-guide/04-customization.en.md)). If you leave it empty, you can ask Copilot: "register the standard build and test commands for this stack in `verify.commands`".
+2. Register build, static analysis, and test commands in `verify.commands` of `scripts/ebak.config.json` (empty `[]` on a new install) ([Settings and customization](users-guide/04-customization.en.md)). If you leave it empty, you can ask Copilot: "register the standard build and test commands for this stack in `verify.commands`".
 3. If CI needs the app's toolchain (Node.js, etc.), add setup steps before the verify step in `.github/workflows/ebak-verify.yml`.
 4. If you already have a requirements definition, import its IDs into the ID registry.
    ```bash
@@ -236,7 +235,7 @@ curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/m
 curl -fsSL .../tools/install.sh | bash -s -- --check
 ```
 
-For what changes when updating from 0.5.x, see [Migrating from 0.5.x](#migrating-from-05x).
+An update handles only the files this version ships. Files an older version installed that this version no longer ships are kept, and their count is shown as a note. When updating from an older version, use `--clean` ([Updating from an older version (clean install)](#updating-from-an-older-version-clean-install)).
 
 ### Uninstalling and cleaning up
 
@@ -268,7 +267,7 @@ If you have cloned the toolkit, use `python tools/install.py --target /path/to/y
 | Toolkit files (`.github/agents`, `skills`, `workflows/ebak-*.yml`, `scripts/*.py`, etc.) and files of older versions | Removed if unmodified (kept as `KEEP-LOCAL` if modified; `--force` removes) | Same |
 | Blocks in `AGENTS.md` / `.github/copilot-instructions.md` | Only the block is removed (the file is removed if nothing else remains) | Same |
 | Manifest `.github/ebak-toolkit.json`, emptied folders, `__pycache__` of removed `.py` | Removed | Removed |
-| Management data (`docs/requirements-definition.md`, `catalog.md`, `integrations.md`, `id-registry.md`, `manual-tests.md`, `docs/requirements/`, a `run-history.md` left from 0.5.x, `tests/system/ledger.json`). Paths follow `management_files` in `scripts/ebak.config.json` | Kept | Removed |
+| Management data (`docs/requirements-definition.md`, `catalog.md`, `integrations.md`, `id-registry.md`, `manual-tests.md`, `docs/requirements/`, `tests/system/ledger.json`). Paths follow `management_files` in `scripts/ebak.config.json` | Kept | Removed |
 | `scripts/ebak.config.json`, `/work`, `*.ebak-backup-*` | Kept | Removed |
 | `/work/` in `.gitignore`, `merge=union` lines in `.gitattributes` | Kept | Only the appended lines are removed (the file is removed if empty) |
 | System Test code (other than the ledger in `tests/system/`), app code, other documents in `docs/` | Kept | Kept |
@@ -296,7 +295,8 @@ So the customizations (`AGENTS.md`, `.github/`) and `scripts/` are placed direct
 | `Python 3.9 以上が必要です` (Python 3.9 or later is required) | Install Python and confirm `python --version` works |
 | `git リポジトリではありません` (not a git repository) | Run `git init -b main` first |
 | `KEEP-LOCAL` is shown | Files you modified locally were not updated or removed. Review the diff and, if it is OK to overwrite or remove them, re-run with `--force` |
-| `WARN-HOOK  <path>` is shown | You had modified a hook file from an older version (`.github/hooks/*.json`) locally, so it was kept (`KEEP-LOCAL`). It calls the deleted `scripts/hooks/gate.py`. When a hook errors, Copilot denies every tool call, so delete the file and reopen the Copilot session |
+| A note says that N files this version does not ship remain | They were installed by an older version. An update does not delete them. Reinstall with `--clean` ([Updating from an older version](#updating-from-an-older-version-clean-install)) |
+| `--clean` says to commit or stash uncommitted changes first | Check `git status`, commit or `git stash`, and run again |
 
 ---
 
@@ -312,7 +312,7 @@ So the customizations (`AGENTS.md`, `.github/`) and `scripts/` are placed direct
 
 1. **Ask Copilot as usual.** VS Code, Copilot CLI, the GitHub Copilot app, or the cloud agent, with the default agent (e.g. "add a feature that notifies the borrower and their manager when a loan is more than 3 days overdue").
 2. **Copilot updates everything in the same change, following the rules.** Following the rules in `AGENTS.md`, it updates the requirements and acceptance criteria in the requirements definition, the catalog, the tests, and the code in the same change, and makes `python scripts/verify.py` exit 0. New IDs come from `next-id.py`; the ledger is updated with `ledger.py`. Review the diff and approve, in chat, any requirements that need approval.
-3. **On push / PR, CI runs the same checks.** `ebak-verify` and `ebak-data-layer` run the same checks as locally.
+3. **On push / PR, CI runs the same checks.** `ebak-verify` runs the same checks as locally (check only; it never commits repairs). If the data layer fails, run `python scripts/rdfix.py --full --apply` locally and include the repair in the same change.
 4. **Ask rd-auditor for an audit at milestones.** When a group of features is done, before a release, and so on, choose `rd-auditor` as the agent and ask, for example, "audit the diff" or "audit everything 3 times". The diff defaults to the diff against `base_branch` (default `main`). On clients that support subagents, the requested number of runs execute in parallel and are decided by majority. Results go to `work/audit/<datetime>/report.md`. You decide whether to apply the findings, and fix them in a separate change.
 5. **Watch the status in EABK Studio** (optional). Use `python EABK-Studio/studio.py --role pm` and the like to see the state of requirements, the catalog, and tests as diagrams and tables ([EABK Studio](#eabk-studio-data-layer-viewer)).
 
@@ -324,41 +324,52 @@ EABK Lite does not add a preamble to your requests automatically. If you want a 
 
 Take an inventory with `python scripts/adopt.py scan`, and use `python scripts/adopt.py request` to create, in `work/import/adopt-<datetime>.md`, a request you can paste into Copilot chat as is (with a `<constraints>` section; defaults are "implementation: no" and "approval: strict"). Reverse-engineered requirements enter as "pending approval" and you approve them ([Adopting an existing app](users-guide/10-adopting-existing-apps.en.md)).
 
-### Data layer workflow (ebak-data-layer)
-
-`.github/workflows/ebak-data-layer.yml` (ebak-data-layer) runs `python scripts/verify.py --docs-only` on pull requests, on push to main, on manual runs (workflow_dispatch), and on a weekly schedule.
-
-- When it fails, it auto-repairs through the common entry point `python scripts/rdfix.py --full --apply` and re-checks, and commits the repair only if it passes. The requirements definition is never changed by design. For a PR in the same repository, the repair goes to that PR's branch; for a push to main and scheduled runs, it goes to a repair branch (`eabk/data-layer-fix`) and a PR.
-- If it is still not fixed after repair, it creates an Issue labeled `eabk-data-layer` with a failure summary and a link to the run (or comments on an open Issue with the same content).
-- Permissions are only contents, pull-requests, and issues write; PRs from forks are only checked. Repair commits by the bot are not repaired again.
-- To disable it, delete the file or Disable it on the Actions page (or use `--no-ci` at install time). Details in `users-guide/04-customization.en.md`.
-
 ---
 
-## Migrating from 0.5.x
+## Updating from an older version (clean install)
 
-0.6.0 (EABK Lite) removes the orchestration (conductor and the worker agents, worktree runs, `/build`, per-role gates). When you update with the same installation command:
+The installer has no migration code for older versions. When updating from an older version (such as 0.5.x), do a clean install with `--clean`. It keeps no per-version removal list: it deletes every file recorded in the manifest (`.github/ebak-toolkit.json`) as installed by the toolkit and then installs again, so the procedure is the same from any version.
 
-| 0.5.x | In 0.6.0 |
+```bash
+git status                                    # no uncommitted changes (otherwise it refuses)
+python tools/install.py --target . --clean --dry-run   # review the list to delete (CLEAN)
+python tools/install.py --target . --clean
+git diff                                      # review and commit (git restore undoes it)
+```
+
+Use `-Clean` in PowerShell and `--clean` with `install.sh`.
+
+| Item | With `--clean` |
 |---|---|
-| Asking conductor with `/build` | Ask the default agent as usual ([Recommended workflow](#recommended-workflow)) |
-| `<run_options>` (`max_hours`, `approval_policy`, `parallel_workers`, `scope`, etc.) | Not needed. Instead of blanket approval (`approval_policy`), approve in chat |
-| conductor, rd-author, test-designer, implementer, reviewer; the skills `build`, `build-template`, `implement-fr`, `system-test-increment`, `dedupe` | Removed if you did not modify them (`REMOVE`). Kept if modified (`KEEP-LOCAL`; `--force` removes) |
-| Hooks (`.github/hooks/quality-gates.json`, `.github/hooks/prompt-prefix.json`, `scripts/hooks/gate.py`) and the automatic preamble | 0.6.0 has no hooks. Removed if unmodified (`REMOVE`). If a modified hook file is kept (`KEEP-LOCAL`), the installer prints `WARN-HOOK  <path>`: the file calls the deleted `gate.py`, and when a hook errors Copilot denies every tool, so delete the file and reopen the Copilot session. An existing `.github/ebak-prompt-prefix.md` is left alone but no longer read |
-| `run-state.py`, `integrate.py`, `kpi.py`, `watch.py`, `clean-work.py`, etc. | Removed. There is no replacement (state and integration are left to git and CI) |
-| Settings keys `gates`, `limits`, `credits`, `worktree_share`, `prompt_prefix` | Removed (shown as `PRUNE`) |
-| `docs/run-history.md` | If it remains, it is a read-only record (Studio can show it, and `rdfix.py` still fixes duplicated rows). New installs do not create it |
-| Worktrees and `work/*` branches left by 0.5.x runs | Not removed automatically. Check with `git worktree list` / `git branch --list "work/*"` and remove them by hand |
+| Files the toolkit installed (recorded in the manifest or shipped by this version; includes older conductor, worker agents, hooks, `gate.py`, and files you modified) | Deleted, then this version's files are installed |
+| `*.ebak-backup-*`, `scripts/ebak.config.json` | Deleted; the settings are recreated with defaults (check the previous values with `git diff scripts/ebak.config.json` and restore what you need) |
+| The blocks in `AGENTS.md` and `.github/copilot-instructions.md`, and the lines the toolkit appended to `.gitignore` and `.gitattributes` | Deleted and reinstalled. Text outside the blocks is kept |
+| Management data (requirements definition, catalog, integration catalog, ID registry, `tests/system/ledger.json`), `/work`, your application code and tests | Kept |
 
-The update does not change the requirements definition, the ledger, or the catalog. For details, see [Version upgrades](users-guide/09-versioning.en.md) and [CHANGELOG.md](CHANGELOG.md).
+- Running it twice in a row changes nothing the second time.
+- Data-layer files from older versions (such as `docs/run-history.md` from 0.5.x) are kept as data. Delete them by hand if you do not need them.
+- Worktrees and `work/*` branches left by 0.5.x runs are not removed. Check with `git worktree list` / `git branch --list "work/*"` and remove them by hand.
+- If you update with the plain installation command instead of `--clean`, files from the older version (including hooks) remain. A leftover old hook calls the deleted `gate.py` and can make Copilot deny tools, so use `--clean` when coming from an older version.
+
+How usage changed from 0.5.x:
+
+| 0.5.x | 0.6.0 (EABK Lite) |
+|---|---|
+| Asking conductor with `/build`, `<run_options>` | Ask the default agent as usual and approve in chat ([Recommended workflow](#recommended-workflow)) |
+| Hooks, the automatic preamble, per-role gates | Gone. Put assumptions you want every time in your own Copilot instructions |
+| `run-state.py`, `integrate.py`, `kpi.py`, `watch.py`, `clean-work.py`, etc. | Gone (state and integration are left to git and CI) |
+| The data-layer auto-repair workflow `ebak-data-layer.yml` | CI is the check-only `ebak-verify`. Repair locally with `python scripts/rdfix.py --full --apply` and include it in the same change |
+| `--run`, `--strict`, `--strict-ledger`, `--no-strict-ledger` of `rdcheck.py check` and `verify.py` | Gone (passing them is an argument error, exit 2). The only knob is the check profile (`checks.profile`, `--profile lite` / `full`) |
+
+For details, see [Version upgrades](users-guide/09-versioning.en.md) and [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
 ## EABK Studio (data-layer viewer)
 
-**EABK Studio** (`EABK-Studio/`) is a local-only web app for browsing the data layer EABK manages (the requirements definition, the catalog, the System Test ledger, the ID registry, and a run history left from 0.5.x) through **diagrams, tables, and search**. It is part of the toolkit and is installed into the target repository.
+**EABK Studio** (`EABK-Studio/`) is a local-only web app for browsing the data layer EABK manages (the requirements definition, the catalog, the System Test ledger, and the ID registry) through **diagrams, tables, and search**. It is part of the toolkit and is installed into the target repository.
 
-- It is **read-only**. It does not open source code and listens only on `127.0.0.1`. The only write is the title / decision state in `docs/catalog.md`, executed from "Consistency maintenance" after you check the preview.
+- It is **read-only**. In a repository with a data layer it does not read source code contents (in "code mode" below it reads them only to find requirement IDs), and it listens only on `127.0.0.1`. The only write is the title / decision state in `docs/catalog.md`, executed from "Consistency maintenance" after you check the preview.
 - It runs on the Python 3.9+ standard library alone (no extra installs). When data-layer files change, the screen reloads within seconds.
 - It is a window for people to understand and judge the state of requirements, the catalog, and tests. To change requirements or the implementation, ask Copilot.
 
@@ -384,6 +395,22 @@ python EABK-Studio/studio.py --role pm    # opens the browser. --role is pm / ar
 
 On Windows you can also use `.\EABK-Studio\start.ps1 -Role pm`, and on macOS / Linux `./EABK-Studio/start.sh . 8765 --role pm`. Details are in [EABK-Studio/README.md](EABK-Studio/README.md); script options are in the [Scripts reference](users-guide/05-scripts-reference.en.md).
 
+### Using Studio without EABK (code mode)
+
+Studio can also show a git repository without EABK (FR-1086). From a clone of this toolkit (HVE), pass the root of the target repository to `--repo`:
+
+```bash
+python EABK-Studio/studio.py --repo <any-git-repo> --check   # mode: code (...) requirement-docs=… requirements=… linked-to-code=… code-files=… test-files=… components=…
+python EABK-Studio/studio.py --repo <any-git-repo>
+```
+
+- If the repository has a data layer, Studio reads it as before.
+- If not, Studio derives a read-only model: requirement IDs (`FR-…`, `NFR-…`) from the first column of markdown tables and from headings (`docs/PRD.md` and files whose names contain prd, requirement, 要求 or spec are read first), the code and test files that mention each ID (catalog rows: implementation files / tests), and source files grouped into components (shared parts).
+- Every screen (dashboard, map, diagrams, source mapping, tables) works. The ledger and acceptance criteria are empty.
+- Code mode applies only to the root of a git repository (a plain folder is never walked). An empty folder or a non-git folder still exits 1 with "no EABK data layer … and nothing to show in code mode".
+- Without `--repo`, the target is the current folder if it has a data layer or is a git repository showable in code mode, otherwise Studio's own repository. Switching repositories from the repository name at the top right accepts the same.
+- Example: on `C:\GitHub\VideoCreator` it showed 103 requirements from `docs/PRD.md`, 56 of them linked to code or tests, 78 code files, and 6 components.
+
 ---
 
 ## Detailed documentation
@@ -400,7 +427,7 @@ Details are in [users-guide/](users-guide/README.en.md).
 | 6 | [Checks and audits](users-guide/06-quality-gates.en.md) | You want the meaning of verify's CHKs and how to fix them, rdfix, and rd-auditor audits |
 | 7 | [Troubleshooting](users-guide/07-troubleshooting.en.md) | verify, CI, or a repair failed |
 | 8 | [Adoption roadmap](users-guide/08-roadmap.en.md) | You want the steps from trial to production use |
-| 9 | [Version upgrades](users-guide/09-versioning.en.md) | Releasing a version (distributor), updating an installed repository (user), migrating from 0.5.x |
+| 9 | [Version upgrades](users-guide/09-versioning.en.md) | Releasing a version (distributor), updating an installed repository (user), clean install from an older version |
 | 10 | [Adopting an existing app](users-guide/10-adopting-existing-apps.en.md) | Build the data layer from existing code and design documents: inventory → reverse-engineered requirements (pending approval) → pinning current behavior |
 | 11 | [Integration catalog](users-guide/11-integration-catalog.en.md) | Record integrations with external apps / data in `docs/integrations.md` (optional): adding, changing, retiring, and checking |
 | Reference | [EABK Studio guide](users-guide/studio/README.en.md) | You want to view the data layer as diagrams and tables, with per-role procedures and the data each screen reads |

@@ -32,11 +32,10 @@ python scripts/verify.py --profile full           # 検査プロファイルを�
 python scripts/verify.py --show-warnings          # 警告も表示する
 python scripts/verify.py --no-cache               # キャッシュを使わずに必ず実行する
 python scripts/verify.py --base main              # 差分の検査の基準（既定は base_branch との merge-base）
-python scripts/verify.py --strict                 # 重要な警告をエラーとして扱う（リリース前など）
 ./scripts/verify.sh   /  .\scripts\verify.ps1     # 同じもの（Python を探して verify.py に引数を渡すラッパー）
 ```
 
-exit 0 なら合格です。`AGENTS.md` の規則では、完了の前にこれを exit 0 にします。CI の `ebak-verify` は `scripts/verify.sh --show-warnings` を実行します。ログの全文は `/work/logs` に保存され、画面には要約だけが出ます。プロジェクトのビルド・テストのコマンドは `scripts/ebak.config.json` の `verify.commands` に書きます（[4. カスタマイズ](04-customization.md)）。
+exit 0 なら合格です。`AGENTS.md` の規則では、完了の前にこれを exit 0 にします。検査のつまみは検査プロファイル（`--profile`）だけです（0.5.x から撤去したオプションは [9 章](09-versioning.md) を参照）。CI の `ebak-verify` は `scripts/verify.sh --show-warnings` を実行します。ログの全文は `/work/logs` に保存され、画面には要約だけが出ます。プロジェクトのビルド・テストのコマンドは `scripts/ebak.config.json` の `verify.commands` に書きます（[4. カスタマイズ](04-customization.md)）。
 
 **検査プロファイル:** `scripts/ebak.config.json` の `checks.profile` が `lite`（既定）か `full` かで、報告する CHK が変わります。
 
@@ -52,7 +51,7 @@ exit 0 なら合格です。`AGENTS.md` の規則では、完了の前にこれ�
 ## rdcheck.py（要求定義書のパーサー）
 
 ```bash
-python scripts/rdcheck.py check [--base REF|none] [--profile lite|full] [--strict] [--errors-only] [--json]
+python scripts/rdcheck.py check [--base REF|none] [--profile lite|full] [--errors-only] [--json]
 python scripts/rdcheck.py show FR-012 AC-031 Q-007     # 指定した要求・AC・質問の節だけを表示する（全文を読まずに済む）
 python scripts/rdcheck.py list --state 承認済み --priority MUST
 python scripts/rdcheck.py list --state 承認待ち         # 承認待ちの要求
@@ -72,19 +71,19 @@ python scripts/rdcheck.py trace INT-001                # 外部連携を参照�
 `check` の出力は 1 行に 1 指摘（`<ERROR|WARN> <CHK-ID> <場所> <内容>`）と、最後の要約行です。
 
 ```text
-rdcheck: errors=0 warnings=2 base=… run=… profile=lite
+rdcheck: errors=0 warnings=2 base=… profile=lite
 ```
 
 `--profile` は `scripts/ebak.config.json` の `checks.profile` より優先します。exit 0 = エラーなし、1 = エラーが 1 件以上です。`--base` の既定値は `base_branch`（既定 `main`）との分岐点（merge-base）で、差分の検査に使います。`none` で比較しません。プロファイルは `rdcheck.py check`・`verify.py`・`rdfix.py` に同じように効きます。
 
 ## rdfix.py（データ層の不整合の自動修正）
 
-要求定義書を正本として、カタログ・ID 台帳・System Test の台帳・`.gitignore`（と、0.5.x から更新した導入先に残る `docs/run-history.md` の重複行）をそれに合わせます。**要求定義書と外部連携カタログ（`docs/integrations.md`）は変更しません。** 報告する指摘と合否は、`verify.py` と同じ検査プロファイル（`checks.profile`）に従います。そのため `rdfix.py --full` は、同じプロファイルの `verify.py --docs-only` が合格するときに合格します（カタログの同期などの機械的な修復は、どのプロファイルでも同じように行います）。
+要求定義書を正本として、カタログ・ID 台帳・System Test の台帳・`.gitignore` をそれに合わせます。**要求定義書と外部連携カタログ（`docs/integrations.md`）は変更しません。** 報告する指摘と合否は、`verify.py` と同じ検査プロファイル（`checks.profile`）に従います。そのため `rdfix.py --full` は、同じプロファイルの `verify.py --docs-only` が合格するときに合格します（カタログの同期などの機械的な修復は、どのプロファイルでも同じように行います）。
 
 ```bash
 python scripts/rdfix.py                           # 修正の計画を表示する（書き込まない）。直せるものがあれば exit 1
 python scripts/rdfix.py --apply                   # 修正を書き込み、rdcheck で確かめる
-python scripts/rdfix.py --only catalog,ledger     # 対象を絞る: registry, catalog, ledger, gitignore, history
+python scripts/rdfix.py --only catalog,ledger     # 対象を絞る: registry, catalog, ledger, gitignore
 python scripts/rdfix.py --adopt --apply           # ID 台帳にない ID も取り込む（手で振った ID でないと確かめたとき）
 python scripts/rdfix.py --json
 ```
@@ -119,15 +118,14 @@ MANUAL CHK-11 tests/system/ledger.json AC-001 の本文が…（担当: System T
 |---|---|
 | 0 = 合格・修復済み | 自動で直すものが残っていない |
 | 1 = 対応が残る | 手動対応が残る・修復の計画がある（`--apply` なし）・収束しない |
-| 2 = 実行しなかった・取り消した | 0.5.x の名残の作業役のブランチ（`work/<run-id>/<item>`）での `--apply`、排他の待ち時間切れ、すべての変更の取り消し、想定外のエラー |
+| 2 = 実行しなかった・取り消した | 排他の待ち時間切れ、すべての変更の取り消し、想定外のエラー |
 
-**安全性（`--full --apply`）:** 同じリポジトリで一度に 1 つだけ実行します（`work/.ebak/rdfix.lock`。後から起動したものは `--lock-wait` の秒数まで待ち、終了したプロセスが残したロックは引き継ぎます）。書き込みは一時ファイルの置き換えで行います。要求定義書・外部連携カタログが変わったとき、書き込みに失敗したとき、修復前になかったエラーが現れたとき、想定外のエラーのときは、すべての変更を取り消して修復前の内容に戻し、exit 2 で終わります。0.5.x の作業役のブランチでは `--apply` を拒否するので、既定のブランチで実行します。
+**安全性（`--full --apply`）:** 同じリポジトリで一度に 1 つだけ実行します（`work/.ebak/rdfix.lock`。後から起動したものは `--lock-wait` の秒数まで待ち、終了したプロセスが残したロックは引き継ぎます）。書き込みは一時ファイルの置き換えで行います。要求定義書・外部連携カタログが変わったとき、書き込みに失敗したとき、修復前になかったエラーが現れたとき、想定外のエラーのときは、すべての変更を取り消して修復前の内容に戻し、exit 2 で終わります。
 
-**入口は 3 つ** で、いずれも同じ `rdfix.py --full [--apply]` を呼びます。
+**入口は 2 つ** で、いずれも同じ `rdfix.py --full [--apply]` を呼びます。CI（`ebak-verify`）は検査だけで、修復しません（読むだけの CI には書き込みの権限が要らず、bot が誰かの PR のブランチへ push すると、ほかの人・PC のブランチと食い違うため）。CI で不合格なら、手元で `rdfix.py --full --apply` を実行して同じ変更に含めます。
 
-1. GitHub Actions の `ebak-data-layer.yml`: 不合格のとき `rdfix.py --full --apply`。合格した修復だけを commit し、直せないものは Issue にします。
-2. インストーラ `tools/install.py`: 導入・更新の後に既定で `rdfix.py --full --apply` を 1 回実行します。`--no-repair` は `rdfix.py --full`（検査と計画だけで、書き込まない）、`--skip-verify` は検査も修復もしない、`--dry-run`・`--check`・`--uninstall`・`--purge` は修復しません。修復の取り消し・手動対応が残っても toolkit は残り、インストーラの終了コードはデータ層の結果で変わりません。
-3. 利用者・Copilot の手動実行。
+1. インストーラ `tools/install.py`: 導入・更新の後に既定で `rdfix.py --full --apply` を 1 回実行します。`--no-repair` は `rdfix.py --full`（検査と計画だけで、書き込まない）、`--skip-verify` は検査も修復もしない、`--dry-run`・`--check`・`--uninstall`・`--purge` は修復しません。修復の取り消し・手動対応が残っても toolkit は残り、インストーラの終了コードはデータ層の結果で変わりません。
+2. 利用者・Copilot の手動実行。
 
 どの入口でも要求定義書と外部連携カタログは変更せず、手元の実行は修復を commit しません。
 
@@ -189,7 +187,7 @@ python scripts/ledger.py run --select changed|failed|all [--base REF] [--canary-
 python scripts/ledger.py run --cases E2E-001,IT-002 [--no-record]     # 指定したケースだけ。--no-record は台帳を書き換えない
 ```
 
-`--select changed` は、git diff の追加・変更行に現れる要求 ID・AC ID に対応するケースを優先して選び、ケースごとに `select <ケース ID>: <理由>` を出力します。共通コードの変更などで絞れないときは広げ、理由に「広げた」と出します。`run` の出力は `<id> <requirement_ids> <pass|fail> <秒> <証跡>` の行と `結果: …` の行です。結果の詳細は `/work` の下に保存されます（`--results PATH` で場所を指定できます）。同じ commit・きれいな作業ツリーですでに pass または fail したケースは再実行を省きます（強制は `--rerun-passed`・`--rerun-failed`）。
+`--select changed` は、git diff の追加・変更行に現れる要求 ID・AC ID に対応するケースを優先して選び、ケースごとに `select <ケース ID>: <理由>` を出力します。共通コードの変更などで絞れないときは広げ、理由に「広げた」と出します。`run` の出力は `<id> <requirement_ids> <pass|fail> <秒> <証跡>` の行と `結果: …` の行です。結果の詳細は `work/system-test/results.json` に保存されます（`--results PATH` で場所を指定できます。`--no-record` のときは台帳を書き換えず、結果は `--results` のファイルにだけ書きます）。同じ commit・きれいな作業ツリーですでに pass または fail したケースは再実行を省きます（強制は `--rerun-passed`・`--rerun-failed`）。
 
 ## summarize.py（ログの要約）
 
@@ -223,6 +221,7 @@ python tools/install.py --target <導入先> [--dry-run] [--force] [--no-ci]
 python tools/install.py --target <導入先> --check        # 更新が必要かを確かめる（必要なら exit 1）
 python tools/install.py --target <導入先> --no-repair    # 導入後は rdfix.py --full（検査と計画だけ。書き込まない）
 python tools/install.py --target <導入先> --skip-verify  # 導入後の検査も修復もしない
+python tools/install.py --target <導入先> --clean        # クリーンインストール（toolkit が入れたものをすべて消してから入れ直す）
 python tools/install.py --target <導入先> --uninstall    # 変更していない toolkit のファイルとブロックを削除（管理データと設定は残す）
 python tools/install.py --target <導入先> --purge        # --uninstall ＋ 管理データ・設定・/work・追記も削除
 python tools/install.py --version
@@ -234,6 +233,7 @@ python tools/install.py --version
 | `--source DIR` | toolkit のソース（既定: このスクリプトのリポジトリ） |
 | `--dry-run` | 書き込まずに、行う操作だけを表示する |
 | `--check` | 更新が必要かを確かめる（必要なら exit 1） |
+| `--clean` | クリーンインストール。マニフェストに記録されたファイルとこの版の配布物（変更したものも）・`.ebak-backup-*`・設定・ブロック・追記した行・マニフェストを削除してから導入する。管理データ・`/work`・アプリのコードとテストは残す。git リポジトリで未 commit の変更がないときだけ実行する。`--uninstall`・`--purge`・`--check` とは併用できない。PowerShell のラッパーでは `-Clean` |
 | `--force` | ローカルで変更した toolkit のファイルも上書き・削除する（`.ebak-backup-*` を残す） |
 | `--no-ci` | `.github/workflows/ebak-verify.yml` を入れない |
 | `--no-repair` | 導入後の自動修復をせず、`rdfix.py --full` で検査と修復の計画だけを表示する。PowerShell のラッパーでは `-NoRepair` |
@@ -242,13 +242,13 @@ python tools/install.py --version
 | `--allow-non-git` | git リポジトリでない場所にも導入する |
 | `--version` | toolkit の版を表示して終了する |
 
-行うこと（何度実行しても同じ結果）: 配布物（rd-auditor、skills、`ebak-verify.yml`・`ebak-data-layer.yml`、`scripts/*`、EABK-Studio）を入れ、変更していなければ更新します。管理データのひな形（要求定義書・カタログ・外部連携カタログ・ID 台帳・台帳）は、ないときだけ作ります。`scripts/ebak.config.json` は新しいキーを足し、利用者の値を残します。`.gitignore` に `/work/`、`.gitattributes` に union merge の行、`AGENTS.md` と `.github/copilot-instructions.md` に規則のブロックを足し、`.github/ebak-toolkit.json` に版とハッシュを記録します。最後に `rdfix.py --full --apply` を 1 回実行します（要求定義書は変更せず、修復は commit しません）。
+行うこと（何度実行しても同じ結果）: 配布物（rd-auditor、skills、`ebak-verify.yml`、`scripts/*`、EABK-Studio。Studio のテスト `EABK-Studio/tests/` は入れません）を入れ、変更していなければ更新します。管理データのひな形（要求定義書・カタログ・外部連携カタログ・ID 台帳・台帳）は、ないときだけ作ります。`scripts/ebak.config.json` は新しいキーを足し、利用者の値を残します（新しい導入の `verify.commands` は空の `[]`）。`.gitignore` に `/work/`（見出し `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`）、`.gitattributes` に `docs/id-registry.md merge=union`、`AGENTS.md` と `.github/copilot-instructions.md` に規則のブロックを足し、`.github/ebak-toolkit.json` に版とハッシュを記録します。最後に `rdfix.py --full --apply` を 1 回実行します（要求定義書は変更せず、修復は commit しません）。
 
-旧版（0.5.x など）からの更新では、利用者が変更していない旧ファイル（conductor などのエージェント、`/build` の skill、hook のファイル `.github/hooks/quality-gates.json`・`.github/hooks/prompt-prefix.json`・`scripts/hooks/gate.py`、撤去したスクリプト）を削除し（`REMOVE`）、変更したものは残します（`KEEP-LOCAL`。`--force` で削除）。変更した hook のファイルを残したときは `WARN-HOOK  <パス>` を表示します。そのファイルは削除された `gate.py` を呼び、hook がエラーになると Copilot がすべてのツールを拒否するので、ファイルを削除してから Copilot のセッションを開き直します。設定のキー `gates`・`limits`・`credits`・`worktree_share`・`prompt_prefix` と旧既定の verify コマンド `toolkit-unit` は削除します（`PRUNE`）。導入先の `.github/ebak-prompt-prefix.md` は残しますが、もう読みません。要求定義書・台帳・カタログは変えません。0.5.x の run が残した worktree と `work/*` ブランチは自動では消さないので、`git worktree list`・`git branch --list "work/*"` で確かめて手で削除します。
+更新は、この版が配布するファイルだけを扱います。旧版が入れて今の版が配布しないファイルは削除せず、マニフェストにも残し（`--clean` で見つけられるように）、件数を「注意」で表示します。旧版からの移行の処理（版ごとの削除リストや設定の書き換え）は持ちません。旧版（0.5.x など）から更新するときは `--clean` を使います。`--clean` の後も、旧版のデータ層のファイル（0.5.x の `docs/run-history.md` など）と、0.5.x の run が残した worktree・`work/*` ブランチは残るので、不要なら手で削除します（[9.4](09-versioning.md#94-旧版から更新するクリーンインストール)）。
 
 ## EABK-Studio（データ層のビューアー）
 
-インストールすると、導入先の `EABK-Studio/` に入ります。データ層（要求定義書・カタログ・台帳）を図・表・検索で見る、ローカルの読み取り専用の Web アプリです（日本語・英語）。
+インストールすると、導入先の `EABK-Studio/` に入ります。データ層（要求定義書・カタログ・台帳）を図・表・検索で見る、ローカルの読み取り専用の Web アプリです（日本語・英語）。EABK を入れていない git リポジトリも、HVE の clone から `python EABK-Studio/studio.py --repo <任意の git リポジトリ>` で見られます（コードのモード。FR-1086）。
 
 ```text
 python EABK-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--role pm|architect|swe] [--check]
@@ -256,12 +256,13 @@ python EABK-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--role pm|a
 
 | オプション | 動作 |
 |---|---|
-| `--repo DIR` | 対象リポジトリ（既定: カレントディレクトリ。親へさかのぼってデータ層を探す） |
+| `--repo DIR` | 対象リポジトリ。EABK がなくてもよい（親へさかのぼってデータ層を探し、なければ git のルート）。省略時はカレントディレクトリ（データ層があるか、コードのモードで見られる git リポジトリのとき）、それ以外は Studio 自身のリポジトリ |
 | `--port N` | 待ち受けポート（既定 8765。使用中なら次の番号を最大 20 まで試す） |
 | `--no-open` | ブラウザーを自動で開かない |
 | `--role pm\|architect\|swe` | 最初に開く画面（ダッシュボード／2D マップ／表） |
-| `--check` | 管理データのファイルの有無と、解析できた件数・警告を表示して終了。データ層があれば exit 0、なければ exit 1 |
+| `--check` | 管理データのファイルの有無と、解析できた件数・警告を表示して終了。データ層があるか、コードのモードで見られれば exit 0（`mode: code (...) requirement-docs=… requirements=… linked-to-code=… code-files=… test-files=… components=…` の行が出ます）、どちらでもなければ exit 1 |
 
 - ラッパー: `EABK-Studio/start.ps1 [-Repo DIR] [-Port N] [-Role …] [-Check] [-NoOpen]`、`EABK-Studio/start.sh [DIR] [PORT] [studio.py のオプション…]`。
-- ソースコードは読まず、127.0.0.1 だけで待ち受けます。書き込むのは「整合性保守」で確認して実行した `docs/catalog.md` の題名・決定状態だけです。
+- コードのモードでは、Markdown の表の先頭の列と見出しにある要求 ID（`FR-…`・`NFR-…`。`docs/PRD.md` などを先に読む）、その ID を書いたコードとテスト、コンポーネントにまとめたソースを読み取りだけで導出します。台帳と受入基準は空です。対象は git リポジトリのルートだけで、空のフォルダーや git でないフォルダーは exit 1 です。
+- データ層があるときはソースコードを読まず、127.0.0.1 だけで待ち受けます。書き込むのは「整合性保守」で確認して実行した `docs/catalog.md` の題名・決定状態だけです。
 - 役割別のガイドは [studio/README.md](studio/README.md) にあります。

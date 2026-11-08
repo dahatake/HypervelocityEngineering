@@ -3,28 +3,32 @@ import json
 import re
 import sys
 
-from conftest import SOURCE, run
+from conftest import SOURCE, git, init_git, run
 
 
 def install(target, *args):
     return run([sys.executable, str(SOURCE / "tools" / "install.py"), "--target", str(target), "--skip-verify", *args], target)
 
 
+# FR-1085 AC-467 AC-473: a fresh install has no orchestration, hooks, repairing workflow or Studio tests
 def test_fresh_install_layout(empty_repo):
     proc = install(empty_repo)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     for rel in (".github/agents/rd-auditor.agent.md", ".github/skills/rd-audit/SKILL.md",
                 ".github/skills/requirement-definition/SKILL.md", ".github/workflows/ebak-verify.yml",
-                ".github/workflows/ebak-data-layer.yml", "scripts/next-id.py", "scripts/ledger.py",
+                "scripts/next-id.py", "scripts/ledger.py",
                 "scripts/verify.sh", "docs/requirements-definition.md", "tests/system/ledger.json", ".github/ebak-toolkit.json"):
         assert (empty_repo / rel).exists(), rel
     # EABK Lite: no orchestration, no role gates
     for rel in (".github/agents/conductor.agent.md", ".github/agents/implementer.agent.md", ".github/skills/build/SKILL.md",
                 ".github/hooks", "scripts/hooks", ".github/ebak-prompt-prefix.md",
+                ".github/workflows/ebak-data-layer.yml", "EABK-Studio/tests",
                 "scripts/run-state.py", "scripts/integrate.py", "scripts/clean-work.py"):
         assert not (empty_repo / rel).exists(), rel
     cfg = json.loads((empty_repo / "scripts/ebak.config.json").read_text(encoding="utf-8"))
     assert cfg["checks"]["profile"] == "lite" and not {"gates", "limits", "credits", "worktree_share", "prompt_prefix"} & set(cfg)
+    assert cfg["verify"]["commands"] == [] and "retention_days" not in cfg["work"]  # the target registers its own
+    assert "run_history" not in cfg["management_files"]
     assert not (empty_repo / ".github/prompts").exists()
     assert "/work/" in (empty_repo / ".gitignore").read_text(encoding="utf-8")
     assert "merge=union" in (empty_repo / ".gitattributes").read_text(encoding="utf-8")
@@ -34,40 +38,99 @@ def test_fresh_install_layout(empty_repo):
     assert not (empty_repo / "tests/toolkit/test_install.py").exists()
 
 
-def test_upgrade_from_orchestration_version_removes_it(empty_repo):
-    """0.5.x -> Lite: unmodified orchestration files and config keys go away, modified ones and the data stay."""
-    install(empty_repo)
-    manifest_p = empty_repo / ".github/ebak-toolkit.json"
+OLD_FILES = {".github/agents/conductor.agent.md": "conductor\n", "scripts/hooks/gate.py": "print('gate')\n",
+             ".github/hooks/quality-gates.json": "{}\n", "tests/toolkit/test_clean_work.py": "def test_x():\n    pass\n"}
+
+
+def plant_old_version(repo) -> None:
+    """Files and settings an older version installed and this version does not ship (recorded in the manifest)."""
+    install(repo)
+    manifest_p = repo / ".github/ebak-toolkit.json"
     manifest = json.loads(manifest_p.read_text(encoding="utf-8"))
-    old = {".github/agents/conductor.agent.md": "conductor\n", "scripts/run-state.py": "print('run')\n",
-           ".github/hooks/quality-gates.json": "{}\n", "tests/toolkit/test_clean_work.py": "def test_x():\n    pass\n"}
-    for rel, text in old.items():
-        (empty_repo / rel).parent.mkdir(parents=True, exist_ok=True)
-        (empty_repo / rel).write_text(text, encoding="utf-8", newline="")
+    for rel, text in OLD_FILES.items():
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_text(text, encoding="utf-8", newline="")
         manifest["files"][rel] = hashlib.sha256(text.encode("utf-8")).hexdigest()
-    for rel in (".github/agents/implementer.agent.md", ".github/hooks/prompt-prefix.json"):
-        (empty_repo / rel).parent.mkdir(parents=True, exist_ok=True)
-        (empty_repo / rel).write_text("利用者が直した\n", encoding="utf-8")
-        manifest["files"][rel] = "hash-of-the-shipped-copy"
+    (repo / ".github/hooks/quality-gates.json").write_text("{\"利用者が直した\": true}\n", encoding="utf-8")
     manifest_p.write_text(json.dumps(manifest), encoding="utf-8")
-    cfg_p = empty_repo / "scripts/ebak.config.json"
+    cfg_p = repo / "scripts/ebak.config.json"
     cfg = json.loads(cfg_p.read_text(encoding="utf-8"))
-    cfg.update({"gates": {"enabled": True}, "limits": {"max_hours_cap": 3}, "credits": {}, "worktree_share": {},
-                "prompt_prefix": {"enabled": True}})
-    cfg["verify"]["commands"] = [{"name": "toolkit-unit", "run": "python -m pytest -q tests/toolkit/test_clean_work.py"},
-                                 {"name": "unit", "run": "npm test"}]
+    cfg.update({"gates": {"enabled": True}, "prompt_prefix": {"enabled": True}})
     cfg_p.write_text(json.dumps(cfg), encoding="utf-8")
-    proc = install(empty_repo)
+    gi = repo / ".gitignore"
+    gi.write_text(gi.read_text(encoding="utf-8").replace("temporary files (logs, evidence, notes)", "temporary run files (kept 14 days)"),
+                  encoding="utf-8")
+    agents = repo / "AGENTS.md"
+    agents.write_text(agents.read_text(encoding="utf-8") + "\n利用者の規則\n", encoding="utf-8")
+    (repo / "docs/requirements-definition.md").write_text("# 利用者の要求定義書\n", encoding="utf-8")
+    (repo / "src").mkdir()
+    (repo / "src/app.py").write_text("print('FR-001')\n", encoding="utf-8")
+
+
+def tree(repo) -> dict:
+    return {p.relative_to(repo).as_posix(): p.read_bytes() for p in repo.rglob("*")
+            if p.is_file() and ".git" not in p.relative_to(repo).parts and p.name != "ebak-toolkit.json"}
+
+
+# FR-1085 AC-468: --clean deletes everything any version installed (modified or not) and installs from scratch
+def test_clean_install_replaces_an_old_version(empty_repo, tmp_path):
+    plant_old_version(empty_repo)
+    git(empty_repo, "add", "-A")
+    git(empty_repo, "commit", "-q", "-m", "old version")
+    proc = install(empty_repo, "--clean")
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    for rel in old:
+    for rel in OLD_FILES:
         assert not (empty_repo / rel).exists(), rel
-    assert (empty_repo / ".github/agents/implementer.agent.md").exists() and "KEEP-LOCAL" in proc.stdout
-    # a kept old hook would call the removed gate.py and make Copilot deny every tool: the installer says so
-    assert (empty_repo / ".github/hooks/prompt-prefix.json").exists() and "WARN-HOOK  .github/hooks/prompt-prefix.json" in proc.stdout
-    cfg = json.loads(cfg_p.read_text(encoding="utf-8"))
-    assert not {"gates", "limits", "credits", "worktree_share", "prompt_prefix"} & set(cfg) and "PRUNE" in proc.stdout
-    assert [c["run"] for c in cfg["verify"]["commands"]] == ["npm test"]
-    assert (empty_repo / "docs/requirements-definition.md").exists() and (empty_repo / "tests/system/ledger.json").exists()
+    for rel in (".github/hooks", "scripts/hooks"):
+        assert not (empty_repo / rel).exists(), rel
+    cfg = json.loads((empty_repo / "scripts/ebak.config.json").read_text(encoding="utf-8"))
+    assert not {"gates", "prompt_prefix"} & set(cfg) and "CLEAN" in proc.stdout
+    assert (empty_repo / "docs/requirements-definition.md").read_text(encoding="utf-8") == "# 利用者の要求定義書\n"
+    assert (empty_repo / "src/app.py").exists()
+    agents = (empty_repo / "AGENTS.md").read_text(encoding="utf-8")
+    assert agents.count("ebak-abk:begin") == 1 and "利用者の規則" in agents
+    assert "kept 14 days" not in (empty_repo / ".gitignore").read_text(encoding="utf-8")
+    # the toolkit files equal a fresh install of this version (the data layer and the user's files aside)
+    fresh = tmp_path / "fresh"
+    fresh.mkdir()
+    init_git(fresh)
+    (fresh / "README.md").write_text("# test\n", encoding="utf-8")
+    install(fresh)
+    mine = {"docs/requirements-definition.md", "src/app.py", "AGENTS.md", "README.md"}
+    got, want = tree(empty_repo), tree(fresh)
+    assert set(got) - mine == set(want) - mine
+    assert [r for r in set(want) - mine if got[r].replace(b"\r\n", b"\n") != want[r].replace(b"\r\n", b"\n")] == []
+    # running it again changes nothing
+    git(empty_repo, "add", "-A")
+    git(empty_repo, "commit", "-q", "-m", "clean install")
+    before = tree(empty_repo)
+    assert install(empty_repo, "--clean").returncode == 0
+    assert tree(empty_repo) == before
+
+
+# FR-1085 AC-469: --clean is safe (committed git repos only, dry-run writes nothing); a normal update only points to it
+def test_clean_safety_and_update_without_migration(empty_repo):
+    plant_old_version(empty_repo)
+    before = tree(empty_repo)
+    proc = install(empty_repo, "--clean")
+    assert proc.returncode == 1 and "commit" in proc.stderr and tree(empty_repo) == before
+    git(empty_repo, "add", "-A")
+    git(empty_repo, "commit", "-q", "-m", "old version")
+    for opts in (("--clean", "--check"), ("--clean", "--uninstall")):
+        assert install(empty_repo, *opts).returncode != 0
+    proc = install(empty_repo, "--clean", "--dry-run")
+    assert proc.returncode == 0 and re.search(r"^CLEAN\s+scripts/hooks/gate.py$", proc.stdout, re.M) and tree(empty_repo) == before
+    # a normal update keeps the old files, warns with no WARN-* line, and keeps them in the manifest for --clean
+    proc = install(empty_repo)
+    assert proc.returncode == 0 and all((empty_repo / rel).exists() for rel in OLD_FILES)
+    assert "--clean" in proc.stdout and "WARN-" not in proc.stdout and "PRUNE" not in proc.stdout
+    manifest = json.loads((empty_repo / ".github/ebak-toolkit.json").read_text(encoding="utf-8"))
+    assert set(OLD_FILES) <= set(manifest["files"])
+
+
+def test_clean_refuses_non_git(tmp_path):
+    proc = install(tmp_path, "--clean", "--allow-non-git")
+    assert proc.returncode != 0 and "git" in proc.stderr
 
 
 def test_reinstall_is_idempotent_and_check(empty_repo):
@@ -168,7 +231,7 @@ def test_purge_removes_everything_the_toolkit_added(empty_repo):
     assert proc.returncode == 0 and (empty_repo / "docs/catalog.md").exists() and backup.exists()
     proc = install(empty_repo, "--purge")
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    for rel in ("docs/requirements-definition.md", "docs/catalog.md", "docs/id-registry.md", "docs/run-history.md",
+    for rel in ("docs/requirements-definition.md", "docs/catalog.md", "docs/id-registry.md",
                 "docs/manual-tests.md", "tests/system/ledger.json", "scripts/ebak.config.json", "work", ".github",
                 ".gitattributes", "AGENTS.md", "scripts/verify.py", "scripts/__pycache__"):
         assert not (empty_repo / rel).exists(), rel
@@ -184,7 +247,8 @@ def test_uninstall_wrappers_pass_uninstall():
     assert "Uninstall = $true" in ps1 and "Purge" in ps1 and "install.ps1" in ps1
     sh = (SOURCE / "tools/uninstall.sh").read_text(encoding="utf-8")
     assert "install.sh\" --uninstall \"$@\"" in sh and "bash -s -- --uninstall \"$@\"" in sh
-    assert "[switch]$Purge" in (SOURCE / "tools/install.ps1").read_text(encoding="utf-8")
+    ps = (SOURCE / "tools/install.ps1").read_text(encoding="utf-8")
+    assert "[switch]$Purge" in ps and "[switch]$Clean" in ps and "'--clean'" in ps
 
 
 def test_refuses_non_git_and_self(tmp_path):

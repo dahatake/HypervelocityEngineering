@@ -259,7 +259,7 @@ def cmd_cost(args, root, cfg) -> int:
     plan = merge_plan(data)
     mergeable = sum(len(g) - 1 for g in plan)
     try:
-        durs = json.loads((h.work_dir(h.conductor_root(root, cfg), cfg) / ".ebak" / "durations.json").read_text(encoding="utf-8"))
+        durs = json.loads((h.work_dir(root, cfg) / ".ebak" / "durations.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         durs = {}
     by_cmd: Dict[str, List[str]] = {}
@@ -985,8 +985,7 @@ def cmd_run(args, root, cfg) -> int:
     sel = [c for c in sel if c.get("status") != "blocked" or args.cases]
     if args.canary_first:
         sel.sort(key=lambda c: not c.get("canary"))
-    rid = h.current_run(h.conductor_root(root, cfg), cfg) or ("adhoc-" + h.new_run_id())
-    results_path = Path(args.results) if args.results else h.run_dir(h.conductor_root(root, cfg), cfg, rid) / "results.json"
+    results_path = Path(args.results) if args.results else h.work_dir(root, cfg) / "system-test" / "results.json"
     logs_dir = results_path.parent / "logs" / "system-test"
     logs_dir.mkdir(parents=True, exist_ok=True)
     results = h.read_json(results_path, default={"runs": []}) or {"runs": []}
@@ -995,9 +994,8 @@ def cmd_run(args, root, cfg) -> int:
     summary = {"pass": 0, "fail": 0, "skipped": 0}
     lines_out = []
     stop_reason = ""
-    h.apply_resource_env(root, cfg)
     jobs = resolve_jobs(args.jobs, cfg)
-    cerr = h.conductor_root(root, cfg)
+    cerr = root
 
     def execute(c):
         if deadline and time.time() > deadline:
@@ -1164,7 +1162,6 @@ def cmd_preflight(args, root, cfg) -> int:
         cmd = c.get("command") or ""
         if re.search(r"\bpytest\b", cmd):
             groups.setdefault(cmd, []).append(c["id"])
-    h.apply_resource_env(root, cfg)
 
     def check(cmd):
         try:
@@ -1248,7 +1245,7 @@ def main(argv=None) -> int:
     r.add_argument("--max-minutes", type=float, default=0)
     r.add_argument("--case-timeout", type=int, default=1800)
     r.add_argument("--jobs", default=None, help="同時に実行するケース数（N または auto。既定は system_test.jobs、なければ 1）。\"serial\": true のケースは単独で実行")
-    r.add_argument("--no-record", action="store_true", help="台帳を書き換えない（作業役の worktree で使う）")
+    r.add_argument("--no-record", action="store_true", help="台帳を書き換えない（結果は --results のファイルにだけ書く）")
     r.add_argument("--no-batch", action="store_true", help="同じ pytest ファイルのケースを 1 プロセスにまとめない（既定はまとめる。system_test.batch_pytest: false でも止められる）")
     r.add_argument("--results")
     r.add_argument("--rerun-passed", action="store_true", help="この run で同じ clean commit ですでに pass したケースも再実行する（既定は省く）")

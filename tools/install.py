@@ -5,19 +5,20 @@ Usually started through tools/install.ps1 or tools/install.sh (one command, down
 From a local clone:
   python tools/install.py --target <path-to-your-repo> [--dry-run] [--force] [--no-ci]
   python tools/install.py --target <repo> --check        # show what would change, exit 1 if outdated
+  python tools/install.py --target <repo> --clean        # clean install: delete every toolkit file, then install
   python tools/install.py --target <repo> --uninstall    # remove unmodified toolkit files (keeps docs and ledger)
   python tools/install.py --target <repo> --purge        # uninstall + remove docs, ledger, config, /work, appended lines
   (one command: tools/uninstall.ps1 / tools/uninstall.sh, same options as install.ps1 / install.sh)
 
 What it does (idempotent) - EABK Lite: rules + data layer + deterministic checks, no orchestration:
-  * copies the managed files (.github/agents/rd-auditor, .github/skills, .github/workflows/ebak-verify.yml,
+  * copies the managed files (.github/agents/rd-auditor, .github/skills, .github/workflows/ebak-verify.yml (check only),
     scripts/*, EABK-Studio/ = the read-only data-layer viewer with its role guides
     and screenshots) and updates them on re-run unless you modified them locally;
-  * removes files that older versions installed but this version no longer ships (OBSOLETE: conductor, worktree
-    runs, role gates, the hooks and their scripts), unless modified; warns when a modified old hook file is kept;
+  * keeps no migration code for older versions: `--clean` (clean install) deletes every file the toolkit installed
+    (the manifest's records, this version's files, backups, the config, the marked blocks and appended lines) and
+    then installs from scratch; the management data (docs/*, the ledger) and your code and tests are kept;
   * creates the management-data templates only when missing (docs/*.md, tests/system/ledger.json);
-  * merges scripts/ebak.config.json (adds new keys, keeps your values, removes the orchestration keys
-    gates / limits / credits / worktree_share / prompt_prefix and the old default verify command toolkit-unit);
+  * merges scripts/ebak.config.json (adds new keys, keeps your values);
   * adds /work/ to .gitignore, union-merge rules to .gitattributes, and a marked block to AGENTS.md
     and .github/copilot-instructions.md;
   * records versions and hashes in .github/ebak-toolkit.json;
@@ -32,7 +33,6 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import hashlib
-import importlib.util
 import json
 import os
 import re
@@ -51,7 +51,6 @@ MANAGED = [
     ".github/skills/rd-audit/SKILL.md",
     ".github/skills/adopt-existing/SKILL.md",
     ".github/workflows/ebak-verify.yml",
-    ".github/workflows/ebak-data-layer.yml",
     "scripts/ebaklib.py",
     "scripts/rdcheck.py",
     "scripts/rdfix.py",
@@ -146,7 +145,6 @@ MANAGED = [
     "users-guide/studio/images/states.png",
     "users-guide/studio/images/structure.png",
     "users-guide/studio/images/tables.png",
-    "EABK-Studio/tests/test_studio.py",
 ]
 # The source's users-guide/ is installed as EABK-docs/ in the target (the target's own users-guide/ is never touched).
 GUIDE_SRC, GUIDE_DEST = "users-guide/", "EABK-docs/"
@@ -156,68 +154,6 @@ def dest_of(rel: str) -> str:
     return GUIDE_DEST + rel[len(GUIDE_SRC):] if rel.startswith(GUIDE_SRC) else rel
 
 
-# Files no longer shipped. Removed on update when unmodified.
-# EABK Studio guide moved from EABK-Studio/users-guide/ into the single users-guide/ (installed as EABK-docs/studio/).
-OBSOLETE: list[str] = [
-    # 0.6.0 EABK Lite: the conductor / worktree orchestration, the role gates and their scripts are no longer shipped
-    ".github/agents/conductor.agent.md",
-    ".github/agents/rd-author.agent.md",
-    ".github/agents/test-designer.agent.md",
-    ".github/agents/implementer.agent.md",
-    ".github/agents/reviewer.agent.md",
-    ".github/skills/implement-fr/SKILL.md",
-    ".github/skills/implement-fr/ui-design.md",
-    ".github/skills/implement-fr/original-rd.md",
-    ".github/skills/implement-fr/original-fr.md",
-    ".github/skills/system-test-increment/SKILL.md",
-    ".github/skills/build/SKILL.md",
-    ".github/skills/build-template/SKILL.md",
-    ".github/skills/dedupe/SKILL.md",
-    ".github/hooks/quality-gates.json",
-    ".github/hooks/prompt-prefix.json",
-    "scripts/hooks/gate.py",
-    "scripts/select-tests.py",
-    "scripts/clean-work.py",
-    "scripts/run-state.py",
-    "scripts/next-impl.py",
-    "scripts/build-request.py",
-    "scripts/integrate.py",
-    "scripts/watch.py",
-    "scripts/kpi.py",
-    "tests/toolkit/test_clean_work.py",
-    "tests/toolkit/test_run_state.py",
-    "EABK-docs/02-during-and-after-run.md",
-    "EABK-docs/02-during-and-after-run.en.md",
-    "scripts/perf-report.py",
-    "scripts/import-speckit.py",
-    "tests/system/e2e/test_run_owned_cleanup.py",
-    "tests/system/test_run_cleanup_system.py",
-    "EABK-Studio/users-guide/README.md",
-    "EABK-Studio/users-guide/01-first-steps.md",
-    "EABK-Studio/users-guide/02-screens.md",
-    "EABK-Studio/users-guide/03-tasks.md",
-    "EABK-Studio/users-guide/04-troubleshooting.md",
-    "EABK-Studio/users-guide/05-product-manager.md",
-    "EABK-Studio/users-guide/06-architect.md",
-    "EABK-Studio/users-guide/07-software-engineer.md",
-    "EABK-Studio/users-guide/08-data-reference.md",
-    "EABK-Studio/users-guide/capture-screens.py",
-    "EABK-Studio/users-guide/screen-images.json",
-    "EABK-Studio/users-guide/images/cases.png",
-    "EABK-Studio/users-guide/images/consistency.png",
-    "EABK-Studio/users-guide/images/dashboard.png",
-    "EABK-Studio/users-guide/images/diagrams.png",
-    "EABK-Studio/users-guide/images/header.png",
-    "EABK-Studio/users-guide/images/maintenance.png",
-    "EABK-Studio/users-guide/images/map2d.png",
-    "EABK-Studio/users-guide/images/map3d.png",
-    "EABK-Studio/users-guide/images/placement.png",
-    "EABK-Studio/users-guide/images/runtime.png",
-    "EABK-Studio/users-guide/images/source.png",
-    "EABK-Studio/users-guide/images/states.png",
-    "EABK-Studio/users-guide/images/structure.png",
-    "EABK-Studio/users-guide/images/tables.png",
-]
 TEMPLATES = [
     "docs/requirements-definition.md",
     "docs/catalog.md",
@@ -229,15 +165,7 @@ CONFIG = "scripts/ebak.config.json"
 MANIFEST = ".github/ebak-toolkit.json"
 EXECUTABLE = {"scripts/verify.sh", "EABK-Studio/start.sh"}
 BEGIN, END = "<!-- ebak-abk:begin -->", "<!-- ebak-abk:end -->"
-LEGACY_MARKERS = (("<!-- ebak-" + "conductor:begin -->", "<!-- ebak-" + "conductor:end -->"),)
 
-
-def block_markers(text: str):
-    """Return the (begin, end) pair present in text (current first, then legacy), or None."""
-    for b, e in ((BEGIN, END),) + LEGACY_MARKERS:
-        if b in text and e in text:
-            return b, e
-    return None
 INSTRUCTIONS_BLOCK = """## Enterprise App Build Kit Lite（要求定義書・カタログ・System Test の一貫性）
 
 - 振る舞いを変える変更（機能の追加・変更・削除）では、同じ変更の中で `docs/requirements-definition.md` の要求と受入基準（AC）を更新します。誰が編集してもかまいません（手順は skill `requirement-definition`）。
@@ -246,22 +174,19 @@ INSTRUCTIONS_BLOCK = """## Enterprise App Build Kit Lite（要求定義書・カ
 - ファイルを足す・名前を変える・消すときは、`docs/catalog.md` の行も直します（`python scripts/rdfix.py --apply` で追従できます）。
 - 完了の前に `python scripts/verify.py` を実行して exit 0 にします（CI の `ebak-verify` も同じ検査をします）。
 - 一時ファイル（ログ・証跡・作業メモ）は `/work` に置きます（git の管理対象外）。"""
-# Config keys of the orchestration and the hook (0.5.x and earlier). EABK Lite reads none of them; an update removes them.
-OBSOLETE_CONFIG_KEYS = ("gates", "limits", "credits", "worktree_share", "prompt_prefix")
-# verify.commands entries that older versions shipped and that run files this version no longer ships.
-OBSOLETE_VERIFY_RUNS = ("python -m pytest -q tests/toolkit/test_clean_work.py",)
 GITIGNORE_LINES = ["/work/"]
-GITATTR_LINES = ["docs/id-registry.md merge=union", "docs/run-history.md merge=union",
+GITATTR_LINES = ["docs/id-registry.md merge=union",
                  "scripts/*.sh text eol=lf", "EABK-Studio/*.sh text eol=lf"]
-GITIGNORE_HEADER = "# Enterprise App Build Kit: temporary run files (kept 14 days)"
+GITIGNORE_HEADER = "# Enterprise App Build Kit: temporary files (logs, evidence, notes)"
 GITATTR_HEADER = "# Enterprise App Build Kit: append-only records"
+# Every header the toolkit has ever written starts with this; --clean / --purge remove such a header and its lines.
+TOOLKIT_HEADER_PREFIX = "# Enterprise App Build Kit"
 # Management data paths (defaults of scripts/ebaklib.py DEFAULT_CONFIG["files"]); --purge also honours the target's config.
 DEFAULT_FILES = {
     "requirements": "docs/requirements-definition.md",
     "requirements_dir": "docs/requirements",
     "catalog": "docs/catalog.md",
     "id_registry": "docs/id-registry.md",
-    "run_history": "docs/run-history.md",
     "ledger": "tests/system/ledger.json",
     "manual_tests": "docs/manual-tests.md",
     "integrations": "docs/integrations.md",
@@ -271,14 +196,11 @@ DEFAULT_FILES = {
 def preflight() -> None:
     """Warn (never fail) about missing tools that the installed scripts, agents and hooks rely on."""
     if not shutil.which("git"):
-        print("警告: git が PATH にありません。run の worktree・統合・hook が動きません。")
+        print("警告: git が PATH にありません。verify.py の変更範囲の判定と CI が動きません。")
     if not shutil.which("python"):
         print("警告: `python` コマンドが PATH にありません（`python3` / `py` のみ）。手順書・agent・verify.commands は `python scripts/...` と書かれています。"
               "Windows は python.org か `winget install Python.Python.3.12` で導入（PATH に追加）、macOS・Linux は `python` を `python3` の別名にします"
               "（例: python-is-python3、または venv を有効化）。")
-    if importlib.util.find_spec("pytest") is None:
-        print("注意: pytest が未導入です。既定の verify.commands（toolkit-unit）が失敗します。`python -m pip install pytest` を実行するか、"
-              "scripts/ebak.config.json の verify.commands を書き換えます。")
 
 
 def sha(path: Path) -> str:
@@ -400,7 +322,7 @@ class Installer:
         ext_dir = self.target / "scripts" / "ext"
         if ext_dir.is_dir():
             registered |= {p.stem for p in ext_dir.glob("*.py")}
-        owned = {Path(r).stem for r in list(MANAGED) + OBSOLETE + list(self.manifest.get("files", {})) if r.startswith("scripts/")}
+        owned = {Path(r).stem for r in list(MANAGED) + list(self.manifest.get("files", {})) if r.startswith("scripts/")}
         hits = find_dropped_wiring(rel, old, new, self.target, registered, owned)
         if not hits:
             return
@@ -430,7 +352,7 @@ class Installer:
             dest.chmod(dest.stat().st_mode | 0o111)
 
     def managed_files(self) -> List[str]:
-        files = [f for f in MANAGED if not (self.no_ci and (f.endswith("ebak-verify.yml") or f.endswith("ebak-data-layer.yml")))]
+        files = [f for f in MANAGED if not (self.no_ci and f.endswith("ebak-verify.yml"))]
         return files
 
     def install_managed(self) -> None:
@@ -463,27 +385,14 @@ class Installer:
                 self.note("KEEP-LOCAL", rel)
                 self.new_hashes[rel] = old or cur
 
-    def remove_obsolete(self) -> None:
-        for rel in OBSOLETE:
-            p = self.target / rel
-            old = self.manifest.get("files", {}).get(rel)
-            if not p.exists() or old is None:
-                continue
-            if is_recorded(p, old):
-                self.note("REMOVE", rel)
-                if not self.dry:
-                    p.unlink()
-                    try:
-                        p.parent.rmdir()
-                    except OSError:
-                        pass
-            else:
-                self.note("KEEP-LOCAL", rel)
-                self.new_hashes[rel] = old
-                if rel.startswith(".github/hooks/"):
-                    self.warnings.append(f"WARN-HOOK  {rel} を残しました（ローカルで変更あり）。EABK Lite には hook がなく、"
-                                         "このファイルが呼ぶ scripts/hooks/gate.py は削除されます。hook がエラーになると Copilot が"
-                                         "ツールの呼び出しを拒否するので、このファイルを削除してから Copilot のセッションを開き直します")
+    def keep_orphans(self) -> None:
+        """Files an older version installed and this version does not ship stay on disk and in the manifest
+        (so that `--clean` can still find them); they are only reported."""
+        shipped = {dest_of(r) for r in MANAGED}
+        self.orphans = sorted(rel for rel, h in self.manifest.get("files", {}).items()
+                              if rel not in shipped and (self.target / rel).is_file())
+        for rel in self.orphans:
+            self.new_hashes[rel] = self.manifest["files"][rel]
 
     def install_templates(self) -> None:
         for rel in TEMPLATES:
@@ -495,6 +404,8 @@ class Installer:
 
     def install_config(self) -> None:
         src = json.loads((self.source / CONFIG).read_text(encoding="utf-8"))
+        # the source's verify.commands are this repository's own (Studio tests); a target registers its own
+        src.setdefault("verify", {})["commands"] = []
         dest_p = self.target / CONFIG
         if not dest_p.exists():
             self.note("CREATE", CONFIG)
@@ -515,18 +426,7 @@ class Installer:
                 elif isinstance(v, dict) and isinstance(a[k], dict):
                     changed = merge(a[k], v) or changed
             return changed
-        pruned = [k for k in OBSOLETE_CONFIG_KEYS if k in cur]
-        for k in pruned:
-            del cur[k]
-        cmds = (cur.get("verify") or {}).get("commands")
-        if isinstance(cmds, list):
-            kept = [c for c in cmds if not (isinstance(c, dict) and str(c.get("run", "")).strip() in OBSOLETE_VERIFY_RUNS)]
-            if len(kept) != len(cmds):
-                cur["verify"]["commands"] = kept
-                pruned.append("verify.commands(toolkit-unit)")
-        if pruned:
-            self.note("PRUNE", f"{CONFIG} ({', '.join(pruned)})")
-        if merge(cur, src) or pruned:
+        if merge(cur, src):
             self.note("MERGE", CONFIG)
             self.write_bytes(CONFIG, (json.dumps(cur, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
         else:
@@ -608,7 +508,7 @@ class Installer:
             candidates = dict(recorded)
         else:
             # No manifest (deleted or never written): treat a file as unmodified when it equals this toolkit's copy.
-            candidates = {dest_of(rel): (sha(self.source / rel) if (self.source / rel).exists() else None) for rel in MANAGED + OBSOLETE}
+            candidates = {dest_of(rel): (sha(self.source / rel) if (self.source / rel).exists() else None) for rel in MANAGED}
             if any((self.target / rel).exists() for rel in candidates):
                 self.note("WARN", f"{MANIFEST} がないため、この版の toolkit と同じ内容のファイルだけを削除します")
         for rel, h in candidates.items():
@@ -621,7 +521,7 @@ class Installer:
                 self.note("KEEP-LOCAL", rel)
 
     def remove_backups(self) -> None:
-        for rel in sorted(set(dest_of(r) for r in MANAGED + OBSOLETE) | {CONFIG}):
+        for rel in sorted({dest_of(r) for r in MANAGED} | set(self.manifest.get("files", {})) | {CONFIG}):
             d = (self.target / rel).parent
             if d.is_dir():
                 for b in sorted(d.glob(Path(rel).name + ".ebak-backup-*")):
@@ -634,15 +534,9 @@ class Installer:
                 continue
             text = p.read_text(encoding="utf-8")
             changed = False
-            while True:
-                m = block_markers(text)
-                if not m:
-                    break
-                b, e = m
-                pre, rest = text.split(b, 1)
-                if e not in rest:
-                    break
-                text = pre.rstrip() + "\n\n" + rest.split(e, 1)[1].lstrip("\n")
+            while BEGIN in text and END in text.split(BEGIN, 1)[1]:
+                pre, rest = text.split(BEGIN, 1)
+                text = pre.rstrip() + "\n\n" + rest.split(END, 1)[1].lstrip("\n")
                 changed = True
             if not changed:
                 continue
@@ -659,7 +553,17 @@ class Installer:
             return
         text = p.read_text(encoding="utf-8")
         drop = set(lines) | {header}
-        kept = [l for l in text.splitlines() if l.strip() not in drop]
+        kept: List[str] = []
+        in_section = False
+        for l in text.splitlines():
+            if l.strip() == header or l.strip().startswith(TOOLKIT_HEADER_PREFIX):
+                in_section = True
+                continue
+            if in_section and l.strip():
+                continue  # every line the toolkit appended under its header, whatever version wrote it
+            in_section = False
+            if l.strip() not in drop:
+                kept.append(l)
         if len(kept) == len(text.splitlines()):
             return
         out: List[str] = []
@@ -694,6 +598,22 @@ class Installer:
                 continue
             if p.exists():
                 self.remove_path(rel)
+
+    def clean(self) -> None:
+        """--clean: delete every file the toolkit installed, whatever version and whether modified, so that the
+        install that follows starts from scratch. Kept: the management data (docs/*, the ledger), /work, your code."""
+        for rel in sorted(set(self.manifest.get("files", {})) | {dest_of(r) for r in MANAGED}):
+            if (self.target / rel).is_file():
+                self.remove_path(rel, "CLEAN")
+        self.remove_backups()
+        if (self.target / CONFIG).is_file():
+            self.remove_path(CONFIG, "CLEAN")
+        self.remove_blocks()
+        self.remove_lines(".gitignore", GITIGNORE_LINES, GITIGNORE_HEADER)
+        self.remove_lines(".gitattributes", GITATTR_LINES, GITATTR_HEADER)
+        if (self.target / MANIFEST).is_file():
+            self.remove_path(MANIFEST, "CLEAN")
+        self.manifest = {"files": {}}
 
     def uninstall(self, purge: bool = False) -> None:
         self.uninstall_files()
@@ -739,6 +659,9 @@ def main(argv=None) -> int:
     ap.add_argument("--force", action="store_true", help="ローカルで変更した toolkit のファイルも上書きする（.ebak-backup-* を残す）")
     ap.add_argument("--no-ci", action="store_true", help=".github/workflows/ebak-verify.yml を入れない")
     ap.add_argument("--version", action="store_true", help="toolkit の版を表示して終了する")
+    ap.add_argument("--clean", action="store_true",
+                    help="クリーンインストール: toolkit が入れたファイル（旧版のものも、変更したものも）・設定・ブロック・追記をすべて削除してから導入する"
+                         "（管理データ・/work・利用者のコードとテストは残す。未 commit の変更があると止まる）")
     ap.add_argument("--uninstall", action="store_true", help="変更していない toolkit のファイルと AGENTS.md などのブロックを削除する（管理データと設定は残す）")
     ap.add_argument("--purge", action="store_true", help="--uninstall に加えて、管理データ（docs・台帳）・設定・/work・.gitignore と .gitattributes の追記・バックアップも削除する")
     ap.add_argument("--allow-non-git", action="store_true")
@@ -765,21 +688,34 @@ def main(argv=None) -> int:
 
     dry = args.dry_run or args.check
     uninstalling = args.uninstall or args.purge
+    if args.clean:
+        if uninstalling or args.check:
+            raise SystemExit("ERROR install: --clean は --uninstall・--purge・--check と同時に指定できません")
+        if not (target / ".git").exists():
+            raise SystemExit("ERROR install: --clean は git リポジトリでだけ使えます（消したファイルを git から戻せるようにするため）")
+        st = subprocess.run(["git", "status", "--porcelain"], cwd=str(target), capture_output=True, text=True)
+        if st.returncode != 0 or st.stdout.strip():
+            raise SystemExit("ERROR install: --clean の前に、未 commit の変更を commit するか退避します（git status）")
     ins = Installer(source, target, dry, args.force, args.no_ci)
     version = toolkit_version(source)
     if uninstalling:
         ins.uninstall(purge=args.purge)
     else:
-        ins.install_managed()
-        ins.remove_obsolete()
-        ins.install_templates()
-        ins.install_config()
-        ins.ensure_lines(".gitignore", GITIGNORE_LINES, GITIGNORE_HEADER)
-        ins.ensure_lines(".gitattributes", GITATTR_LINES, GITATTR_HEADER)
-        ins.ensure_block("AGENTS.md", "# AGENTS.md\n\n")
-        ins.ensure_block(".github/copilot-instructions.md", "# Copilot instructions\n\n")
-        if ins.manifest.get("version") != version or any(k not in ("SAME", "EXISTS", "KEEP-LOCAL") for k, _ in ins.actions):
-            ins.write_manifest(version)
+        if args.clean:
+            ins.clean()
+        if args.clean and dry:
+            ins.note("INSTALL", "（削除のあとに、新規の導入と同じようにすべてを入れ直します）")
+        else:
+            ins.install_managed()
+            ins.keep_orphans()
+            ins.install_templates()
+            ins.install_config()
+            ins.ensure_lines(".gitignore", GITIGNORE_LINES, GITIGNORE_HEADER)
+            ins.ensure_lines(".gitattributes", GITATTR_LINES, GITATTR_HEADER)
+            ins.ensure_block("AGENTS.md", "# AGENTS.md\n\n")
+            ins.ensure_block(".github/copilot-instructions.md", "# Copilot instructions\n\n")
+            if ins.manifest.get("version") != version or any(k not in ("SAME", "EXISTS", "KEEP-LOCAL") for k, _ in ins.actions):
+                ins.write_manifest(version)
 
     width = max((len(k) for k, _ in ins.actions), default=4)
     for kind, rel in ins.actions:
@@ -789,12 +725,14 @@ def main(argv=None) -> int:
     if uninstalling:
         mode = ("purge" if args.purge else "uninstall") + (" (dry-run)" if dry else "")
     else:
-        mode = "check" if args.check else ("dry-run" if args.dry_run else "install")
+        mode = ("clean " if args.clean else "") + ("check" if args.check else ("dry-run" if args.dry_run else "install"))
     print(f"\nEnterprise App Build Kit {version}: {mode} {target}  changes={len(pending)}")
-    hook_warn = [w for w in ins.warnings if w.startswith("WARN-HOOK")]
-    ins.warnings = [w for w in ins.warnings if not w.startswith("WARN-HOOK")]
-    for w in hook_warn:
-        print("\n" + w)
+    orphans = getattr(ins, "orphans", [])
+    if orphans:
+        print(f"\n注意: この版が配布しないファイルが {len(orphans)} 件残っています（旧版が入れたもの）: {', '.join(orphans[:5])}"
+              + (" …" if len(orphans) > 5 else "") + "\n  旧版からの移行はしません。すべて消して入れ直すには --clean を使います（先に --dry-run で確認できます）")
+    if args.clean and not dry:
+        print("\n注意: --clean で scripts/ebak.config.json を既定に戻しました。以前の値は `git diff scripts/ebak.config.json` で確認できます")
     if ins.warnings:
         print(f"\n警告: 利用側が足した配線のうち、拡張点（extensions.checks / scripts/ext/*.py）に未登録のものが {len(ins.warnings)} 件あり、"
               "この更新で脱落します（上書き・バックアップ・終了コードは変わりません）:" if not dry else
@@ -815,9 +753,7 @@ def main(argv=None) -> int:
         if not dry:
             print("\n次の手順:")
             print("  1. 変更を確認して commit します: git status && git add -A && git commit -m \"Remove Enterprise App Build Kit\"")
-            if args.purge:
-                print("  2. 0.5.x 以前の run が作った worktree と work/* ブランチが残っていれば削除します: git worktree list / git branch --list \"work/*\"")
-            else:
+            if not args.purge:
                 print("  2. 管理データ・設定・/work も消すには --purge で再実行します（先に --dry-run で確認できます）")
         return 0
     if dry:

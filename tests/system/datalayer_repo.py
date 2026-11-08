@@ -10,8 +10,8 @@ Inconsistencies planted (chosen from AC-237 and from the documented MANUAL kinds
   automatic  (AC-237 の例): カタログの決定状態のずれ          docs/catalog.md   FR-001 の決定状態
                             ID 台帳の状態のずれ              docs/id-registry.md FR-002 の状態
                             System Test の台帳の欠けた項目    tests/system/ledger.json の case から "evidence" を除く
-  manual                  : 実行履歴の同じ run-id の内容の違う 2 行（どちらが正しいかは人が決める）
-                            docs/run-history.md
+  manual                  : ID 台帳で削除済みの FR-001 を要求定義書が使っている（再利用か誤りかは人が決める）
+                            docs/requirements-definition.md の FR-001 の行（CHK-02）
 
 Interface assumed (requirements definition FR-1046 / FR-1045 [ASSUMPTION]):
   check only : python scripts/rdfix.py --full
@@ -40,9 +40,9 @@ RD = "docs/requirements-definition.md"
 INTEGRATIONS = "docs/integrations.md"
 CATALOG = "docs/catalog.md"
 REGISTRY = "docs/id-registry.md"
-HISTORY = "docs/run-history.md"
 LEDGER = "tests/system/ledger.json"
 PROTECTED = (RD, INTEGRATIONS)
+MANUAL = RD  # where the planted manual item is reported (protected: the repair never writes it)
 ROLES = ("要求定義書", "System Test の台帳", "コードとカタログ", "リポジトリ")
 CHECK = ["scripts/rdfix.py", "--full"]
 APPLY = ["scripts/rdfix.py", "--full", "--apply"]
@@ -125,14 +125,10 @@ def write_clean_data_layer(root: Path) -> None:
            "--title", f"{ac} の合成ケース", "--layer", "data", "--command", "python -c pass", check=True)
     py(root, "scripts/ledger.py", "--by", "test-designer", "digests", "--update", check=True)
     py(root, "scripts/next-id.py", "--sync", check=True)  # 採番済み -> 使用中
-    hist = root / HISTORY
-    hist.write_text((hist.read_text(encoding="utf-8") if hist.exists() else (SOURCE / "tools" / "templates" / "docs" / "run-history.md").read_text(encoding="utf-8")).rstrip("\n") + "\n"
-                    "| 202610010000 | 2026-10-01 00:00 | 2026-10-01 01:00 | abc1234 | 完了 | FR-001 | なし | 100% | 60 分 | 100% | 0 | 0 | FR-001 |\n",
-                    encoding="utf-8", newline="\n")
 
 
 def pin_full_profile(root: Path) -> None:
-    """These tests check repair semantics with every CHK (the planted manual item is CHK-23, outside the lite
+    """These tests check repair semantics with every CHK (the planted catalog state is CHK-07, outside the lite
     profile). The profile itself is covered by tests/toolkit/test_lite.py (FR-1084)."""
     p = root / "scripts" / "ebak.config.json"
     cfg = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
@@ -158,7 +154,7 @@ def make_clean_installed(root: Path) -> Path:
     return snapshots.clone("clean-installed", _build_clean_installed, root)
 
 
-DATA_FILES = (RD, INTEGRATIONS, CATALOG, REGISTRY, HISTORY, LEDGER)
+DATA_FILES = (RD, INTEGRATIONS, CATALOG, REGISTRY, LEDGER)
 
 
 def make_clean_uninstalled(root: Path, scratch: Path) -> Path:
@@ -195,10 +191,8 @@ def plant_automatic(root: Path) -> None:
 
 
 def plant_manual(root: Path) -> None:
-    hist = root / HISTORY
-    hist.write_text((hist.read_text(encoding="utf-8") if hist.exists() else (SOURCE / "tools" / "templates" / "docs" / "run-history.md").read_text(encoding="utf-8")).rstrip("\n") + "\n"
-                    "| 202610010000 | 2026-10-01 00:00 | 2026-10-01 02:00 | def5678 | 中断 | FR-002 | なし | 50% | 120 分 | 50% | 0 | 1 | なし |\n",
-                    encoding="utf-8", newline="\n")
+    # ID 台帳で FR-001 を削除済みにする（要求定義書は FR-001 を使い続ける -> CHK-02 の手動対応）
+    _sub_line(root / REGISTRY, r"^(\| FR-001 \|[^|\n]*\| )使用中( \|)", r"\1削除済み\2")
 
 
 def automatic_repaired(root: Path) -> Dict[str, bool]:

@@ -15,7 +15,7 @@ Click `🏗️ Architect` at the top right of the screen to open the 2D map. Lau
 | Placement | Which requirements and data are implemented in which components | Requirements, catalog paths |
 | Placement (runtime) | What Studio reads, what it writes, and what it sends outside | Files read, external integrations |
 | Source mapping | How densely files map to requirements | Catalog paths (code is not read) |
-| Structure | The gap between current and ideal for the 7 data layers | All data layers |
+| Structure | The gap between current and ideal for the 6 data layers | All data layers |
 | Consistency | Gaps in requirement → AC → test → catalog → implementation | Requirements, ledger, catalog |
 
 ## S6.2 15-minute tutorial
@@ -42,7 +42,7 @@ Click `🏗️ Architect` at the top right of the screen to open the 2D map. Lau
 7. **Check how Studio itself behaves** (1 minute). Open `#/placement?kind=runtime`. It lists the files read, the direction of reading, where it writes (none), and external transmission (the definition, if the requirements definition has an external integration). You can use this for a security check before adoption.
 
    ![Placement (runtime)](images/runtime.png)
-8. **Check for missing layers** (3 minutes). Open `#/consistency` and see, for each requirement, whether all five of requirement, AC, test, catalog, and implementation files are present. Then, in `#/structure`, read the "current state, ideal, difference, applied rule, judgment reason, and basis" of the 7 data layers. The kinds of difference are: valid, missing, orphaned, reference mismatch, duplicate, and surplus.
+8. **Check for missing layers** (3 minutes). Open `#/consistency` and see, for each requirement, whether all five of requirement, AC, test, catalog, and implementation files are present. Then, in `#/structure`, read the "current state, ideal, difference, applied rule, judgment reason, and basis" of the 6 data layers. The kinds of difference are: valid, missing, orphaned, reference mismatch, duplicate, and surplus.
 
    ![Structure](images/structure.png)
 9. **Jump to the basis location** (1 minute). Use the `Basis` (file:line) on a judgment row, or `↗ VS Code` in the detail panel, to open the relevant line in the requirements definition or catalog. Request design fixes in Copilot chat (requirements, catalog, and code are fixed in the same change).

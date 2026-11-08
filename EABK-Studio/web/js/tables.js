@@ -20,7 +20,7 @@ let tab = 'reqs';
 const state = { q: '', only: false, filters: {}, sort: { reqs: { k: 'id', d: 1 }, acs: { k: 'id', d: 1 } } };
 
 // FR-1051 AC-280: every kind belongs to exactly one group (named by words, not colour).
-const GROUPS = [['req', ['goals', 'reqs', 'acs', 'params', 'questions']], ['design', ['entities', 'parts', 'apis', 'tables', 'integrations', 'terms', 'personas']], ['evidence', ['cases', 'files', 'sources']], ['ops', ['decisions', 'audits', 'runs']]];
+const GROUPS = [['req', ['goals', 'reqs', 'acs', 'params', 'questions']], ['design', ['entities', 'parts', 'apis', 'tables', 'integrations', 'terms', 'personas']], ['evidence', ['cases', 'files', 'sources']], ['ops', ['decisions', 'audits']]];
 
 const cell = (v) => (Array.isArray(v) ? v.join(', ') : v ?? '');
 
@@ -68,7 +68,6 @@ function defs(m) {
     decisions: { cols: [['date'], ['target'], ['decision'], ['basis'], ['run']], filters: [], rows: () => m.decisions.map((p) => ({ ...p })) },
     audits: { cols: [['id'], ['date'], ['category'], ['severity'], ['where'], ['summary'], ['state']], filters: ['category', 'severity', 'state'], rows: () => m.audits.map((p) => ({ ...p })) },
     sources: { cols: [['id'], ['title'], ['version'], ['kind']], filters: [], rows: () => m.sources.map((p) => ({ ...p })) },
-    runs: { cols: (m.runs[0] ? Object.keys(m.runs[0]).slice(0, 8) : []).map((k) => [k]), filters: [], rows: () => m.runs.map((r) => ({ ...r })) },
   };
 }
 
@@ -86,7 +85,7 @@ export function mount(host) {
     if (!D[tab]) tab = 'reqs';
     const def = D[tab];
     const rows = def.rows();
-    const colLabel = (k) => (tab === 'runs' ? k : t('col.' + k));
+    const colLabel = (k) => t('col.' + k);
 
     const tabBtn = (k) => el('button', { class: 'tabbtn' + (k === tab ? ' on' : ''), role: 'tab', type: 'button', 'aria-selected': k === tab ? 'true' : 'false', 'data-testid': 'table-kind', onclick: () => { tab = k; state.filters = {}; render(); } }, t('tab.' + k), el('small', {}, D[k].rows().length));
     const tabBar = el('div', { class: 'tgroups' }, GROUPS.map(([g, keys]) => el('div', { class: 'tgroup', role: 'group', 'aria-label': t('tgrp.' + g), 'data-group': g },

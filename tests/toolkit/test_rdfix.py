@@ -126,17 +126,12 @@ def test_ledger_repair_keeps_review_signals(sample):
     assert led["ac_digests"] == {"AC-001": "sha256:stale"}  # stale digest is left for test-designer
 
 
-def test_gitignore_and_run_history(sample):
+def test_gitignore(sample):
     gi = "\n".join(l for l in sample.read(".gitignore").splitlines() if "work" not in l) + "\n"
     sample.write(".gitignore", gi)
-    row = "| 202610080900 | 2026-10-08 09:00 | 10:00 | abc | 全件完了 | FR-001 | - | 100% | 1h | 100% | - | 1 | 1 |\n"
-    # EABK Lite no longer creates docs/run-history.md; a repository updated from 0.5.x still has one
-    template = (SOURCE / "tools" / "templates" / "docs" / "run-history.md").read_text(encoding="utf-8")
-    sample.write("docs/run-history.md", template + row + row)
     out = sample.py("rdfix.py", "--apply").stdout
-    assert any(".gitignore" in l for l in fixes(out)) and any("run-id 202610080900 の重複" in l for l in fixes(out))
+    assert any(".gitignore" in l for l in fixes(out))
     assert "/work/" in sample.read(".gitignore")
-    assert sample.read("docs/run-history.md").count("202610080900") == 1
 
 
 def test_verify_prints_hint(sample):
@@ -144,12 +139,6 @@ def test_verify_prints_hint(sample):
     out = sample.py("verify.py", "--docs-only").stdout
     assert "FAIL rdcheck" in out and "HINT rdfix" in out
 
-
-def test_apply_refused_for_workers(sample):
-    git(sample.path, "switch", "-q", "-c", "work/r/I-01")
-    assert sample.py("rdfix.py", "--apply").returncode == 2
-    git(sample.path, "switch", "-q", "main")
-    assert sample.py("rdfix.py", "--apply", "--only", "catalog,registry").returncode == 0
 
 def test_common_parts_follow_function_table(sample):
     sample.write("docs/catalog.md", sample.read("docs/catalog.md").replace("| 未実装 | 未実装 | なし |", "| 未実装 | 未実装 | 下書き保存 |")

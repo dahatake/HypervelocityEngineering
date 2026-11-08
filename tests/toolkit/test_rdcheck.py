@@ -20,10 +20,13 @@ def test_sample_passes_with_warnings(sample):
     assert "WARN CHK-09" in proc.stdout  # MUST requirement not implemented yet
 
 
-def test_strict_ledger_turns_missing_case_into_error(sample):
-    proc = sample.py("rdcheck.py", "check", "--base", "none", "--strict-ledger")
-    assert proc.returncode == 1
-    assert "CHK-10" in codes(proc)
+def test_removed_run_and_strict_options_are_rejected(sample):
+    # FR-1085 AC-474: EABK Lite has no runs and one knob (the profile); --run / --strict / --strict-ledger are gone
+    for opt in ("--run", "--strict", "--strict-ledger"):
+        args = [opt, "current"] if opt == "--run" else [opt]
+        assert sample.py("rdcheck.py", "check", "--base", "none", *args).returncode == 2, opt
+        assert sample.py("verify.py", "--docs-only", "--no-cache", *args).returncode == 2, opt
+    assert "CHK-21" not in sample.py("rdcheck.py", "check", "--base", "none").stdout
 
 
 def test_show_prints_only_the_block(sample):

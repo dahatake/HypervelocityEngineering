@@ -14,8 +14,8 @@
     "AC-005": "sha256:c0c502ef4909cd05",
     "AC-006": "sha256:82d44e3a89ec4b70",
     "AC-008": "sha256:361dae2866606a9a",
-    "AC-010": "sha256:8bbd19693f009e1c",
-    "AC-053": "sha256:871dc91803313df7",
+    "AC-010": "sha256:a808d63b7048cb45",
+    "AC-053": "sha256:2a06d0615c40dd08",
     "AC-037": "sha256:46c798f3729c2c06",
     "AC-044": "sha256:4261ddc0095208fa",
     "AC-045": "sha256:797391cd7043133f",
@@ -107,7 +107,7 @@
     "AC-332": "sha256:634b76242ef6eb6c",
     "AC-333": "sha256:7d9db0365502e562",
     "AC-334": "sha256:539a947f850f1e6c",
-    "AC-335": "sha256:4855e8440e37a075",
+    "AC-335": "sha256:497cfc5d1c6771a9",
     "AC-363": "sha256:7b8d2a2d9489cdb1",
     "AC-345": "sha256:df178fcf8ca4ab1d",
     "AC-346": "sha256:4b7fce12dd66ae47",
@@ -142,7 +142,7 @@
     "AC-443": "sha256:56844dcc502cae93",
     "AC-444": "sha256:7a0a7b59545d11ae",
     "AC-457": "sha256:bcd423b094734a96",
-    "AC-459": "sha256:5c55a7e59ab02430"
+    "AC-459": "sha256:815f681895907199"
   },
   "cases": [
     {
@@ -2959,7 +2959,7 @@
       "layer": "contract",
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac105 -q",
       "canary": true,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "67e3d3df",
       "last_run_at": "2026-11-06T10:42:50+09:00",
       "evidence": "work/runs/202611060711/logs/system-test/IT-008-202611061042.log",
@@ -2981,6 +2981,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-105..114 が level system になったため blocked 解除"
+        },
+        {
+          "at": "2026-11-08T12:30:51+09:00",
+          "by": "eabk-lite",
+          "change": "blocked",
+          "reason": "0.6.0 EABK Lite: 自動修復のワークフロー ebak-data-layer.yml を撤去（検査は ebak-verify、修復は手元で同じ変更に含める）。FR-1017/1018/1019・NFR-SEC-004・NFR-OPS-006 を廃止"
         }
       ]
     },
@@ -2996,7 +3002,7 @@
       "layer": "contract",
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac106 -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "67e3d3df",
       "last_run_at": "2026-11-06T10:42:50+09:00",
       "evidence": "work/runs/202611060711/logs/system-test/IT-009-202611061042.log",
@@ -3018,6 +3024,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-105..114 が level system になったため blocked 解除"
+        },
+        {
+          "at": "2026-11-08T12:30:51+09:00",
+          "by": "eabk-lite",
+          "change": "blocked",
+          "reason": "0.6.0 EABK Lite: 自動修復のワークフロー ebak-data-layer.yml を撤去（検査は ebak-verify、修復は手元で同じ変更に含める）。FR-1017/1018/1019・NFR-SEC-004・NFR-OPS-006 を廃止"
         }
       ]
     },
@@ -3035,7 +3047,7 @@
       "layer": "contract",
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k \"(ac107) or (ac108) or (ac109)\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "30ae6c99",
       "last_run_at": "2026-11-06T06:17:50+09:00",
       "evidence": "work/runs/202611060524/logs/system-test/IT-010-202611060610.log",
@@ -3063,6 +3075,12 @@
           "by": "conductor",
           "change": "command, ac_ids: IT-011, IT-012 を統合",
           "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
+        },
+        {
+          "at": "2026-11-08T12:30:52+09:00",
+          "by": "eabk-lite",
+          "change": "blocked",
+          "reason": "0.6.0 EABK Lite: 自動修復のワークフロー ebak-data-layer.yml を撤去（検査は ebak-verify、修復は手元で同じ変更に含める）。FR-1017/1018/1019・NFR-SEC-004・NFR-OPS-006 を廃止"
         }
       ]
     },
@@ -3167,7 +3185,7 @@
       "layer": "contract",
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k \"(ac110) or (ac111)\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "30ae6c99",
       "last_run_at": "2026-11-06T06:17:50+09:00",
       "evidence": "work/runs/202611060524/logs/system-test/IT-013-202611060610.log",
@@ -3195,6 +3213,12 @@
           "by": "conductor",
           "change": "command, ac_ids: IT-014 を統合",
           "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
+        },
+        {
+          "at": "2026-11-08T12:30:52+09:00",
+          "by": "eabk-lite",
+          "change": "blocked",
+          "reason": "0.6.0 EABK Lite: 自動修復のワークフロー ebak-data-layer.yml を撤去（検査は ebak-verify、修復は手元で同じ変更に含める）。FR-1017/1018/1019・NFR-SEC-004・NFR-OPS-006 を廃止"
         }
       ]
     },
@@ -3255,7 +3279,7 @@
       "layer": "contract",
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k \"(ac112) or (ac113)\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "30ae6c99",
       "last_run_at": "2026-11-06T06:17:50+09:00",
       "evidence": "work/runs/202611060524/logs/system-test/IT-015-202611060610.log",
@@ -3283,6 +3307,12 @@
           "by": "conductor",
           "change": "command, ac_ids: IT-016 を統合",
           "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
+        },
+        {
+          "at": "2026-11-08T12:30:52+09:00",
+          "by": "eabk-lite",
+          "change": "blocked",
+          "reason": "0.6.0 EABK Lite: 自動修復のワークフロー ebak-data-layer.yml を撤去（検査は ebak-verify、修復は手元で同じ変更に含める）。FR-1017/1018/1019・NFR-SEC-004・NFR-OPS-006 を廃止"
         }
       ]
     },
@@ -3342,7 +3372,7 @@
       "layer": "contract",
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac114 -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "30ae6c99",
       "last_run_at": "2026-11-06T06:17:50+09:00",
       "evidence": "work/runs/202611060524/logs/system-test/IT-017-202611060610.log",
@@ -3364,6 +3394,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-105..114 が level system になったため blocked 解除"
+        },
+        {
+          "at": "2026-11-08T12:30:53+09:00",
+          "by": "eabk-lite",
+          "change": "blocked",
+          "reason": "0.6.0 EABK Lite: 自動修復のワークフロー ebak-data-layer.yml を撤去（検査は ebak-verify、修復は手元で同じ変更に含める）。FR-1017/1018/1019・NFR-SEC-004・NFR-OPS-006 を廃止"
         }
       ]
     },

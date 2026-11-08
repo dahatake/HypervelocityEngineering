@@ -43,7 +43,6 @@ The "primary place to browse" is the item where you see that kind's meaning, rel
 | Decision record | Dashboard | Tables |
 | Audit finding | Dashboard | Tables |
 | Source | Map | Tables |
-| Run history | Dashboard | Tables |
 
 The old URLs `#/map2d`, `#/map3d`, and `#/placement` remain as aliases and redirect to the Map (2D / 3D) and Diagrams (implementation placement diagram).
 
@@ -66,7 +65,7 @@ Capture conditions and SHA-256 are recorded in [screen-images.json](screen-image
 | Tables | ![Tables](images/tables.png) |
 
 ## Dashboard
-The counts of requirements, approvals, implementation registered, acceptance criteria, tests passed, unanswered questions, and BLOCKED. Decision states, priorities, progress per goal, implementation per requirement boundary (the files the requirements were split into), verification levels of acceptance criteria, System Test results, and run history. **Click a chart or number and the matching requirements are highlighted on the map.**
+The counts of requirements, approvals, implementation registered, acceptance criteria, tests passed, unanswered questions, and BLOCKED. Decision states, priorities, progress per goal, implementation per requirement boundary (the files the requirements were split into), verification levels of acceptance criteria, and System Test results. **Click a chart or number and the matching requirements are highlighted on the map.**
 
 ## Map (2D)
 An overall diagram arranged from left to right in the order "goal → requirement → data / shared component / API / table → source file → test case."
@@ -152,7 +151,7 @@ The data and calculations each screen reads are in [08-data-reference.en.md](08-
 A diagram (treemap) that shows the names of files written in the catalog by area. Area is the number of linked requirements; blue is implementation and green is tests. Select a file to see the requirements it satisfies, the components it uses, and its tests. **It does not read the contents of source code.**
 
 ## Tables
-"Tables" is a screen that lists the original rows of management data by kind. Choose a kind from under 4 group headings: "Requirements" (goals, requirements, acceptance criteria, PARAM, questionnaire), "Design" (entities, shared components, APIs, tables, external integrations, terms, personas), "Evidence" (test cases, files, sources), and "Operations" (decision records, audit findings, run history). An ID written in a cell is a link to its details, and an ID not in the management data is shown as "Unresolved." You can sort by header, filter in the box above, show only rows related to what you selected on the map with "Only rows related to the selection," and export as CSV.
+"Tables" is a screen that lists the original rows of management data by kind. Choose a kind from under 4 group headings: "Requirements" (goals, requirements, acceptance criteria, PARAM, questionnaire), "Design" (entities, shared components, APIs, tables, external integrations, terms, personas), "Evidence" (test cases, files, sources), and "Operations" (decision records, audit findings). An ID written in a cell is a link to its details, and an ID not in the management data is shown as "Unresolved." You can sort by header, filter in the box above, show only rows related to what you selected on the map with "Only rows related to the selection," and export as CSV.
 
 ## Detail panel on the right
 It appears when you select an item. For a requirement, you can see the text, acceptance criteria, decision state, priority, parent goal, data handled, parameters, implementation files, tests, and BLOCKED questions. The "VS Code" link opens the definition's location or the file in the editor. "View on the 2D / 3D map" moves you to that screen.

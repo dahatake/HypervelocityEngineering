@@ -32,11 +32,10 @@ python scripts/verify.py --profile full           # choose the check profile (li
 python scripts/verify.py --show-warnings          # also print warnings
 python scripts/verify.py --no-cache               # always run, never reuse the cache
 python scripts/verify.py --base main              # base of the diff checks (default: merge-base with base_branch)
-python scripts/verify.py --strict                 # treat important warnings as errors (e.g. before a release)
 ./scripts/verify.sh   /  .\scripts\verify.ps1     # the same (wrappers that find Python and pass the arguments to verify.py)
 ```
 
-Exit 0 means pass. The `AGENTS.md` rules require exit 0 before a change is finished. CI `ebak-verify` runs `scripts/verify.sh --show-warnings`. Full logs are saved to `/work/logs`; only a summary is printed. The project's build and test commands go into `verify.commands` in `scripts/ebak.config.json` ([4. Customization](04-customization.en.md)).
+Exit 0 means pass. The `AGENTS.md` rules require exit 0 before a change is finished. The only check knob is the check profile (`--profile`) (for removed 0.5.x options, see [chapter 9](09-versioning.en.md)). CI `ebak-verify` runs `scripts/verify.sh --show-warnings`. Full logs are saved to `/work/logs`; only a summary is printed. The project's build and test commands go into `verify.commands` in `scripts/ebak.config.json` ([4. Customization](04-customization.en.md)).
 
 **Check profile:** `checks.profile` in `scripts/ebak.config.json`, `lite` (default) or `full`, decides which CHKs are reported.
 
@@ -52,7 +51,7 @@ To see the writing-style warnings: `python scripts/verify.py --docs-only --profi
 ## rdcheck.py (requirements definition parser)
 
 ```bash
-python scripts/rdcheck.py check [--base REF|none] [--profile lite|full] [--strict] [--errors-only] [--json]
+python scripts/rdcheck.py check [--base REF|none] [--profile lite|full] [--errors-only] [--json]
 python scripts/rdcheck.py show FR-012 AC-031 Q-007     # print only the given requirement / AC / question blocks (no need to read everything)
 python scripts/rdcheck.py list --state 承認済み --priority MUST
 python scripts/rdcheck.py list --state 承認待ち         # requirements awaiting approval
@@ -72,19 +71,19 @@ python scripts/rdcheck.py trace INT-001                # requirements and ACs th
 `check` prints one finding per line (`<ERROR|WARN> <CHK-ID> <location> <message>`) and a final summary line.
 
 ```text
-rdcheck: errors=0 warnings=2 base=… run=… profile=lite
+rdcheck: errors=0 warnings=2 base=… profile=lite
 ```
 
 `--profile` overrides `checks.profile` in `scripts/ebak.config.json`. Exit 0 = no errors, 1 = at least one error. The default of `--base` is the merge-base with `base_branch` (default `main`), used by the diff checks; `none` disables the comparison. The profile applies the same way to `rdcheck.py check`, `verify.py`, and `rdfix.py`.
 
 ## rdfix.py (automatic repair of data-layer inconsistencies)
 
-Treating the requirements definition (要求定義書) as the source of truth, it aligns the catalog, ID registry, System Test ledger and `.gitignore` (and duplicated rows of `docs/run-history.md` left in repositories updated from 0.5.x). **It never changes the requirements definition or the external integration catalog (`docs/integrations.md`).** The findings it reports and its pass/fail follow the same check profile (`checks.profile`) as `verify.py`, so `rdfix.py --full` passes exactly when `verify.py --docs-only` passes with the same profile (the mechanical repairs themselves run regardless of the profile).
+Treating the requirements definition (要求定義書) as the source of truth, it aligns the catalog, ID registry, System Test ledger and `.gitignore`. **It never changes the requirements definition or the external integration catalog (`docs/integrations.md`).** The findings it reports and its pass/fail follow the same check profile (`checks.profile`) as `verify.py`, so `rdfix.py --full` passes exactly when `verify.py --docs-only` passes with the same profile (the mechanical repairs themselves run regardless of the profile).
 
 ```bash
 python scripts/rdfix.py                           # show the repair plan (no writes). Exit 1 if there is something to fix
 python scripts/rdfix.py --apply                   # write the fixes, then confirm with rdcheck
-python scripts/rdfix.py --only catalog,ledger     # restrict the targets: registry, catalog, ledger, gitignore, history
+python scripts/rdfix.py --only catalog,ledger     # restrict the targets: registry, catalog, ledger, gitignore
 python scripts/rdfix.py --adopt --apply           # also adopt IDs missing from the ID registry (after confirming they were not hand-numbered)
 python scripts/rdfix.py --json
 ```
@@ -119,15 +118,14 @@ MANUAL CHK-11 tests/system/ledger.json AC-001 の本文が…（担当: System T
 |---|---|
 | 0 = passed / repaired | Nothing left to fix automatically |
 | 1 = work remains | Manual items remain, repairs are planned (without `--apply`), or not converged |
-| 2 = not run / undone | `--apply` on a leftover 0.5.x worker branch (`work/<run-id>/<item>`), lock wait timed out, all changes undone, or an unexpected error |
+| 2 = not run / undone | Lock wait timed out, all changes undone, or an unexpected error |
 
-**Safety (`--full --apply`):** only one repair runs at a time per repository (`work/.ebak/rdfix.lock`; a later one waits up to `--lock-wait` seconds, and a lock left by a dead process is taken over). Every write replaces a temporary file. If the requirements definition or external integration catalog changed, a write failed, an error appeared that was not there before the repair, or an unexpected error occurred, every change is undone, the files are restored to their pre-repair content, and it ends with exit 2. `--apply` is refused on 0.5.x worker branches, so run it on the default branch.
+**Safety (`--full --apply`):** only one repair runs at a time per repository (`work/.ebak/rdfix.lock`; a later one waits up to `--lock-wait` seconds, and a lock left by a dead process is taken over). Every write replaces a temporary file. If the requirements definition or external integration catalog changed, a write failed, an error appeared that was not there before the repair, or an unexpected error occurred, every change is undone, the files are restored to their pre-repair content, and it ends with exit 2.
 
-**Three entry points** all call the same `rdfix.py --full [--apply]`.
+**Two entry points** both call the same `rdfix.py --full [--apply]`. CI (`ebak-verify`) only checks and never repairs (CI that only reads needs no write permission, and a bot pushing onto someone's PR branch would make the branches of other people and PCs diverge). If CI fails, run `rdfix.py --full --apply` locally and include the repair in the same change.
 
-1. The GitHub Actions workflow `ebak-data-layer.yml`: `rdfix.py --full --apply` on failure. Only a repair that passes is committed; what cannot be fixed becomes an Issue.
-2. The installer `tools/install.py`: by default runs `rdfix.py --full --apply` once after install or update. `--no-repair` runs `rdfix.py --full` (check and plan only, no writes), `--skip-verify` neither checks nor repairs, and `--dry-run`, `--check`, `--uninstall` and `--purge` never repair. If the repair is undone or manual items remain, the toolkit stays installed and the installer's exit code does not depend on the data-layer result.
-3. Manual runs by you or Copilot.
+1. The installer `tools/install.py`: by default runs `rdfix.py --full --apply` once after install or update. `--no-repair` runs `rdfix.py --full` (check and plan only, no writes), `--skip-verify` neither checks nor repairs, and `--dry-run`, `--check`, `--uninstall` and `--purge` never repair. If the repair is undone or manual items remain, the toolkit stays installed and the installer's exit code does not depend on the data-layer result.
+2. Manual runs by you or Copilot.
 
 No entry point changes the requirements definition or the external integration catalog, and local runs never commit the repair.
 
@@ -189,7 +187,7 @@ python scripts/ledger.py run --select changed|failed|all [--base REF] [--canary-
 python scripts/ledger.py run --cases E2E-001,IT-002 [--no-record]     # only the given cases; --no-record leaves the ledger unchanged
 ```
 
-`--select changed` prefers cases whose requirement or AC IDs appear in lines added or changed in the git diff, and prints `select <case ID>: <reason>` per case. When it cannot narrow down (e.g. shared code changed), it widens the selection and says so in the reason. `run` prints lines `<id> <requirement_ids> <pass|fail> <seconds> <evidence>` and a `結果: …` (result) line. Details are saved under `/work` (`--results PATH` sets the location). Cases that already passed or failed on the same commit with a clean working tree are not re-run (force with `--rerun-passed` / `--rerun-failed`).
+`--select changed` prefers cases whose requirement or AC IDs appear in lines added or changed in the git diff, and prints `select <case ID>: <reason>` per case. When it cannot narrow down (e.g. shared code changed), it widens the selection and says so in the reason. `run` prints lines `<id> <requirement_ids> <pass|fail> <seconds> <evidence>` and a `結果: …` (result) line. Details are saved to `work/system-test/results.json` (`--results PATH` sets the location; with `--no-record` the ledger is not rewritten and results go only to the `--results` file). Cases that already passed or failed on the same commit with a clean working tree are not re-run (force with `--rerun-passed` / `--rerun-failed`).
 
 ## summarize.py (log summary)
 
@@ -223,6 +221,7 @@ python tools/install.py --target <repo> [--dry-run] [--force] [--no-ci]
 python tools/install.py --target <repo> --check        # check whether an update is needed (exit 1 if so)
 python tools/install.py --target <repo> --no-repair    # after installing, run rdfix.py --full (check and plan only, no writes)
 python tools/install.py --target <repo> --skip-verify  # no check or repair after installing
+python tools/install.py --target <repo> --clean        # clean install (delete everything the toolkit installed, then install again)
 python tools/install.py --target <repo> --uninstall    # remove unmodified toolkit files and blocks (keeps management data and config)
 python tools/install.py --target <repo> --purge        # --uninstall + remove management data, config, /work and appended lines
 python tools/install.py --version
@@ -234,6 +233,7 @@ python tools/install.py --version
 | `--source DIR` | Toolkit source (default: this script's repository) |
 | `--dry-run` | Print the operations without writing |
 | `--check` | Check whether an update is needed (exit 1 if so) |
+| `--clean` | Clean install. Deletes the files recorded in the manifest and this version's distributed files (even if modified), `.ebak-backup-*`, the settings, the blocks, the appended lines and the manifest, then installs. Keeps the management data, `/work`, and your application code and tests. Runs only in a git repository with no uncommitted changes. Cannot be combined with `--uninstall`, `--purge` or `--check`. `-Clean` in the PowerShell wrapper |
 | `--force` | Also overwrite or remove locally modified toolkit files (keeps `.ebak-backup-*`) |
 | `--no-ci` | Do not install `.github/workflows/ebak-verify.yml` |
 | `--no-repair` | Do not repair after installing; print only the check and repair plan with `rdfix.py --full`. `-NoRepair` in the PowerShell wrapper |
@@ -242,13 +242,13 @@ python tools/install.py --version
 | `--allow-non-git` | Install into a directory that is not a git repository |
 | `--version` | Print the toolkit version and exit |
 
-What it does (idempotent): installs the distributed files (rd-auditor, skills, `ebak-verify.yml` and `ebak-data-layer.yml`, `scripts/*`, EABK-Studio) and updates them if unmodified. Management-data templates (requirements definition, catalog, external integration catalog, ID registry, ledger) are created only when missing. `scripts/ebak.config.json` gets new keys while your values are kept. It adds `/work/` to `.gitignore`, union-merge lines to `.gitattributes`, and the rules block to `AGENTS.md` and `.github/copilot-instructions.md`, and records versions and hashes in `.github/ebak-toolkit.json`. Finally it runs `rdfix.py --full --apply` once (the requirements definition is never changed and the repair is not committed).
+What it does (idempotent): installs the distributed files (rd-auditor, skills, `ebak-verify.yml`, `scripts/*`, EABK-Studio; Studio's tests `EABK-Studio/tests/` are not installed) and updates them if unmodified. Management-data templates (requirements definition, catalog, external integration catalog, ID registry, ledger) are created only when missing. `scripts/ebak.config.json` gets new keys while your values are kept (a new install gets an empty `verify.commands`: `[]`). It adds `/work/` to `.gitignore` (header `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`), `docs/id-registry.md merge=union` to `.gitattributes`, and the rules block to `AGENTS.md` and `.github/copilot-instructions.md`, and records versions and hashes in `.github/ebak-toolkit.json`. Finally it runs `rdfix.py --full --apply` once (the requirements definition is never changed and the repair is not committed).
 
-When updating from an older version (such as 0.5.x), old files you did not modify (agents such as conductor, the `/build` skills, the hook files `.github/hooks/quality-gates.json`, `.github/hooks/prompt-prefix.json` and `scripts/hooks/gate.py`, removed scripts) are deleted (`REMOVE`); modified ones are kept (`KEEP-LOCAL`; `--force` deletes them). When a modified hook file is kept, the installer prints `WARN-HOOK  <path>`: the file calls the deleted `gate.py`, and when a hook errors Copilot denies every tool, so delete the file and reopen the Copilot session. The config keys `gates`, `limits`, `credits`, `worktree_share`, `prompt_prefix` and the old default verify command `toolkit-unit` are removed (`PRUNE`). An existing `.github/ebak-prompt-prefix.md` is left alone but no longer read. The requirements definition, ledger and catalog are not changed. Worktrees and `work/*` branches left by 0.5.x runs are not removed automatically; check them with `git worktree list` and `git branch --list "work/*"` and delete them by hand.
+An update handles only the files this version ships. Files an older version installed that this version no longer ships are not deleted; they stay in the manifest (so `--clean` can find them) and their count is shown as a note. There is no migration code for older versions (no per-version removal list, no settings rewrite). When updating from an older version (such as 0.5.x), use `--clean`. Even after `--clean`, data-layer files from older versions (such as `docs/run-history.md` from 0.5.x) and the worktrees and `work/*` branches left by 0.5.x runs remain; delete them by hand if you do not need them ([9.4](09-versioning.en.md#94-updating-from-an-older-version-clean-install)).
 
 ## EABK-Studio (data-layer viewer)
 
-Installed into `EABK-Studio/` of the target repository. A local, read-only web app that shows the data layer (requirements definition, catalog, ledger) as diagrams, tables and search (Japanese and English).
+Installed into `EABK-Studio/` of the target repository. A local, read-only web app that shows the data layer (requirements definition, catalog, ledger) as diagrams, tables and search (Japanese and English). A git repository without EABK can also be viewed from an HVE clone with `python EABK-Studio/studio.py --repo <any-git-repo>` (code mode, FR-1086).
 
 ```text
 python EABK-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--role pm|architect|swe] [--check]
@@ -256,12 +256,13 @@ python EABK-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--role pm|a
 
 | Option | Behavior |
 |---|---|
-| `--repo DIR` | Target repository (default: current directory; searches parent directories for the data layer) |
+| `--repo DIR` | Target repository, with or without EABK (searches parent directories for the data layer, otherwise uses the git root). Default: the current directory if it has a data layer or is a git repository showable in code mode, otherwise Studio's own repository |
 | `--port N` | Listening port (default 8765; if in use, tries the next numbers up to 20 times) |
 | `--no-open` | Do not open the browser automatically |
 | `--role pm\|architect\|swe` | First screen to open (dashboard / 2D map / table) |
-| `--check` | Print which management-data files exist, the parsed counts and warnings, then exit. Exit 0 if a data layer exists, otherwise 1 |
+| `--check` | Print which management-data files exist, the parsed counts and warnings, then exit. Exit 0 if a data layer exists or code mode has something to show (a `mode: code (...) requirement-docs=… requirements=… linked-to-code=… code-files=… test-files=… components=…` line is printed), otherwise 1 |
 
 - Wrappers: `EABK-Studio/start.ps1 [-Repo DIR] [-Port N] [-Role …] [-Check] [-NoOpen]`, `EABK-Studio/start.sh [DIR] [PORT] [studio.py options…]`.
-- It never reads source code and listens on 127.0.0.1 only. The only writes are catalog titles and decision states in `docs/catalog.md` that you confirm and run in "整合性保守" (consistency maintenance).
+- In code mode it derives, read-only, requirement IDs (`FR-…`, `NFR-…`) from the first column of markdown tables and from headings (`docs/PRD.md` and the like first), the code and test files that mention each ID, and source files grouped into components. The ledger and acceptance criteria are empty. Only a git repository root is used; an empty or non-git folder exits 1.
+- With a data layer it never reads source code. It listens on 127.0.0.1 only. The only writes are catalog titles and decision states in `docs/catalog.md` that you confirm and run in "整合性保守" (consistency maintenance).
 - Role-based guides are in [studio/README.en.md](studio/README.en.md).
