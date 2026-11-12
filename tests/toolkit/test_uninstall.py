@@ -60,6 +60,7 @@ def test_catalog_covers_this_version():
     assert cat["installer_versions"] >= 40
     for rel in inst.MANAGED:
         assert inst.dest_of(rel) in cat["files"] and inst.dest_of(rel) in cat["current"], rel
+        assert inst.sha(SOURCE / rel) in cat["files"][inst.dest_of(rel)], rel
     for rel in inst.TEMPLATES:
         assert rel in cat["data"], rel
     assert {".github/ebak-toolkit.json", ".github/hve-toolkit.json"} <= set(cat["manifests"])

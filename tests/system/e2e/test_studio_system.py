@@ -443,6 +443,8 @@ def test_first_steps_consolidates_startup_prerequisites_and_unknowns(page):
         "three.js",
         "ブラウザー",
         "管理データ",
+        "git",
+        "空の Git",
         "インターネット",
         "127.0.0.1",
         "8765",

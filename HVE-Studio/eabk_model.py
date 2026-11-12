@@ -1,8 +1,7 @@
 """HVE Studio: reads the EABK data layer of any repository and builds one model.
 
-Only the data layer is read (requirements definition, catalog, system-test ledger,
-ID registry). Source code is never opened; it is only *named* by the
-paths that the catalog already holds.
+Declared management data remains authoritative. Local Git files supplement it
+with a read-only inventory, explicit references and task sources.
 """
 from __future__ import annotations
 
@@ -13,6 +12,8 @@ import subprocess
 from collections import Counter, OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
+
+import repo_scan
 
 STUDIO_VERSION = "1.0.0"
 
@@ -270,44 +271,24 @@ def load_config(root: Path) -> dict:
 def find_root(start: Path) -> Path:
     start = start.resolve()
     for cand in [start, *start.parents]:
-        if (cand / "docs" / "requirements-definition.md").is_file() or (cand / "docs" / "catalog.md").is_file():
-            return cand
-    for cand in [start, *start.parents]:  # a repository without EABK: its git root (code mode)
-        if (cand / ".git").exists():
+        if has_data_layer(cand) or (cand / ".git").exists():
             return cand
     return start
 
 
 # ------------------------------------------------------------------ code mode (a repository without EABK)
-# When a repository has no EABK data layer, Studio derives one from what is already there: requirement-like IDs
-# in markdown tables and headings (a PRD.md such as `| FR-SEL-02 | ... |`), the source files grouped by component,
-# and the files that mention each ID. Read-only; nothing is written. With a data layer this is never used.
-CODE_EXTS = {".py", ".cs", ".fs", ".vb", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".svelte", ".java",
-             ".kt", ".kts", ".scala", ".go", ".rs", ".rb", ".php", ".swift", ".m", ".mm", ".c", ".h", ".cc", ".cpp",
-             ".hpp", ".dart", ".lua", ".sql", ".ps1", ".psm1", ".sh", ".bash", ".r", ".jl", ".ex", ".exs", ".erl",
-             ".clj", ".hs", ".ml", ".zig", ".nim", ".css", ".scss", ".html", ".razor", ".cshtml", ".xaml"}
-SKIP_DIRS = {".git", "node_modules", "bin", "obj", "dist", "build", "out", "target", ".venv", "venv", "__pycache__",
-             ".next", ".nuxt", "coverage", "vendor", "packages", ".idea", ".vs", "work", "TestResults"}
+# Explicit requirement definitions and references supplement, but never override, management records.
+CODE_EXTS = repo_scan.SOURCE_EXTS
+SKIP_DIRS = repo_scan.SKIP_DIRS
+INVENTORY_ONLY_KINDS = {"ignored", "generated", "submodule"}
 PRD_NAME_RE = re.compile(r"prd|requirement|要求|spec", re.I)
-CODE_MAX_FILES = 5000
-CODE_MAX_BYTES = 1_000_000
-PART_MAX_FILES = 300
 
 
 def _repo_files(root: Path) -> list[str] | None:
     """Tracked + untracked-not-ignored files of a git repository root, or None when root is not one. Code mode is
     limited to repositories so that an arbitrary folder (a home or temp directory) is never walked."""
-    if not (root / ".git").exists():
-        return None
-    try:
-        proc = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], cwd=root,
-                              capture_output=True, timeout=30, check=False)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if proc.returncode != 0:
-        return None
-    out = [p for p in proc.stdout.decode("utf-8", "replace").split("\0") if p]
-    return [p for p in out if not set(p.split("/")[:-1]) & SKIP_DIRS]
+    paths = repo_scan.list_files(root)
+    return None if paths is None else [p for p in paths if not repo_scan.excluded(p)]
 
 
 def _md_order(rel: str) -> tuple:
@@ -319,23 +300,27 @@ def _cell(text: str) -> str:
     return re.sub(r"\s+", " ", strip_md(text)).replace("|", "／").strip()[:160]
 
 
-def synthesize_from_code(root: Path) -> tuple[list[dict], dict, dict] | None:
-    """(requirement docs, catalog doc, info) derived from a git repository without EABK, or None when root is not
-    a git repository or has neither requirement-like IDs in markdown nor source files."""
-    files = _repo_files(root)
-    if files is None:
+def synthesize_from_code(root: Path, scan: dict | None = None) -> tuple[list[dict], dict, dict] | None:
+    """Derive explicit definitions and source links; return None only for a non-Git folder."""
+    scan = scan if scan is not None else repo_scan.scan(root, is_test_path)
+    if scan is None:
         return None
+    files = [f["path"] for f in scan["files"] if f["kind"] not in INVENTORY_ONLY_KINDS]
+    texts = scan["texts"]
     defs: OrderedDict[str, tuple[str, str, int]] = OrderedDict()  # id -> (title, file, line)
     used_docs: list[str] = []
-    for rel in sorted((f for f in files if f.lower().endswith(".md")), key=_md_order):
-        p = root / rel
-        try:
-            if p.stat().st_size > CODE_MAX_BYTES:
-                continue
-        except OSError:
+    records: dict[str, dict] = {}
+    source_tables = []
+    managed = has_data_layer(root)
+    configured = load_config(root)
+    for rel in sorted((f for f in texts if Path(f).suffix.lower() in {".md", ".markdown"}), key=_md_order):
+        if managed and (rel in configured.values() or rel.startswith(configured["requirements_dir"] + "/")
+                        or not PRD_NAME_RE.search(Path(rel).name)):
             continue
         before = len(defs)
-        doc = parse_document(p, rel)
+        doc = parse_text(texts[rel], rel)
+        for record in parse_requirements(doc):
+            records.setdefault(record["id"], record)
         for t in doc["tables"]:
             for row in t["rows"]:
                 cells = row["cells"]
@@ -343,27 +328,20 @@ def synthesize_from_code(root: Path) -> tuple[list[dict], dict, dict] | None:
                 if re.fullmatch(REQ_ID, rid) and rid not in defs:
                     title = next((_cell(c) for c in cells[1:] if _cell(c)), rid)
                     defs[rid] = (title, rel, row["line"])
-        for ln, raw in enumerate(doc["lines"], 1):
-            m = REQ_HEADING_RE.match(raw)
+        for ln, level, title in doc["headings"]:
+            m = REQ_HEADING_RE.match("#" * level + " " + title)
             if m and m.group(2) not in defs:
                 defs[m.group(2)] = (_cell(m.group(3)) or m.group(2), rel, ln)
         if len(defs) > before:
             used_docs.append(rel)
-    code = [f for f in files if Path(f).suffix.lower() in CODE_EXTS][:CODE_MAX_FILES]
-    if not defs and not code:
-        return None
+            source_tables.extend(doc["tables"])
+    code = [f for f in files if Path(f).suffix.lower() in CODE_EXTS]
     impl: dict[str, list[str]] = {}
     tests: dict[str, list[str]] = {}
     mentions: dict[str, set[str]] = {}
     known = set(defs)
     for rel in code:
-        p = root / rel
-        try:
-            if p.stat().st_size > CODE_MAX_BYTES:
-                continue
-            text = p.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
+        text = texts.get(rel, "")
         ids = {m.group(1) for m in REQ_ID_RE.finditer(text)} & known if known else set()
         mentions[rel] = ids
         for rid in ids:
@@ -384,13 +362,15 @@ def synthesize_from_code(root: Path) -> tuple[list[dict], dict, dict] | None:
     ct += ["", "## 共通部品", "", "| 部品名 | ファイル | 用途 | 使っている要求 ID |", "|---|---|---|---|"]
     for comp, rels in groups.items():
         n_test = sum(1 for r in rels if is_test_path(r))
-        shown = rels[:PART_MAX_FILES]
-        more = f"（ほか {len(rels) - len(shown)} ファイルは省略）" if len(rels) > len(shown) else ""
+        shown = rels
+        more = ""
         ids = sorted({i for r in rels for i in mentions.get(r, ())})
         ct.append(f"| {comp} | {', '.join(shown)} | コードから導出: {len(rels)} ファイル（テスト {n_test}）{more} | "
                   f"{'、'.join(ids) or '-'} |")
     req_doc = parse_text("\n".join(rq) + "\n", "(code mode)")
     req_doc["origin"] = {rid: (f, ln) for rid, (_, f, ln) in defs.items()}
+    req_doc["records"] = records
+    req_doc["tables"] = source_tables
     cat_doc = parse_text("\n".join(ct) + "\n", "(code mode)")
     info = {"requirementDocs": used_docs, "requirements": len(defs), "codeFiles": len(code),
             "testFiles": sum(1 for f in code if is_test_path(f)), "components": len(groups),
@@ -400,12 +380,13 @@ def synthesize_from_code(root: Path) -> tuple[list[dict], dict, dict] | None:
 
 def can_view(root: Path) -> bool:
     """A data layer, or something to show in code mode."""
-    return has_data_layer(root) or synthesize_from_code(Path(root).resolve()) is not None
+    return has_data_layer(root) or repo_scan.list_files(Path(root).resolve()) is not None
 
 
 def has_data_layer(root: Path) -> bool:
     files = load_config(root)
-    return any((root / files[k]).exists() for k in ("requirements", "catalog", "ledger"))
+    return (any((root / files[k]).is_file() for k in ("requirements", "catalog", "ledger", "integrations", "id_registry"))
+            or any((root / files["requirements_dir"]).glob("*.md")))
 
 
 def data_layer_report(root: Path) -> dict:
@@ -429,6 +410,7 @@ def data_layer_report(root: Path) -> dict:
             "ledgerCases": len(model["cases"]),
         },
         "warnings": list(model["warnings"]),
+        "repository": model.get("repository"),
     }
 
 
@@ -445,7 +427,12 @@ def fingerprint(root: Path) -> str:
             stamps.append(f"{p.name}:{st.st_mtime_ns}:{st.st_size}")
         except OSError:
             stamps.append(f"{p.name}:-")
-    return "|".join(stamps)
+    stamps += [repo_scan.fingerprint(root)]
+    for cand in CONFIG_CANDIDATES:
+        p = root / cand
+        if p.is_file():
+            stamps.append(f"{cand}:{p.stat().st_mtime_ns}:{p.stat().st_size}")
+    return hashlib.sha256("|".join(stamps).encode("utf-8")).hexdigest()
 
 
 def generated_at(root: Path) -> str:
@@ -1053,6 +1040,7 @@ def build_model(root: Path) -> dict:
     root = Path(root).resolve()
     files = load_config(root)
     warnings: list[str] = []
+    scan = repo_scan.scan(root, is_test_path)
     model: dict = {
         "meta": {"repo": str(root), "name": root.name, "studio": STUDIO_VERSION,
                  "generatedAt": generated_at(root), "files": {}, "fingerprint": fingerprint(root)},
@@ -1075,21 +1063,35 @@ def build_model(root: Path) -> dict:
     cat_doc = parse_document(cat_path, files["catalog"]) if cat_path.is_file() else None
     model["meta"]["files"] = {k: (v if (root / v).exists() else None) for k, v in files.items()}
     model["meta"]["mode"] = "eabk"
-    if not docs and not cat_doc:
-        derived = synthesize_from_code(root)
+    derived = synthesize_from_code(root, scan) if scan is not None else None
+    if not has_data_layer(root):
         if derived is None:
             model["meta"]["error"] = "no-data-layer"
             return model
         docs, cat_doc, model["meta"]["derivedFrom"] = derived
         model["meta"]["mode"] = "code"
+    elif derived is not None:
+        docs += derived[0]
+        model["meta"]["derivedFrom"] = derived[2]
+    if scan is not None:
+        model["repository"] = {k: v for k, v in scan.items() if k != "texts"}
+        model["tasks"] = scan["tasks"]
+        warnings.extend(f"{d['path']}: {d['reason']}" for d in scan["diagnostics"])
+    else:
+        model["repository"] = {"files": [], "counts": {}, "tasks": [], "dependencies": [], "history": [], "submodules": [],
+                               "links": [], "diagnostics": [], "unavailable": ["No local Git inventory: management files only."]}
+        model["tasks"] = []
 
     # requirements
     reqs: OrderedDict[str, dict] = OrderedDict()
     for d in docs:
         for r in parse_requirements(d):
+            r = d.get("records", {}).get(r["id"], r)
             if r["id"] in d.get("origin", {}):  # code mode: point at the real PRD line
                 r["file"], r["line"] = d["origin"][r["id"]]
             if r["id"] in reqs:
+                if d.get("origin") is not None:
+                    continue  # explicit management definitions win over derived duplicates
                 warnings.append(f"duplicate {r['id']} ({d['rel']}:{r['line']})")
                 continue
             reqs[r["id"]] = r
@@ -1252,6 +1254,21 @@ def build_model(root: Path) -> dict:
     for tb in model["catalog"]["tables"]:
         tb["reqs"] = expand_ids(tb.pop("reqRaw"), known)
     model["catalog"]["parts"] = parts
+    if scan is not None:
+        feats = {f["req"]: f for f in model["catalog"]["features"]}
+        for rel, text in scan["texts"].items():
+            if Path(rel).suffix.lower() not in CODE_EXTS:
+                continue
+            for rid in set(REQ_ID_RE.findall(text)) & set(reqs):
+                feature = feats.get(rid)
+                if feature is None:
+                    feature = {"req": rid, "title": reqs[rid]["title"], "status": reqs[rid]["status"],
+                               "impl": [], "implRaw": "", "tests": [], "parts": [], "line": 0, "derived": True}
+                    feats[rid] = feature
+                    model["catalog"]["features"].append(feature)
+                key = "tests" if is_test_path(rel) else "impl"
+                if rel not in feature[key]:
+                    feature[key].append(rel)
 
     # ledger / registry
     lp = root / files["ledger"]
@@ -1301,6 +1318,10 @@ def build_model(root: Path) -> dict:
     build_management_analysis(model, docs, cat_doc, files, warnings)
     build_graph(model, reqs, parts)
     model["hierarchy"] = derive_hierarchy(model, root, docs, cat_doc)
+    if scan is not None and scan["files"]:
+        latest = max(((root / f["path"]).stat().st_mtime for f in scan["files"]
+                      if f["analysis"] == "read" and (root / f["path"]).is_file()), default=root.stat().st_mtime)
+        model["meta"]["generatedAt"] = datetime.fromtimestamp(latest).astimezone().isoformat(timespec="seconds")
     return model
 
 
@@ -1600,6 +1621,11 @@ def build_graph(model: dict, reqs: dict, parts: list[dict]) -> None:
         return nid
 
     part_alias: dict[str, str] = {}
+    for item in model.get("repository", {}).get("files", []):
+        if item["kind"] not in INVENTORY_ONLY_KINDS:
+            file_node(item["path"], "test" if item["kind"] == "test" else item["kind"])
+    for link in model.get("repository", {}).get("links", []):
+        edge("file:" + link["source"], "file:" + link["target"], "imports")
     for p in parts:
         pid = f"part:{p['name']}"
         node(pid, "part", re.sub(r"[（(].*$", "", p["name"]).strip() or p["name"], title=p["purpose"][:200], path=p["name"],

@@ -110,6 +110,7 @@ export function mount(host) {
     page.replaceChildren(
       el('h1', {}, t('dash.title')),
       el('p', { class: 'sub' }, `${m.meta.name} · `, el('span', { class: 'mono' }, m.meta.repo), ` · ${t('dash.generated')} ${m.meta.generatedAt}`),
+      el('p', {}, el('a', { href: '#/workspace', 'data-testid': 'workspace-link' }, t('ws.title'))),
       m.meta.error ? el('div', { class: 'warnbox' }, t('err.nodata')) : '',
       el('div', { class: 'grid kpis' },
         kpi(reqs.length, t('dash.reqs'), reqs.map((r) => r.id)),

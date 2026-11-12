@@ -8,12 +8,14 @@
 |---|---|
 | The browser doesn't open | Paste the URL shown in the terminal (`http://127.0.0.1:…`) into the browser by hand. |
 | `python` is not found | Install Python 3.9 or later, or try `py HVE-Studio/studio.py`. |
-| "EABK data layer not found" | If Studio showed guidance at launch and exited, the target folder has none of `docs/requirements-definition.md`, `docs/catalog.md`, or `tests/system/ledger.json`. Specify the correct folder with `--repo`. If you have only installed EABK and have not yet created requirements, first create them by making a request in Copilot chat (this creates `docs/requirements-definition.md`). |
-| I can't tell which files are being read | Run `python HVE-Studio/studio.py --repo <repository> --check`. It shows which management data files were found / not found, the counts of requirements, acceptance criteria, catalog rows, and ledger cases that could be parsed, and warnings, then exits (it does not launch). The exit code is 0 if the data layer exists and 1 if not. If you have moved file locations, check `management_files` in `scripts/ebak.config.json`. |
-| Nothing shows on screen (count is 0) | If the `--check` count is 0, the column names in a table's header do not match the format in [08-data-reference.en.md](08-data-reference.en.md) (e.g., the feature table lacks the `要求ID` and `実装ファイル` columns). Align with EABK's [management data format](../03-requirements-format.en.md). |
+| "EABK data layer not found" | Specify a local Git root (empty is fine) or a folder with management records using `--repo`. For Git acquisition errors, check the `git` command and OS file permissions. |
+| I can't tell which files are being read | Run `python HVE-Studio/studio.py --repo <repository> --check` for management and inventory counts and diagnostics, without launching. Exit 0 means management records or Git were readable; otherwise exit 1. Management paths follow `management_files` in `scripts/ebak.config.json`. |
+| Nothing shows on screen (count is 0) | Undeclared requirements or APIs have a count of zero; they are not guessed. Check coverage and diagnostics in Dashboard → Repository analysis & tasks. For declared management data, check the [column formats](08-data-reference.en.md) too. |
+| Tasks cannot be saved | Read the displayed reason and check storage permissions. `HVE_STUDIO_DATA_DIR` must be a writable directory outside the selected repository. New task input is retained on failure. |
 | `preview-conflict` in Consistency maintenance | The catalog was updated by another means after Studio launched. Restart Studio and preview again. |
 | The menu doesn't appear for a `?select=` link | Links with `select` are a display for capturing screenshots. Normally use `q`, as in `#/map2d?q=<requirement ID>`. |
 | The screen is stale | It auto-updates within a few seconds. If that doesn't fix it, reload the browser. |
+| GitHub issues, PRs or CI runs are missing | The GitHub line in "Repository analysis & tasks" shows the reason. Install the `gh` CLI, run `gh auth login`, then press "Refetch from GitHub". Non-GitHub remotes and `--no-remote` runs are not fetched. |
 | 3D doesn't display / is slow | Enable hardware acceleration in your browser. If it is slow, reduce what is shown with "Layers." |
 | APIs / tables are empty | The "APIs / events" and "Tables" tables in the catalog have no entries (this is not an error). |
 | "Implementation" differs from reality | "Implementation" is what the catalog states. Ask EABK's agent to update the catalog. |

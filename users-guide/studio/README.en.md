@@ -33,7 +33,7 @@ This guide lives in `users-guide/studio/` in the distribution source, and in `EA
 
 ## Things to know first
 
-- **Normal browsing is read-only**. As the one exception, only when a user reviews the diff and runs "Consistency maintenance" does Studio align the catalog's titles and decision states with the requirements source of truth. If it fails, the original content is restored.
-- **Nothing is sent outside**. Communication stays inside your own computer (127.0.0.1). Source code is not opened.
+- **Normal browsing is read-only**. Only confirmed catalog maintenance changes originals. Task edits use Studio-owned storage outside the repository.
+- **Nothing is sent outside**. Communication stays inside your own computer (127.0.0.1). Explicit source references and TODOs are read, but repository code is not executed.
 - **It stays up to date automatically**. When a data-layer file is updated, the screen reloads within a few seconds.
 - With `JA | EN` at the top right of the screen, you can switch the screen's language between Japanese and English (requirement text and the like remain as written).

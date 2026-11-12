@@ -390,7 +390,7 @@ For details, see [Version upgrades](users-guide/09-versioning.en.md) and [CHANGE
 
 **HVE Studio** (Hypervelocity Engineering Studio, `HVE-Studio/`) is a local-only web app for browsing the data layer EABK manages (the requirements definition, the catalog, the System Test ledger, and the ID registry) through **diagrams, tables, and search**. It is part of the toolkit and is installed into the target repository.
 
-- It is **read-only**. In a repository with a data layer it does not read source code contents (in "code mode" below it reads them only to find requirement IDs), and it listens only on `127.0.0.1`. The only write is the title / decision state in `docs/catalog.md`, executed from "Consistency maintenance" after you check the preview.
+- **Browsing and analysis do not change originals**. Management records remain authoritative, supplemented with explicit source references, imports and TODOs. Studio listens only on `127.0.0.1`. Only confirmed maintenance changes the catalog; task edits use Studio-owned storage outside the repository.
 - It runs on the Python 3.9+ standard library alone (no extra installs). When data-layer files change, the screen reloads within seconds.
 - It is a window for people to understand and judge the state of requirements, the catalog, and tests. To change requirements or the implementation, ask Copilot.
 
@@ -425,10 +425,10 @@ python HVE-Studio/studio.py --repo <any-git-repo> --check   # mode: code (...) r
 python HVE-Studio/studio.py --repo <any-git-repo>
 ```
 
-- If the repository has a data layer, Studio reads it as before.
+- Management records remain authoritative and are supplemented with local Git inventory and explicit references. Git analysis requires the `git` command; no additional Python packages are needed.
 - If not, Studio derives a read-only model: requirement IDs (`FR-…`, `NFR-…`) from the first column of markdown tables and from headings (`docs/PRD.md` and files whose names contain prd, requirement, 要求 or spec are read first), the code and test files that mention each ID (catalog rows: implementation files / tests), and source files grouped into components (shared parts).
-- Every screen (dashboard, map, diagrams, source mapping, tables) works. The ledger and acceptance criteria are empty.
-- Code mode applies only to the root of a git repository (a plain folder is never walked). An empty folder or a non-git folder still exits 1 with "no EABK data layer … and nothing to show in code mode".
+- Existing views remain available; written acceptance criteria are preserved and missing facts are not guessed. Dashboard links to **Repository analysis & tasks** for local file inventory, dependencies, Git history, diagnostics and persistent checklist/TODO tasks.
+- Empty and document-only Git repositories are supported. Folders with neither Git nor management records exit 1. Task edits are stored outside the repository, isolated by canonical path. No LLM is used. See the [data reference](users-guide/studio/08-data-reference.en.md) for supported formats and exclusions.
 - Without `--repo`, the target is the current folder if it has a data layer or is a git repository showable in code mode, otherwise Studio's own repository. Switching repositories from the repository name at the top right accepts the same.
 - Example: on `C:\GitHub\VideoCreator` it showed 103 requirements from `docs/PRD.md`, 56 of them linked to code or tests, 78 code files, and 6 components.
 

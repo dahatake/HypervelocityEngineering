@@ -20,6 +20,13 @@ button{border:0}
 /* ポインター目標は 24px 四方以上（PARAM-031、WCAG 2.5.8） */
 button,select,input:not([type=checkbox]):not([type=radio]){min-height:var(--size-target-min)}
 button{min-width:var(--size-target-min)}
+.workspace{overflow-wrap:anywhere}
+.workspace .card{margin-top:var(--space-4)}
+.workspace input,.workspace select{max-width:100%;min-width:0;background:var(--color-bg-surface);border:var(--stroke-thin) solid var(--color-border-default);border-radius:var(--radius-sm);padding:var(--space-2)}
+.workspace-task{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2);padding:var(--space-2);border-bottom:var(--stroke-thin) solid var(--color-border-default)}
+.workspace-task>span:first-child,.workspace-task>input{flex:1 1 40%;min-width:0}
+.workspace .table-wrap{overflow:auto;max-width:100%}
+.workspace td,.workspace th{padding:var(--space-2);text-align:left;overflow-wrap:anywhere}
 input[type=checkbox],input[type=radio]{width:var(--size-icon-lg);height:var(--size-icon-lg);margin:var(--space-0)}
 .skip-link{position:fixed;left:var(--space-3);top:var(--space-2);z-index:200;padding:var(--space-2) var(--space-3);border-radius:var(--radius-md);background:var(--color-bg-surface);color:var(--color-fg-default);border:var(--stroke-thin) solid var(--color-border-strong);transform:translateY(-150%);transition:transform var(--duration-fast)}
 .skip-link:focus{transform:translateY(0)}

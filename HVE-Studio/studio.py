@@ -14,11 +14,13 @@ import hashlib
 import json
 import os
 import re
+import sqlite3
 import stat
 import subprocess
 import sys
 import tempfile
 import threading
+import time
 import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -29,6 +31,9 @@ sys.dont_write_bytecode = True  # do not leave __pycache__ in the repository bei
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import eabk_model  # noqa: E402
+import repo_scan  # noqa: E402
+import remote_github  # noqa: E402
+from task_state import TaskStore  # noqa: E402
 
 WEB = HERE / "web"
 # The toolkit source keeps the guide in users-guide/; installed repositories get it as EABK-docs/.
@@ -43,12 +48,58 @@ MIME = {
 
 
 class State:
-    def __init__(self, root: Path):
+    REMOTE_TTL = 600
+
+    def __init__(self, root: Path, data_dir: Path | None = None, remote: bool = False):
         self.lock = threading.Lock()
         self.root = root
         self.cache: dict[str, tuple[str, bytes]] = {}
         self.previews: dict[str, dict] = {}
         self.catalog_baseline = self._catalog_hash(root)
+        self.tasks = TaskStore(data_dir)
+        self.remote_enabled = remote
+        self.remote: dict[str, dict] = {}  # in memory only; never written to disk
+        self.remote_loading: set[str] = set()
+
+    def _remote(self, root: Path, force: bool = False) -> dict:
+        """Current GitHub data for root; starts a background fetch when missing, stale or forced. Caller holds lock."""
+        if not self.remote_enabled:
+            return {"status": "disabled", "reason": "started with --no-remote"}
+        key = str(root)
+        hit = self.remote.get(key)
+        stale = hit is None or force or time.time() - hit.get("_at", 0) > self.REMOTE_TTL
+        if stale and key not in self.remote_loading:
+            self.remote_loading.add(key)
+
+            def store(data):
+                with self.lock:
+                    previous = self.remote.get(key, {})
+                    kept = {s: previous.get(s, []) for s in data.get("pending", [])}  # keep old rows until refetched
+                    self.remote[key] = {**data, **kept, "_at": time.time()}
+
+            def work():
+                try:
+                    data = remote_github.fetch(root, progress=store)
+                except Exception as exc:  # a failed fetch is reported, never fatal
+                    data = {"status": "error", "reason": str(exc), "issues": [], "pulls": [], "runs": []}
+                with self.lock:
+                    self.remote[key] = {**data, "_at": time.time()}
+                    self.remote_loading.discard(key)
+
+            threading.Thread(target=work, daemon=True).start()
+        current = dict(hit) if hit else {"status": "loading", "issues": [], "pulls": [], "runs": []}
+        current["loading"] = key in self.remote_loading
+        current.pop("_at", None)
+        return current
+
+    def refresh_remote(self) -> dict:
+        with self.lock:
+            return {"status": self._remote(self.root, force=True)["status"]}
+
+    def _imported(self, root: Path, model: dict) -> list[dict]:
+        remote = self._remote(root)
+        model["remote"] = remote
+        return model.get("tasks", []) + remote_github.issue_tasks(remote)
 
     @staticmethod
     def _catalog_hash(root: Path) -> str:
@@ -64,23 +115,44 @@ class State:
     def model_bytes(self) -> bytes:
         with self.lock:
             root = self.root
-            fp = eabk_model.fingerprint(root)
+            fp = self._fingerprint()
             hit = self.cache.get(str(root))
             if hit and hit[0] == fp:
                 return hit[1]
-            data = json.dumps(eabk_model.build_model(root), ensure_ascii=False).encode("utf-8")
+            model = eabk_model.build_model(root)
+            model["tasks"] = self.tasks.list(root, self._imported(root, model))
+            model["meta"]["taskStorage"] = str(self.tasks.path)
+            model["meta"]["stateFingerprint"] = str(root) + "#" + fp
+            data = json.dumps(model, ensure_ascii=False).encode("utf-8")
             self.cache = {str(root): (fp, data)}
             return data
 
+    def update_task(self, payload: dict) -> dict:
+        with self.lock:
+            if payload.get("repo") != str(self.root):
+                raise ValueError("repository changed; reload before editing tasks")
+            model = eabk_model.build_model(self.root)
+            result = self.tasks.update(self.root, payload, self._imported(self.root, model))
+            self.cache.clear()
+            return result
+
     def fingerprint(self) -> str:
         with self.lock:
-            return str(self.root) + "#" + eabk_model.fingerprint(self.root)
+            return str(self.root) + "#" + self._fingerprint()
+
+    def _fingerprint(self) -> str:
+        stamp = self.tasks.path.stat().st_mtime_ns if self.tasks.path.exists() else 0
+        remote = self._remote(self.root)
+        refreshed = self.remote.get(str(self.root), {}).get("_at", "")
+        return eabk_model.fingerprint(self.root) + "#" + str(stamp) + "#" + str(refreshed) + "#" + "|".join(
+            str(remote.get(k)) for k in ("status", "fetchedAt", "loading"))
 
     @staticmethod
     def _catalog_update(root: Path, requirement_id: str) -> dict:
         model = eabk_model.build_model(root)
         reqs = [item for item in model["reqs"] if item["id"] == requirement_id]
         features = [item for item in model["catalog"]["features"] if item["req"] == requirement_id]
+        features = [item for item in features if not item.get("derived")]
         if len(reqs) != 1 or len(features) != 1:
             code = "unsupported" if not reqs else "invalid-input"
             raise MaintenanceError(code, "unsupported requirement" if code == "unsupported" else "input condition is not unique")
@@ -259,9 +331,15 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"error": "bad host"}, HTTPStatus.FORBIDDEN)
         path = urlparse(self.path).path
         if path == "/api/model":
-            return self.send_bytes(STATE.model_bytes(), MIME[".json"])
+            try:
+                return self.send_bytes(STATE.model_bytes(), MIME[".json"])
+            except (repo_scan.ScanError, OSError, ValueError, sqlite3.Error) as exc:
+                return self.send_json({"error": "analysis-failed", "detail": str(exc)}, HTTPStatus.UNPROCESSABLE_ENTITY)
         if path == "/api/fingerprint":
-            return self.send_json({"fingerprint": STATE.fingerprint()})
+            try:
+                return self.send_json({"fingerprint": STATE.fingerprint()})
+            except (repo_scan.ScanError, OSError) as exc:
+                return self.send_json({"error": "analysis-failed", "detail": str(exc)}, HTTPStatus.UNPROCESSABLE_ENTITY)
         if path == "/api/repo":
             return self.send_json({"repo": str(STATE.root)})
         rel = "index.html" if path in ("/", "") else path.lstrip("/")
@@ -282,13 +360,25 @@ class Handler(BaseHTTPRequestHandler):
             if picked is None:
                 return self.send_json({"error": "picker-unavailable"}, HTTPStatus.NOT_IMPLEMENTED)
             return self.send_json({"path": picked})
-        if endpoint not in ("/api/repo", "/api/maintenance/preview", "/api/maintenance/apply"):
+        if endpoint == "/api/remote/refresh":
+            self.rfile.read(min(int(self.headers.get("Content-Length") or 0), 8192))
+            return self.send_json(STATE.refresh_remote())
+        if endpoint not in ("/api/repo", "/api/tasks", "/api/maintenance/preview", "/api/maintenance/apply"):
             return self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
         try:
             length = int(self.headers.get("Content-Length") or 0)
             payload = json.loads(self.rfile.read(min(length, 8192)) or b"{}")
+            if not isinstance(payload, dict) or length > 8192:
+                raise ValueError("invalid payload")
         except (ValueError, TypeError):
             return self.send_json({"error": "bad request"}, HTTPStatus.BAD_REQUEST)
+        if endpoint == "/api/tasks":
+            try:
+                return self.send_json(STATE.update_task(payload))
+            except ValueError as exc:
+                return self.send_json({"error": "invalid-task", "detail": str(exc)}, HTTPStatus.CONFLICT)
+            except (repo_scan.ScanError, OSError, sqlite3.Error) as exc:
+                return self.send_json({"error": "task-save-failed", "detail": str(exc)}, HTTPStatus.UNPROCESSABLE_ENTITY)
         if endpoint.startswith("/api/maintenance/"):
             try:
                 if endpoint.endswith("/preview"):
@@ -306,8 +396,13 @@ class Handler(BaseHTTPRequestHandler):
         if not raw or not p.is_dir():
             return self.send_json({"error": "not-a-directory"}, HTTPStatus.BAD_REQUEST)
         root = eabk_model.find_root(p)
-        if not eabk_model.can_view(root):
-            return self.send_json({"error": "no-data-layer", "repo": str(root)}, HTTPStatus.UNPROCESSABLE_ENTITY)
+        try:
+            model = eabk_model.build_model(root)
+            if model["meta"].get("error"):
+                return self.send_json({"error": "no-data-layer", "repo": str(root)}, HTTPStatus.UNPROCESSABLE_ENTITY)
+            STATE.tasks.list(root, model.get("tasks", []))
+        except (repo_scan.ScanError, OSError, ValueError, sqlite3.Error) as exc:
+            return self.send_json({"error": "analysis-failed", "detail": str(exc)}, HTTPStatus.UNPROCESSABLE_ENTITY)
         STATE.set_root(root)
         self.send_json({"repo": str(root)})
 
@@ -360,6 +455,11 @@ def format_report(report: dict) -> str:
                      f"requirement-docs={', '.join(d['requirementDocs']) or '-'} requirements={d['requirements']} "
                      f"linked-to-code={d['linkedRequirements']} code-files={d['codeFiles']} test-files={d['testFiles']} "
                      f"components={d['components']}")
+    if report.get("repository"):
+        inv = report["repository"]
+        lines.append(f"  repository: {inv.get('counts', {})} tasks={len(inv.get('tasks', []))} "
+                     f"dependencies={len(inv.get('dependencies', []))} commits={len(inv.get('history', []))}")
+        lines += [f"    scope: {item}" for item in inv.get("unavailable", [])]
     lines.append("  result: OK - start the viewer with `python HVE-Studio/studio.py --repo <repo>`" if report["ok"]
                  else "  result: " + no_data_message(report["root"]))
     return "\n".join(lines)
@@ -367,7 +467,7 @@ def format_report(report: dict) -> str:
 
 def no_data_message(root) -> str:
     return (f"no EABK data layer in {root} (docs/requirements-definition.md, docs/catalog.md or tests/system/ledger.json), "
-            f"and nothing to show in code mode (no source files, no requirement IDs in markdown). "
+            f"and not a local Git repository. "
             f"Pass a repository with --repo, or see {GUIDE}")
 
 
@@ -381,6 +481,8 @@ def main(argv=None) -> int:
                     help="first screen: pm=dashboard, architect=2D map, swe=tables")
     ap.add_argument("--check", action="store_true",
                     help="list the data-layer files found/missing and record counts, then exit (0 = data layer found, 1 = none)")
+    ap.add_argument("--no-remote", action="store_true",
+                    help="do not read GitHub issues, pull requests and Actions runs through the local GitHub CLI (gh)")
     args = ap.parse_args(argv)
     if args.repo is not None:
         root = eabk_model.find_root(Path(args.repo))
@@ -388,13 +490,24 @@ def main(argv=None) -> int:
         cwd_root = eabk_model.find_root(Path.cwd())
         root = cwd_root if eabk_model.can_view(cwd_root) else eabk_model.find_root(HERE.parent)
     if args.check:
-        report = eabk_model.data_layer_report(root)
+        try:
+            report = eabk_model.data_layer_report(root)
+        except (repo_scan.ScanError, OSError) as exc:
+            print(f"repository analysis failed: {exc}", file=sys.stderr)
+            return 1
         print(format_report(report))
         return 0 if report["ok"] else 1
-    if not eabk_model.can_view(root):
+    try:
+        initial = eabk_model.build_model(root)
+    except (repo_scan.ScanError, OSError) as exc:
+        print(f"repository analysis failed: {exc}", file=sys.stderr)
+        return 1
+    if initial["meta"].get("error"):
         print(no_data_message(root), file=sys.stderr)
         return 1
-    STATE = State(root)
+    STATE = State(root, remote=not args.no_remote)
+    with STATE.lock:
+        STATE._remote(root)  # start the GitHub fetch while the server starts
     srv = None
     for port in range(args.port, args.port + 20):
         try:

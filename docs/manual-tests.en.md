@@ -4,6 +4,12 @@
 
 A list of acceptance criteria that are hard to judge automatically with a command and are verified by following a procedure.
 
+## FR-1088 AC-480 AC-481 AC-482 AC-483 Repository analysis and tasks
+
+Run `python -m pytest HVE-Studio/tests/test_repository_workspace.py -q` for model, HTTP and real-browser checks covering empty/document-only/large repositories, management-data precedence, diagnostics, refresh, persistence, isolation and save errors.
+
+For a manual check, open any local Git repository and follow Dashboard → Repository analysis & tasks. Compare paths and lines against originals, create a task and change its status, restart and verify persistence, then switch repositories and verify isolation. Original bytes and modification times must remain unchanged. Review diagnostics for unavailable information; no LLM is required.
+
 ## NFR-COMPAT-002 AC-090 Behavior unchanged by performance improvements
 
 1. For the commit before the improvement and the commit after it, run `python scripts/verify.py --docs-only` and `python scripts/rdcheck.py` against the same repository state, and record the standard output, standard error, and exit code.

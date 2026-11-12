@@ -18,7 +18,9 @@ Switch screens with the navigation at the top (9 items). Point at any item and a
 | ⑥ External integrations | A list and details of integrations with external apps and data (list and detail views were added in FR-1042) |
 | ⑦ Source mapping | The catalog's file paths, and their mapping to requirements, components, and tests |
 | ⑧ Tables | The original rows of all records (sorting, CSV) |
-| ⑨ Consistency maintenance | The operation that aligns the catalog's titles and decision states with the requirements source of truth (the only place where writing happens) |
+| ⑨ Consistency maintenance | Aligns catalog titles and decision states with requirements (the only operation that changes originals) |
+
+Open **Repository analysis & tasks** from ① Dashboard for files, dependencies, Git history, diagnostics and tasks. Task edits persist separately from originals. See [S8](08-data-reference.en.md) for coverage.
 
 ### Kinds of management data and their primary place to browse
 

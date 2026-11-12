@@ -36,6 +36,7 @@ const ROUTES = {
   maintenance: { icon: 'maintenance', mount: mountMaintenance },
   structure: { navKey: 'maintenance', hidden: true, mount: mountStructure },
   consistency: { navKey: 'maintenance', hidden: true, mount: mountConsistency },
+  workspace: { navKey: 'dashboard', hidden: true, load: () => import('./workspace.js') },
 };
 // nav items in display order: key → route it opens (the map opens in the dimension chosen last)
 const NAV = ['dashboard', 'implstatus', 'map', 'diagrams', 'entities', 'integrations', 'source', 'tables', 'maintenance'];
@@ -116,7 +117,7 @@ function problemPanel() {
     return statePanel({ state: 'error', heading: t('state.stale.h'), description: `${t('state.stale.d')} (${(modelError && modelError.message) || modelError})`,
       action: el('button', { type: 'button', class: 'btn', onclick: () => loadModel(true).then(() => { modelError = null; route(); }).catch((e) => { modelError = e; route(); }) }, icon('stale', { size: 16 }), t('state.retry')) });
   }
-  if (store.model && store.nodes.size === 0) {
+  if (store.model && store.nodes.size === 0 && routeName() !== 'workspace' && routeName() !== 'dashboard') {
     return statePanel({ state: 'empty', heading: t('state.empty.h'), description: t('state.empty.d'),
       action: el('button', { type: 'button', class: 'btn ghost', onclick: () => document.getElementById('repoBtn').click() }, icon('folder', { size: 16 }), t('state.empty.a')) });
   }
@@ -201,6 +202,7 @@ function mountMapDim(host, name, inner) {
 async function loadModel(quiet) {
   const res = await fetch('/api/model', { cache: 'no-store' });
   const model = await res.json();
+  if (!res.ok) throw new Error(model.detail || model.error || 'HTTP ' + res.status);
   store.load(model);
   setDocName(model.meta.name);   // the project name is managed data: shown as written
   document.getElementById('repoBtn').replaceChildren(icon('folder', { size: 16 }), ' ' + model.meta.name);
@@ -208,8 +210,10 @@ async function loadModel(quiet) {
   const modelTime = document.getElementById('modelTime');
   modelTime.dateTime = model.meta.generatedAt;
   modelTime.textContent = model.meta.generatedAt;
-  const f = await (await fetch('/api/fingerprint')).json();
-  fingerprint = f.fingerprint;
+  const fp = await fetch('/api/fingerprint', { cache: 'no-store' });
+  const f = await fp.json();
+  if (!fp.ok) throw new Error(f.detail || f.error || 'HTTP ' + fp.status);
+  fingerprint = model.meta.stateFingerprint || f.fingerprint; // the model's own state avoids a load/poll race
   if (!quiet) route();
 }
 
@@ -330,7 +334,7 @@ async function pickAndSwitch() {
     return;
   }
   const { path } = await res.json().catch(() => ({}));
-  await switchRepository(cur, path);
+  try { await switchRepository(cur, path); } catch (e) { toast(t('repo.bad') + ' ' + String(e.message || e)); }
 }
 document.getElementById('repoBtn').addEventListener('click', () => { pickAndSwitch(); });
 // NFR-OPS-003 AC-028: on failure keep the current model, show cause + Retry / Back.
@@ -339,7 +343,7 @@ async function switchRepository(cur, path) {
   const res = await fetch('/api/repo', { method: 'POST', headers: HDR, body: JSON.stringify({ path }) });
   if (!res.ok) {
     const j = await res.json().catch(() => ({}));
-    toast(j.error === 'no-data-layer' ? t('repo.nodata') : t('repo.bad'), [
+    toast((j.error === 'no-data-layer' ? t('repo.nodata') : t('repo.bad')) + (j.detail ? ' ' + j.detail : ''), [
       { label: t('repo.retry'), run: () => pickAndSwitch() },
       { label: t('repo.back'), run: () => {} },
     ]);
@@ -354,12 +358,23 @@ async function switchRepository(cur, path) {
   await loadModel();
 }window.addEventListener('hashchange', route);
 
+let refreshFailed = false;
 setInterval(async () => {
   if (document.hidden || !store.model || routeName() === 'maintenance') return;
   try {
-    const f = await (await fetch('/api/fingerprint', { cache: 'no-store' })).json();
-    if (fingerprint && f.fingerprint !== fingerprint) { toast(t('update.avail')); await loadModel(true); route(); }
-  } catch { /* server stopped */ }
+    const response = await fetch('/api/fingerprint', { cache: 'no-store' });
+    const f = await response.json();
+    if (!response.ok) throw new Error(f.detail || f.error || 'HTTP ' + response.status);
+    if (fingerprint && f.fingerprint !== fingerprint) {
+      toast(t('update.avail'));
+      await loadModel(true);
+      if (routeName() !== 'workspace') route();
+    }
+    refreshFailed = false;
+  } catch (e) {
+    if (!refreshFailed) toast(t('state.stale.d') + ' ' + String(e.message || e));
+    refreshFailed = true;
+  }
 }, 4000);
 
 const headerEl = document.querySelector('.top');

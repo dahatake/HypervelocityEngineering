@@ -165,11 +165,16 @@ def build() -> dict:
                 sets["infixes"].add(lit)
     head = commits[-1]
     current = constants((ROOT / INSTALLER).read_text(encoding="utf-8"))
+    gsrc, gdest = current.get("GUIDE_SRC", ""), current.get("GUIDE_DEST", "")
+    for rel in current.get("MANAGED", []):
+        dest = (gdest + rel[len(gsrc):]) if gsrc and rel.startswith(gsrc) else rel
+        sources_of.setdefault(dest, set()).add(rel)
+    for rel in current.get("TEMPLATES", []):
+        template_sources.setdefault(rel, set()).add(TEMPLATE_DIR + rel)
     hashes = blob_hashes({s for v in sources_of.values() for s in v} | {s for v in template_sources.values() for s in v})
 
     def merged(mapping: Dict[str, Set[str]]) -> Dict[str, List[str]]:
         return {d: sorted(set().union(*(hashes.get(s, set()) for s in srcs))) for d, srcs in sorted(mapping.items())}
-    gsrc, gdest = current.get("GUIDE_SRC", ""), current.get("GUIDE_DEST", "")
     shipped = {(gdest + r[len(gsrc):]) if gsrc and r.startswith(gsrc) else r: r for r in current.get("MANAGED", [])}
     lib = (ROOT / "scripts" / "ebaklib.py").read_text(encoding="utf-8")
     version = next((l.split("=", 1)[1].strip().strip('"') for l in lib.splitlines() if l.startswith("TOOLKIT_VERSION")), "unknown")

@@ -118,7 +118,8 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1084 | EABK Lite の検査プロファイル（lite／full） | 承認済み | `scripts/rdcheck.py`、`scripts/verify.py`、`scripts/rdfix.py` | `tests/toolkit/test_lite.py` | - |
 | FR-1085 | オーケストレーションを持たない配布と旧版からの移行 | 承認済み | `tools/install.py` | `tests/toolkit/test_install.py` | - |
 | FR-1087 | 全版に対応したアンインストール | 承認済み | `tools/uninstall.py`、`tools/uninstall-catalog.json`、`tools/build-uninstall-catalog.py`、`tools/uninstall.ps1`、`tools/uninstall.sh` | `tests/toolkit/test_uninstall.py`、`tools/verify-uninstall-matrix.py`、`docs/manual-tests.md` | - |
-| FR-1086 | EABK を導入していないリポジトリの表示（コードのモード） | 承認済み | `HVE-Studio/eabk_model.py`、`HVE-Studio/studio.py` | `HVE-Studio/tests/test_studio.py` | - |
+| FR-1086 | EABK を導入していないリポジトリの表示（コードのモード） | 承認済み（依頼 2026-11-12） | `HVE-Studio/eabk_model.py`、`HVE-Studio/studio.py`、`HVE-Studio/repo_scan.py` | `HVE-Studio/tests/test_studio.py`、`HVE-Studio/tests/test_repository_workspace.py` | 管理データモデル |
+| FR-1088 | リポジトリ分析と分離されたタスク管理 | 承認済み（依頼 2026-11-12） | `HVE-Studio/repo_scan.py`、`HVE-Studio/remote_github.py`、`HVE-Studio/task_state.py`、`HVE-Studio/eabk_model.py`、`HVE-Studio/studio.py`、`HVE-Studio/web/js/workspace.js`、`HVE-Studio/web/js/dashboard.js`、`HVE-Studio/web/js/app.js`、`HVE-Studio/web/js/i18n.js`、`HVE-Studio/web/app.css` | `HVE-Studio/tests/test_repository_workspace.py` | 管理データモデル、HTTP サーバー、ストア |
 
 
 ## API・イベント
@@ -203,6 +204,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | `GET /api/repo` | `HVE-Studio/studio.py` | FR-010 |
 | `POST /api/repo` | `HVE-Studio/studio.py` | FR-010、NFR-OPS-003 |
 | `POST /api/repo/pick` | `HVE-Studio/studio.py` | FR-010 |
+| `POST /api/tasks` | `HVE-Studio/studio.py` | FR-1088 |
 | 管理データフィンガープリント変化 | `HVE-Studio/web/js/app.js` | FR-012、NFR-OPS-002 |
 
 ## テーブル
@@ -213,14 +215,15 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | 機能・API・テーブル・共通部品 | `docs/catalog.md` | 対象リポジトリのカタログ | FR-001、FR-007、FR-009 |
 | System Test 台帳 | `tests/system/ledger.json` | 対象リポジトリの台帳 | FR-001、FR-009、NFR-OPS-002 |
 | ID 台帳 | `docs/id-registry.md` | 対象リポジトリの ID 台帳 | FR-001、FR-009、NFR-OPS-004 |
+| Studio タスク・取込状態の上書き | `HVE-Studio/task_state.py` | Studio 専用の SQLite（対象リポジトリ外） | FR-1088 |
 
 ## 共通部品
 
 | 部品名 | ファイル | 用途 | 使っている要求 ID |
 |---|---|---|---|
-| 管理データモデル | `HVE-Studio/eabk_model.py` | 正本ファイルを読み、ノードと関係を構築 | FR-001、FR-009、FR-1003、FR-1005、FR-1006、FR-1013、FR-1014、FR-1021、FR-1022、FR-1025、FR-1026、FR-1027、FR-1028、FR-1029、FR-1034、FR-1042、FR-1061、NFR-COMPAT-003、NFR-OPS-004、NFR-SEC-002 |
-| HTTP サーバー | `HVE-Studio/studio.py` | 127.0.0.1 限定の読取 API と静的配信 | FR-010、FR-1001、NFR-OPS-003、NFR-SEC-001、NFR-SEC-002 |
-| ストア | `HVE-Studio/web/js/store.js` | モデル、選択、関連、表現間の状態を共有 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008、FR-1002、FR-1003、FR-1005、FR-1006、FR-1011、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1029、FR-1031、FR-1033、FR-1034、FR-1040、FR-1041、FR-1042、FR-1061 |
+| 管理データモデル | `HVE-Studio/eabk_model.py`、`HVE-Studio/repo_scan.py`、`HVE-Studio/remote_github.py` | 正本とローカル Git を読み、取得範囲・出典・ノードと関係を構築 | FR-001、FR-009、FR-1003、FR-1005、FR-1006、FR-1013、FR-1014、FR-1021、FR-1022、FR-1025、FR-1026、FR-1027、FR-1028、FR-1029、FR-1034、FR-1042、FR-1061、FR-1086、FR-1088、NFR-COMPAT-003、NFR-OPS-004、NFR-SEC-002 |
+| HTTP サーバー | `HVE-Studio/studio.py` | 127.0.0.1 限定の読取 API と静的配信 | FR-010、FR-1001、FR-1088、NFR-OPS-003、NFR-SEC-001、NFR-SEC-002 |
+| ストア | `HVE-Studio/web/js/store.js` | モデル、選択、関連、表現間の状態を共有 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008、FR-1002、FR-1003、FR-1005、FR-1006、FR-1011、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1029、FR-1031、FR-1033、FR-1034、FR-1040、FR-1041、FR-1042、FR-1061、FR-1088 |
 | UI 部品 | `HVE-Studio/web/js/ui.js`, `HVE-Studio/web/js/xref.js` | 表示、詳細、通知、リンク、状態表示の共通の形 `statePanel`（読込中・空・エラー・古い。`data-testid=state-panel`）、同梱のアイコン 1 セット `icon()`（16・20・24px）、系列色のトークン読み出し `token()` / `TYPE_COLOR` / `STATUS_COLOR` / `IMPL_COLOR` | FR-006、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1028、FR-1031、FR-1033、FR-1040、FR-1041、FR-1042、FR-1047、FR-1048、FR-1061、FR-1079、FR-1080、NFR-A11Y-001、NFR-OPS-003、NFR-PERF-006、NFR-UX-005、NFR-UX-007、NFR-UX-010 |
 | 言語辞書 | `HVE-Studio/web/js/i18n.js` | JA/EN の辞書（`t()`・`data-i18n`・`data-i18n-title`・`data-i18n-ph`・`data-i18n-aria`）と言語の切替 `setLang()`・通知 `onLang()`。選択は言語コード（`ja`／`en` のみ）を localStorage `eabk-studio.lang` に保存・起動時に復元し、`<html lang>`・文書タイトル・ヘッダーの言語トグル `#lang`（JA／EN の button、`aria-pressed`）を更新する。画面の文言の直書きは持たない（管理データの値は訳さない。静的検査は `HVE-Studio/tests/test_i18n_coverage.py`） | FR-011 |
 | デザイン基盤 | `HVE-Studio/web/tokens.css`, `HVE-Studio/web/app.css`, `HVE-Studio/web/sz.css`, `HVE-Studio/web/js/theme.js`, `HVE-Studio/web/index.html` | Fluent 2 に寄せた名前付きトークン（`--color-*`・`--font-size-*`・`--space-*`・`--radius-*`・`--shadow-*`・`--stroke-*`・`--duration-*`・`--ease-*`、部品の種類ごとの段階 `--radius-control`・`--radius-container`・`--radius-overlay`・`--radius-tooltip`・`--elevation-*`、素材 `--material-*`、系列色 `--viz-*`、3D 素材色 `--scene-*`。tokens.css の 1 か所）、ライト/ダーク/システムのテーマ（`data-theme`・`data-theme-choice`、テーマ名のみ localStorage `eabk-studio.theme` に保存・起動時に復元、不正値は system）、強制色・動きの軽減・フォーカス表示、外枠、ナビゲーション、検索、通知 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-008、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1032、FR-1040、FR-1041、FR-1042、FR-1047、FR-1048、FR-1068、FR-1069、FR-1070、FR-1072、FR-1079、FR-1080、NFR-A11Y-001、NFR-PERF-006、NFR-UX-016 |

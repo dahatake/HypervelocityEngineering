@@ -9,7 +9,7 @@ If you meet the following, you can use HVE Studio. Items that have been confirme
 | Item | Prerequisite | Basis / confirmation status |
 |---|---|---|
 | Python | Python 3.9 or later is required. | Confirmed: [`README.md`](../../HVE-Studio/README.md) |
-| Additional installation | No additional installation is needed. three.js for 3D display is bundled. | Confirmed: [`README.md`](../../HVE-Studio/README.md) |
+| Additional installation | No additional Python packages are needed. three.js for 3D display is bundled. Git repository analysis requires the `git` command. | Confirmed: [`README.md`](../../HVE-Studio/README.md), `repo_scan.py` |
 | Launch script | You can use `start.ps1` on Windows and `start.sh` on macOS/Linux. The range of operation checks per OS version is unconfirmed. | Confirmed: [`start.ps1`](../../HVE-Studio/start.ps1), [`start.sh`](../../HVE-Studio/start.sh) |
 | Browser | A browser that can open a local URL is required. Supported browser names and versions are unconfirmed. | Confirmed: the specification opens a browser at launch. Supported range is unconfirmed. |
 | Target repository | Specify a repository that has EABK management data (any location where `docs/requirements-definition.md` or `docs/catalog.md` can be found), or a git repository without EABK (code mode; see "Using Studio without EABK" below). | Confirmed: [`README.md`](../../HVE-Studio/README.md) |
@@ -54,7 +54,7 @@ Role-specific walkthroughs are in [05-product-manager.en.md](05-product-manager.
 
 ## Viewing another repository
 
-Press the repository name at the top right of the screen and enter a folder path. You don't need to restart. You can switch to a repository with a data layer or to a git repository showable in code mode. For a folder that is neither (an empty folder, a non-git folder), a message appears and the view doesn't switch.
+Press the repository name and select a folder in the OS dialog. No restart is needed. Any local Git repository, including empty or document-only repositories, or a folder with management records can be opened. Invalid targets show a reason and keep the current repository.
 
 ## Using Studio without EABK (code mode)
 
@@ -67,9 +67,11 @@ python HVE-Studio/studio.py --repo C:\path\to\any-git-repo
 
 `--check` prints a `mode: code (...) requirement-docs=… requirements=… linked-to-code=… code-files=… test-files=… components=…` line and exits 0.
 
-- If the repository has a data layer, Studio reads it as before.
+- Management records remain authoritative and are supplemented with local Git inventory and explicit code references. Git analysis requires the `git` command.
 - If not, Studio derives a read-only model: requirement IDs (`FR-…`, `NFR-…`) from the first column of markdown tables and from headings (`docs/PRD.md` and files whose names contain prd, requirement, 要求 or spec are read first), the code and test files that mention each ID (catalog rows: implementation files / tests), and source files grouped into components (shared parts).
-- Every screen (dashboard, map, diagrams, source mapping, tables) works. The ledger and acceptance criteria are empty.
-- Code mode applies only to the root of a git repository (a plain folder is never walked). An empty or non-git folder prints "no EABK data layer … and nothing to show in code mode" and exits 1.
+- Existing views remain available. Written acceptance criteria are preserved and missing information is not guessed.
+- Empty Git repositories are supported. Folders with neither management records nor Git are not scanned and exit 1 with a reason.
 - Without `--repo`, Studio opens the current folder if it has a data layer or is a git repository showable in code mode, otherwise Studio's own repository.
 - Example: on `C:\GitHub\VideoCreator` it showed 103 requirements from `docs/PRD.md`, 56 of them linked to code or tests, 78 code files, and 6 components.
+
+Open **Repository analysis & tasks** from Dashboard to inspect files, dependencies, Git history, diagnostics and checklist/TODO tasks. New tasks and status changes persist in Studio-owned storage without changing originals. See the [data reference](08-data-reference.en.md) for coverage, exclusions and storage. No LLM is used.

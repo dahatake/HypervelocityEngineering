@@ -16,7 +16,7 @@
     "AC-008": "sha256:361dae2866606a9a",
     "AC-010": "sha256:a808d63b7048cb45",
     "AC-053": "sha256:2a06d0615c40dd08",
-    "AC-037": "sha256:46c798f3729c2c06",
+    "AC-037": "sha256:9812fbfc61197a34",
     "AC-044": "sha256:4261ddc0095208fa",
     "AC-045": "sha256:797391cd7043133f",
     "AC-046": "sha256:ec8fcb9abcb2cef1",
@@ -624,14 +624,14 @@
       "ac_ids": [
         "AC-037"
       ],
-      "title": "All documented startup prerequisites, evidence, and unknowns",
+      "title": "Startup prerequisites for management folders and arbitrary local Git repositories",
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_first_steps_consolidates_startup_prerequisites_and_unknowns",
       "canary": false,
       "status": "pass",
-      "last_commit": "30ae6c99",
-      "last_run_at": "2026-11-06T06:17:50+09:00",
-      "evidence": "work/runs/202611060524/logs/system-test/E2E-015-202611060610.log",
+      "last_commit": "c76a6d3e",
+      "last_run_at": "2026-11-12T10:36:25+09:00",
+      "evidence": "work/system-test/logs/system-test/E2E-015-202611121036.log",
       "history": [
         {
           "at": "2026-10-09T22:13:44+09:00",
@@ -650,6 +650,12 @@
           "by": "test-designer",
           "change": "title: 'First-steps startup prerequisites and unknowns' -> 'All documented startup prerequisites, evidence, and unknowns'",
           "reason": "AC本文の未検証句と異常系を補い、期待値を要求定義書だけから強化"
+        },
+        {
+          "at": "2026-11-12T10:33:59+09:00",
+          "by": "script",
+          "change": "title: 'All documented startup prerequisites, evidence, and unknowns' -> 'Startup prerequisites for management folders and arbitrary local Git repositories'",
+          "reason": "FR-1088: Git analysis requires git; empty Git repositories no longer require management data. Existing prerequisite assertions are retained and Git coverage is added."
         }
       ]
     },

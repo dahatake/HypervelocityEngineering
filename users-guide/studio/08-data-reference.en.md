@@ -5,9 +5,9 @@
 This is a list of **which file, which section, column, or field** each HVE Studio screen and feature reads, and **how it calculates** what it displays. Use it when you want to check the basis of a number or diagram ("What is this 62% a percentage of?").
 The content was verified against the implementation (`HVE-Studio/eabk_model.py`, `studio.py`, `web/js/*.js`).
 
-- In a repository with a data layer, Studio reads **only data-layer files**. It does not open the contents of source code. It uses the **path strings** written in the catalog and the ledger merely as names (S8.1, S8.8).
+- Management records remain authoritative. Local Git inventory, explicit requirement references, imports, TODO comments and additional requirement documents supplement them. Repository code is not executed.
 - In a git repository without a data layer, Studio derives a read-only model in code mode ("Code mode" after S8.1).
-- Normal browsing is read-only. The only thing Studio writes is `docs/catalog.md`, and only when you confirm and run "Consistency maintenance" (S8.9).
+- Browsing is read-only. Changes to originals are limited to confirmed catalog maintenance (S8.9). Explicit task edits are stored separately outside the repository.
 - Communication is `127.0.0.1` only (S8.10).
 
 ## S8.1 Files Read
@@ -26,7 +26,7 @@ You can change the locations with `management_files` in the target repository's 
 - At startup, you can run `python HVE-Studio/studio.py --check` to see which files were found and how many items were parsed ([04-troubleshooting.en.md](04-troubleshooting.en.md)).
 - Requirements are collected from **both** `docs/requirements-definition.md` and `docs/requirements/*.md`. If the same ID appears two or more times, the first one is used, and the rest are reported as duplicates on the Structure screen.
 - How things look when a file is missing is described in S8.7.
-- Basis for not reading code contents: the test `test_nothing_outside_the_data_layer_is_read` (`HVE-Studio/tests/test_studio.py` in the HVE repository) verifies that, in a repository with a data layer, requirement IDs written in files under `src/` are not read (so does `test_data_layer_wins_over_code_mode`).
+- `HVE-Studio/tests/test_repository_workspace.py` verifies management-data precedence, additional definitions, explicit code references and unchanged originals. Non-Git management folders still read only management files.
 
 ### Code mode (a git repository without a data layer, FR-1086)
 
@@ -38,9 +38,19 @@ At the root of a git repository that has none of `docs/requirements-definition.m
 | Links from requirements to code and tests | Source files that mention the requirement ID | Implementation files / tests of the feature rows in the catalog |
 | Components | Source files grouped by location | Shared parts |
 
-- Every screen works. The ledger and acceptance criteria are empty.
+- Existing views remain available. Written acceptance criteria are preserved; missing requirements, approvals and passing test results are not guessed.
 - `--check` prints `mode: code (...) requirement-docs=… requirements=… linked-to-code=… code-files=… test-files=… components=…`.
-- A folder that is not a git repository is never walked. If there is nothing to show, it exits 1 ([01-first-steps.en.md](01-first-steps.en.md)).
+- Folders with neither Git nor management records are not scanned and exit 1. Empty Git repositories open successfully.
+
+### Repository analysis & tasks (`#/workspace`)
+
+Open the link from Dashboard. The workspace shows file paths, kinds, sizes, analysis status, dependencies from `package.json` and `requirements*.txt`, static local Python/JS/TS imports, all history reachable from local Git refs, document checklists and TODO / FIXME comments. Records are not truncated by file count; tables support filtering and pagination.
+
+Initialized submodule contents are analysed. Ignored and generated paths are listed as inventory-only rows without reading their content; potential credential filenames and symlinks are not read. Supported UTF-8 text files are read up to 1,000,000 bytes each; skipped, unreadable and unsupported content and uninitialized submodules are identified.
+
+When the remote is GitHub, issues, pull requests and Actions runs are fetched read-only through the authenticated `gh` CLI (in memory only, never written to disk), and issues appear as `github:issue:N` tasks. A missing `gh`, missing authentication (`gh auth login`) or a non-GitHub remote is reported with its reason. `HVE_STUDIO_REMOTE_LIMIT` (default 10000) caps each list and reports truncation. The three lists are fetched in parallel and shown as each one finishes; `HVE_STUDIO_REMOTE_TIMEOUT` (seconds, default 600) caps the wait per list. `--no-remote` disables remote fetching. Missing business semantics are not invented.
+
+Task creation, title edits and status changes persist in `%LOCALAPPDATA%\hve-studio\tasks.sqlite3` on Windows, or `~/.local/share/hve-studio/tasks.sqlite3` elsewhere, isolated by canonical repository path. `HVE_STUDIO_DATA_DIR` can select another directory outside the repository. Imported status overrides can be reset and never change originals. No LLM is used; there are no LLM charges or budget settings.
 
 ## S8.2 Items Extracted from the Requirements Definition
 
