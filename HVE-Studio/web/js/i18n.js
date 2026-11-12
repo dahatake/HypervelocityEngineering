@@ -5,6 +5,11 @@ const listeners = new Set();
 
 const D = {
   ja: {
+    'data.title': 'HVE Studio 表示用管理データ', 'data.missing': '未作成（ファイルなし）', 'data.current': '作成済み・同期済み', 'data.stale': '作成済み・再同期が必要（現在の原本を表示）', 'data.conflict': 'ファイルあり・要確認（原本から表示）', 'data.unknown': 'ファイルの状態を確認中',
+    'data.sync': '作成・同期', 'data.delete': '生成データを削除', 'data.progress': '表示用管理データ処理の進捗', 'data.note': '生成物は要求の正本ではありません。削除後も原本から閲覧できます。',
+    'data.confirm': '表示用管理データだけを削除します。\n{path}\n要求定義書・ソース・テストは削除しません。実行しますか？',
+    'data.done.sync': '同期が完了しました', 'data.done.delete': '生成データを削除しました',
+    'data.phase.prepare': '準備', 'data.phase.inventory': 'ファイル一覧の取得', 'data.phase.files': 'ファイルの解析', 'data.phase.relationships': '関係の解析', 'data.phase.history': 'Git 履歴の取得', 'data.phase.model': '表示データの構築', 'data.phase.write': 'ファイルの保存', 'data.phase.delete': '削除対象の確認', 'data.phase.done': '完了',
     'splash.mark': 'H', 'splash.brand': 'HVE STUDIO', 'splash.kicker': 'HYPERVELOCITY ENGINEERING', 'splash.title': 'すべてのつながりを、ひとつの視点に。', 'splash.subtitle': 'プロジェクトの全体像を準備しています。', 'splash.initial': 'アプリケーションを読み込み中…', 'splash.progress': '起動の進捗', 'splash.note': '処理が完了した段階を表示しています。', 'splash.reload': '再読み込み',
     'splash.model': 'ソースと管理データを解析中…', 'splash.index': 'データと関連を準備中…', 'splash.view': '画面を準備中…', 'splash.done': '準備ができました',
     'ws.title': 'リポジトリ分析・タスク管理', 'ws.scope': 'ローカル Git の追跡済み・未追跡のファイル、初期化済みサブモジュールのファイル、無視対象と生成物のパス、全ローカル参照の履歴を取得します。GitHub の Issue・PR・Actions の実行は、この端末で認証済みの GitHub CLI（gh）から読み取り専用で取得し、メモリにだけ保持します。コードの実行・原本の変更はしません。',
@@ -30,7 +35,7 @@ const D = {
     'navd.integrations': '外部のアプリ・データとの連携（連携先・方向・方式・データ分類）の一覧と詳細を見ます。',
     'navd.source': 'カタログに載るファイルのパスと、要求・部品・試験との対応を見ます。',
     'navd.tables': '要求・試験ケース・質問・用語などの元の行を、種別ごとに一覧・並べ替え・CSV で見ます。',
-    'navd.maintenance': 'カタログの題名・決定状態と要求定義書の正本とのずれを確認し、合わせます（書込みはここだけ）。',
+    'navd.maintenance': 'カタログの題名・決定状態と要求定義書の正本とのずれを確認し、合わせます。',
     'int.none': '外部連携なし（外部連携カタログに項目がありません）。', 'int.sub': '外部連携カタログの連携を一覧し、行を選ぶと 16 観点・関連する要求と受入基準・責任分界を詳細で確認できます。',
     'int.col.id': 'ID', 'int.col.name': '名前', 'int.col.partner': '連携先', 'int.col.direction': '方向', 'int.col.method': '方式', 'int.col.dataClass': 'データ分類', 'int.col.pii': '個人情報',
     'int.col.status': '状態', 'int.col.reqs': '関連する要求', 'int.col.gaps': '未記載/TBD', 'int.flag': '要確認', 'int.flag.pii': '個人情報あり', 'int.flag.auth': '認証認可が TBD',
@@ -159,6 +164,11 @@ const D = {
         // @@ja6
       },
   en: {
+    'data.title': 'HVE Studio display data', 'data.missing': 'Not created (no file)', 'data.current': 'File created and synchronized', 'data.stale': 'File exists; sync needed (showing live sources)', 'data.conflict': 'File exists; needs attention (showing live sources)', 'data.unknown': 'Checking file status',
+    'data.sync': 'Create / sync', 'data.delete': 'Delete generated data', 'data.progress': 'Display data operation progress', 'data.note': 'Generated data is not authoritative. Originals remain viewable after deletion.',
+    'data.confirm': 'Delete only the generated display data?\n{path}\nRequirements, source code and tests will not be deleted.',
+    'data.done.sync': 'Synchronization completed', 'data.done.delete': 'Generated data deleted',
+    'data.phase.prepare': 'Preparing', 'data.phase.inventory': 'Listing files', 'data.phase.files': 'Analyzing files', 'data.phase.relationships': 'Analyzing relationships', 'data.phase.history': 'Reading Git history', 'data.phase.model': 'Building display data', 'data.phase.write': 'Saving file', 'data.phase.delete': 'Checking deletion target', 'data.phase.done': 'Completed',
     'splash.mark': 'H', 'splash.brand': 'HVE STUDIO', 'splash.kicker': 'HYPERVELOCITY ENGINEERING', 'splash.title': 'See the whole picture, in one place.', 'splash.subtitle': 'Preparing your project workspace.', 'splash.initial': 'Loading the application…', 'splash.progress': 'Startup progress', 'splash.note': 'Progress shows completed stages.', 'splash.reload': 'Reload',
     'splash.model': 'Analyzing source and project data…', 'splash.index': 'Preparing data and relationships…', 'splash.view': 'Preparing your view…', 'splash.done': 'Ready',
     'ws.title': 'Repository analysis & tasks', 'ws.scope': 'Collects tracked and untracked local Git files, files of initialized submodules, ignored and generated paths, and history of all local refs. GitHub issues, pull requests and Actions runs are read-only fetched through the GitHub CLI (gh) already authenticated on this device and kept in memory only. No repository code execution or changes to originals.',
@@ -184,7 +194,7 @@ const D = {
     'navd.integrations': 'See the list and details of integrations with external apps and data (partner, direction, method, data class).',
     'navd.source': 'See the file paths listed in the catalog and how they map to requirements, parts and tests.',
     'navd.tables': 'See the raw rows (requirements, test cases, questions, terms, …) by kind in a sortable list with CSV export.',
-    'navd.maintenance': 'Check where catalog titles and decision states differ from the requirements document and align them (the only write operation).',
+    'navd.maintenance': 'Check where catalog titles and decision states differ from the requirements document and align them.',
     'int.none': 'No integrations (the integration catalog has no items).', 'int.sub': 'Lists the integrations of the integration catalog; pick a row to see its 16 viewpoints, related requirements and acceptance criteria, and responsibility split.',
     'int.col.id': 'ID', 'int.col.name': 'Name', 'int.col.partner': 'Partner', 'int.col.direction': 'Direction', 'int.col.method': 'Method', 'int.col.dataClass': 'Data class', 'int.col.pii': 'Personal data',
     'int.col.status': 'Status', 'int.col.reqs': 'Related requirements', 'int.col.gaps': 'Missing/TBD', 'int.flag': 'Check', 'int.flag.pii': 'Has personal data', 'int.flag.auth': 'Auth is TBD',

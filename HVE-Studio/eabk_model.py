@@ -124,7 +124,23 @@ def parse_document(path: Path, rel: str) -> dict:
 
 def parse_text(text: str, rel: str) -> dict:
     """parse_document for markdown that is not a file (the documents synthesised in code mode)."""
-    lines = text.splitlines()
+    lines, comment, code = [], False, False
+    for raw in text.splitlines():
+        if not comment and raw.lstrip().startswith("```"):
+            code = not code
+        if code:
+            lines.append(raw)
+            continue
+        visible, remaining = "", raw
+        while remaining:
+            if comment:
+                _, end, remaining = remaining.partition("-->")
+                comment = not bool(end)
+            else:
+                part, start, remaining = remaining.partition("<!--")
+                visible += part
+                comment = bool(start)
+        lines.append(visible)
     headings, tables = [], []
     fence = False
     i = 0
@@ -1036,11 +1052,13 @@ def derive_hierarchy(model: dict, root: Path, docs: list[dict], cat_doc: dict | 
     return {"items": items, "tiers": tiers, "unclassified": UNCLASSIFIED, "kinds": list(HIER_KINDS)}
 
 
-def build_model(root: Path) -> dict:
+def build_model(root: Path, progress=None) -> dict:
     root = Path(root).resolve()
     files = load_config(root)
     warnings: list[str] = []
-    scan = repo_scan.scan(root, is_test_path)
+    scan = repo_scan.scan(root, is_test_path, progress=progress)
+    if progress:
+        progress({"phase": "model", "completed": 0, "total": 1})
     model: dict = {
         "meta": {"repo": str(root), "name": root.name, "studio": STUDIO_VERSION,
                  "generatedAt": generated_at(root), "files": {}, "fingerprint": fingerprint(root)},
@@ -1067,6 +1085,8 @@ def build_model(root: Path) -> dict:
     if not has_data_layer(root):
         if derived is None:
             model["meta"]["error"] = "no-data-layer"
+            if progress:
+                progress({"phase": "model", "completed": 1, "total": 1})
             return model
         docs, cat_doc, model["meta"]["derivedFrom"] = derived
         model["meta"]["mode"] = "code"
@@ -1322,6 +1342,8 @@ def build_model(root: Path) -> dict:
         latest = max(((root / f["path"]).stat().st_mtime for f in scan["files"]
                       if f["analysis"] == "read" and (root / f["path"]).is_file()), default=root.stat().st_mtime)
         model["meta"]["generatedAt"] = datetime.fromtimestamp(latest).astimezone().isoformat(timespec="seconds")
+    if progress:
+        progress({"phase": "model", "completed": 1, "total": 1})
     return model
 
 

@@ -121,12 +121,16 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1086 | EABK を導入していないリポジトリの表示（コードのモード） | 承認済み（依頼 2026-11-12） | `HVE-Studio/eabk_model.py`、`HVE-Studio/studio.py`、`HVE-Studio/repo_scan.py` | `HVE-Studio/tests/test_studio.py`、`HVE-Studio/tests/test_repository_workspace.py` | 管理データモデル |
 | FR-1088 | リポジトリ分析と分離されたタスク管理 | 承認済み（依頼 2026-11-12） | `HVE-Studio/repo_scan.py`、`HVE-Studio/remote_github.py`、`HVE-Studio/task_state.py`、`HVE-Studio/eabk_model.py`、`HVE-Studio/studio.py`、`HVE-Studio/web/js/workspace.js`、`HVE-Studio/web/js/dashboard.js`、`HVE-Studio/web/js/app.js`、`HVE-Studio/web/js/i18n.js`、`HVE-Studio/web/app.css` | `HVE-Studio/tests/test_repository_workspace.py` | 管理データモデル、HTTP サーバー、ストア |
 | FR-1089 | 起動時の進捗表示 | 承認済み | `HVE-Studio/studio.py`, `HVE-Studio/web/index.html`, `HVE-Studio/web/app.css`, `HVE-Studio/web/js/app.js`, `HVE-Studio/web/js/i18n.js` | `HVE-Studio/tests/test_splash_ui.py`, `HVE-Studio/tests/test_studio.py`, `tests/integration/test_semantic_zoom_ui.py` | HTTP サーバー、デザイン基盤 |
+| FR-1090 | 表示用管理データの作成・同期・削除 | 承認済み | `HVE-Studio/managed_data.py`、`HVE-Studio/studio.py`、`HVE-Studio/eabk_model.py`、`HVE-Studio/repo_scan.py`、`HVE-Studio/web/js/managed-data.js`、`HVE-Studio/web/js/app.js`、`HVE-Studio/web/js/i18n.js`、`HVE-Studio/web/index.html`、`HVE-Studio/web/app.css`、`tools/install.py`、`tools/build-uninstall-catalog.py` | `HVE-Studio/tests/test_managed_data.py`、`HVE-Studio/tests/test_managed_data_ui.py`、`tests/toolkit/test_install.py`、`tests/toolkit/test_uninstall.py` | 表示用管理データ、管理データモデル、HTTP サーバー |
 
 
 ## API・イベント
 
 | 名前 | 定義ファイル | 関連する要求 ID |
 |---|---|---|
+| 表示用管理データの状態（GET /api/data） | `HVE-Studio/studio.py` | FR-1090 |
+| 表示用管理データの同期（POST /api/data/sync） | `HVE-Studio/studio.py` | FR-1090 |
+| 表示用管理データの削除（POST /api/data/delete） | `HVE-Studio/studio.py` | FR-1090 |
 
 ## テーブル
 
@@ -137,6 +141,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 
 | 部品名 | ファイル | 用途 | 使っている要求 ID |
 |---|---|---|---|
+| 表示用管理データ | `HVE-Studio/managed_data.py`、`HVE-Studio/web/js/managed-data.js` | `.hve-studio/managed-data.json` にローカル解析結果を原子的に保存。所有・内容の整合・原本の変更を確認し、古い生成物は表示に使わない。CLI・installer・画面で進捗を共有し、生成先の存在・パス・状態を常設表示。削除は整合を確認できる生成ファイルだけで、正本・ソース・隣接ファイルを保持 | FR-1090 |
 | 3D カメラのプリセット | `HVE-Studio/web/js/camera3d.js` | 9 種のプリセット表 `CAMERA_PRESETS`（落ち着き→派手。Shot Size×Camera Angle×Camera Movement×Motion Character の 4 要素・語彙・別名表。1 か所）、操作部品 `createCameraRig`（`camera-presets`・`camera-detail`・`data-camera-auto`・`data-reduced-motion`・`window.__eabk3d.camera()`）、動きの軽減で Static、手動操作・Esc・停止ボタンで自動動作を止める、性能不足（PARAM-047 未満）で Static へ縮退（保存値は書かない）、コマンド検索の `cameraCommands()`。WebGL 版（map3d.js）と Canvas 版（sz3d.js）が共用 | FR-1070、FR-1071、NFR-UX-015 |
 | 3D 種別かたち・演出スタイル | `HVE-Studio/web/js/shapes3d.js` | 3D のノード種別 → かたち（three.js 標準ジオメトリの組合せ）の対応表 `SHAPE_OF`（1 か所。凡例・3D の描画・テストが参照）、InstancedMesh による描画、凡例（`legend-3d`）、演出スタイルの切替（`style-toggle`。保存は localStorage `eabk-studio.style3d` にスタイル名のみ）。未知の種別は `default`（その他） | FR-1068、FR-1069 |
 | 配布同期対象 | `tools/install.py` | EABK Lite の配布物（規則・データ層のスクリプト・rd-auditor・Studio）をインストール対象へ同期する管理対象。旧版からの移行の処理は持たず、`--clean`（クリーンインストール）でマニフェストに記録されたファイル・設定・ブロック・追記を削除してから入れ直す。外部連携カタログの雛形（TEMPLATES。なければ作成）と検査・チェックリスト（MANAGED）も配る | FR-1037、FR-1038、FR-1039、FR-1045、FR-1078、FR-1082、FR-1083、NFR-OPS-007 |
@@ -222,8 +227,8 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 
 | 部品名 | ファイル | 用途 | 使っている要求 ID |
 |---|---|---|---|
-| 管理データモデル | `HVE-Studio/eabk_model.py`、`HVE-Studio/repo_scan.py`、`HVE-Studio/remote_github.py` | 正本とローカル Git を読み、取得範囲・出典・ノードと関係を構築 | FR-001、FR-009、FR-1003、FR-1005、FR-1006、FR-1013、FR-1014、FR-1021、FR-1022、FR-1025、FR-1026、FR-1027、FR-1028、FR-1029、FR-1034、FR-1042、FR-1061、FR-1086、FR-1088、NFR-COMPAT-003、NFR-OPS-004、NFR-SEC-002 |
-| HTTP サーバー | `HVE-Studio/studio.py` | 127.0.0.1 限定の読取 API と静的配信 | FR-010、FR-1001、FR-1088、NFR-OPS-003、NFR-SEC-001、NFR-SEC-002 |
+| 管理データモデル | `HVE-Studio/eabk_model.py`、`HVE-Studio/repo_scan.py`、`HVE-Studio/remote_github.py` | 正本とローカル Git を読み、取得範囲・出典・ノードと関係を構築 | FR-001、FR-009、FR-1003、FR-1005、FR-1006、FR-1013、FR-1014、FR-1021、FR-1022、FR-1025、FR-1026、FR-1027、FR-1028、FR-1029、FR-1034、FR-1042、FR-1061、FR-1086、FR-1088、FR-1090、NFR-COMPAT-003、NFR-OPS-004、NFR-SEC-002 |
+| HTTP サーバー | `HVE-Studio/studio.py` | 127.0.0.1 限定の API と静的配信。原本の保守と表示用生成物の操作は明示的な POST だけ | FR-010、FR-1001、FR-1088、FR-1090、NFR-OPS-003、NFR-SEC-001、NFR-SEC-002 |
 | ストア | `HVE-Studio/web/js/store.js` | モデル、選択、関連、表現間の状態を共有 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008、FR-1002、FR-1003、FR-1005、FR-1006、FR-1011、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1029、FR-1031、FR-1033、FR-1034、FR-1040、FR-1041、FR-1042、FR-1061、FR-1088 |
 | UI 部品 | `HVE-Studio/web/js/ui.js`, `HVE-Studio/web/js/xref.js` | 表示、詳細、通知、リンク、状態表示の共通の形 `statePanel`（読込中・空・エラー・古い。`data-testid=state-panel`）、同梱のアイコン 1 セット `icon()`（16・20・24px）、系列色のトークン読み出し `token()` / `TYPE_COLOR` / `STATUS_COLOR` / `IMPL_COLOR` | FR-006、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1028、FR-1031、FR-1033、FR-1040、FR-1041、FR-1042、FR-1047、FR-1048、FR-1061、FR-1079、FR-1080、NFR-A11Y-001、NFR-OPS-003、NFR-PERF-006、NFR-UX-005、NFR-UX-007、NFR-UX-010 |
 | 言語辞書 | `HVE-Studio/web/js/i18n.js` | JA/EN の辞書（`t()`・`data-i18n`・`data-i18n-title`・`data-i18n-ph`・`data-i18n-aria`）と言語の切替 `setLang()`・通知 `onLang()`。選択は言語コード（`ja`／`en` のみ）を localStorage `eabk-studio.lang` に保存・起動時に復元し、`<html lang>`・文書タイトル・ヘッダーの言語トグル `#lang`（JA／EN の button、`aria-pressed`）を更新する。画面の文言の直書きは持たない（管理データの値は訳さない。静的検査は `HVE-Studio/tests/test_i18n_coverage.py`） | FR-011 |

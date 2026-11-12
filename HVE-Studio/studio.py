@@ -33,6 +33,7 @@ sys.path.insert(0, str(HERE))
 import eabk_model  # noqa: E402
 import repo_scan  # noqa: E402
 import remote_github  # noqa: E402
+import managed_data  # noqa: E402
 from task_state import TaskStore  # noqa: E402
 
 WEB = HERE / "web"
@@ -60,6 +61,8 @@ class State:
         self.remote_enabled = remote
         self.remote: dict[str, dict] = {}  # in memory only; never written to disk
         self.remote_loading: set[str] = set()
+        self.data_lock = threading.Lock()
+        self.data_jobs: dict[str, dict] = {}
 
     def _remote(self, root: Path, force: bool = False) -> dict:
         """Current GitHub data for root; starts a background fetch when missing, stale or forced. Caller holds lock."""
@@ -119,7 +122,9 @@ class State:
             hit = self.cache.get(str(root))
             if hit and hit[0] == fp:
                 return hit[1]
-            model = eabk_model.build_model(root)
+            data_status, saved_model = managed_data.inspect(root)
+            model = saved_model if saved_model is not None else eabk_model.build_model(root)
+            model["meta"]["generatedData"] = data_status
             model["tasks"] = self.tasks.list(root, self._imported(root, model))
             model["meta"]["taskStorage"] = str(self.tasks.path)
             model["meta"]["stateFingerprint"] = str(root) + "#" + fp
@@ -140,11 +145,53 @@ class State:
         with self.lock:
             return str(self.root) + "#" + self._fingerprint()
 
+    def data_status(self) -> dict:
+        root = self.root
+        with self.data_lock:
+            job = dict(self.data_jobs.get(str(root), {}))
+        return {"repo": str(root), "data": managed_data.inspect(root)[0], "operation": job}
+
+    def start_data_operation(self, payload: dict, action: str) -> dict:
+        with self.lock:
+            root = self.root
+            if payload.get("repo") != str(root):
+                raise managed_data.DataError("repository changed; reload before managing data")
+        if action == "delete" and payload.get("confirm") is not True:
+            raise managed_data.DataError("confirm deletion of the displayed generated-data file")
+        key = str(root)
+        with self.data_lock:
+            if self.data_jobs.get(key, {}).get("status") == "running":
+                raise managed_data.DataError("a data operation is already running for this repository")
+            self.data_jobs[key] = {"repo": key, "action": action, "status": "running",
+                                   "id": os.urandom(16).hex(),
+                                   "progress": {"phase": "prepare", "completed": 0, "total": 1}, "error": None}
+
+        def progress(event):
+            with self.data_lock:
+                self.data_jobs[key]["progress"] = event
+
+        def work():
+            try:
+                operation = managed_data.sync if action == "sync" else managed_data.delete
+                operation(root, progress=progress)
+            except (OSError, ValueError, repo_scan.ScanError) as exc:
+                with self.data_lock:
+                    self.data_jobs[key].update(status="error", error=str(exc))
+            else:
+                with self.data_lock:
+                    self.data_jobs[key]["status"] = "done"
+            finally:
+                with self.lock:
+                    self.cache.pop(key, None)
+
+        threading.Thread(target=work, daemon=True).start()
+        return {"repo": key, "status": "running"}
+
     def _fingerprint(self) -> str:
         stamp = self.tasks.path.stat().st_mtime_ns if self.tasks.path.exists() else 0
         remote = self._remote(self.root)
         refreshed = self.remote.get(str(self.root), {}).get("_at", "")
-        return eabk_model.fingerprint(self.root) + "#" + str(stamp) + "#" + str(refreshed) + "#" + "|".join(
+        return eabk_model.fingerprint(self.root) + "#" + managed_data.stamp(self.root) + "#" + str(stamp) + "#" + str(refreshed) + "#" + "|".join(
             str(remote.get(k)) for k in ("status", "fetchedAt", "loading"))
 
     @staticmethod
@@ -342,6 +389,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "analysis-failed", "detail": str(exc)}, HTTPStatus.UNPROCESSABLE_ENTITY)
         if path == "/api/repo":
             return self.send_json({"repo": str(STATE.root)})
+        if path == "/api/data":
+            try:
+                return self.send_json(STATE.data_status())
+            except (repo_scan.ScanError, OSError) as exc:
+                return self.send_json({"error": "data-status-failed", "detail": str(exc)}, HTTPStatus.UNPROCESSABLE_ENTITY)
         rel = "index.html" if path in ("/", "") else path.lstrip("/")
         target = (WEB / rel).resolve()
         if WEB.resolve() not in target.parents or not target.is_file():
@@ -363,7 +415,8 @@ class Handler(BaseHTTPRequestHandler):
         if endpoint == "/api/remote/refresh":
             self.rfile.read(min(int(self.headers.get("Content-Length") or 0), 8192))
             return self.send_json(STATE.refresh_remote())
-        if endpoint not in ("/api/repo", "/api/tasks", "/api/maintenance/preview", "/api/maintenance/apply"):
+        if endpoint not in ("/api/repo", "/api/tasks", "/api/maintenance/preview", "/api/maintenance/apply",
+                            "/api/data/sync", "/api/data/delete"):
             return self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
         try:
             length = int(self.headers.get("Content-Length") or 0)
@@ -372,6 +425,12 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("invalid payload")
         except (ValueError, TypeError):
             return self.send_json({"error": "bad request"}, HTTPStatus.BAD_REQUEST)
+        if endpoint in ("/api/data/sync", "/api/data/delete"):
+            try:
+                result = STATE.start_data_operation(payload, endpoint.rsplit("/", 1)[-1])
+                return self.send_json(result, HTTPStatus.ACCEPTED)
+            except managed_data.DataError as exc:
+                return self.send_json({"error": "data-operation-rejected", "detail": str(exc)}, HTTPStatus.CONFLICT)
         if endpoint == "/api/tasks":
             try:
                 return self.send_json(STATE.update_task(payload))
@@ -479,8 +538,15 @@ def main(argv=None) -> int:
     ap.add_argument("--no-open", action="store_true", help="do not open the browser")
     ap.add_argument("--role", choices=sorted(ROLE_ROUTES), default=None,
                     help="first screen: pm=dashboard, architect=2D map, swe=tables")
-    ap.add_argument("--check", action="store_true",
+    operations = ap.add_mutually_exclusive_group()
+    operations.add_argument("--check", action="store_true",
                     help="list the data-layer files found/missing and record counts, then exit (0 = data layer found, 1 = none)")
+    operations.add_argument("--sync-data", action="store_true",
+                           help="create/synchronize disposable display data with progress, then exit")
+    operations.add_argument("--delete-data", action="store_true",
+                           help="delete only intact Studio-generated display data, then exit")
+    operations.add_argument("--data-status", action="store_true",
+                           help="show generated display-data presence and synchronization state, then exit")
     ap.add_argument("--no-remote", action="store_true",
                     help="do not read GitHub issues, pull requests and Actions runs through the local GitHub CLI (gh)")
     args = ap.parse_args(argv)
@@ -489,6 +555,19 @@ def main(argv=None) -> int:
     else:
         cwd_root = eabk_model.find_root(Path.cwd())
         root = cwd_root if eabk_model.can_view(cwd_root) else eabk_model.find_root(HERE.parent)
+    if args.sync_data or args.delete_data or args.data_status:
+        try:
+            if args.sync_data:
+                status = managed_data.sync(root, progress=managed_data.console_progress())
+            elif args.delete_data:
+                status = managed_data.delete(root, progress=managed_data.console_progress())
+            else:
+                status = managed_data.inspect(root)[0]
+            print(json.dumps(status, ensure_ascii=False))
+            return 1 if status["state"] == "conflict" else 0
+        except (repo_scan.ScanError, OSError, ValueError) as exc:
+            print(f"Studio data operation failed: {exc}", file=sys.stderr)
+            return 1
     if args.check:
         try:
             report = eabk_model.data_layer_report(root)

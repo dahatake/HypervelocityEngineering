@@ -12,21 +12,25 @@ From a local clone:
 
 What it does (idempotent) - EABK Lite: rules + data layer + deterministic checks, no orchestration:
   * copies the managed files (.github/agents/rd-auditor, .github/skills, .github/workflows/ebak-verify.yml (check only),
-    scripts/*, HVE-Studio/ = the read-only data-layer viewer with its role guides
+    scripts/*, HVE-Studio/ = the data-layer viewer with its role guides
     and screenshots) and updates them on re-run unless you modified them locally;
   * keeps no migration code for older versions: `--clean` (clean install) deletes every file the toolkit installed
     (the manifest's records, this version's files, backups, the config, the marked blocks and appended lines) and
     then installs from scratch; the management data (docs/*, the ledger) and your code and tests are kept;
   * creates the management-data templates only when missing (docs/*.md, tests/system/ledger.json);
   * merges scripts/ebak.config.json (adds new keys, keeps your values);
-  * adds /work/ to .gitignore, union-merge rules to .gitattributes, and a marked block to AGENTS.md
+  * adds /work/ and /.hve-studio/ to .gitignore, union-merge rules to .gitattributes, and a marked block to AGENTS.md
     and .github/copilot-instructions.md;
   * records versions and hashes in .github/ebak-toolkit.json;
   * after an install / update, calls the data-layer common entry point once: `scripts/rdfix.py --full --apply`
     (check -> repair -> re-check; the requirements definition and docs/integrations.md are never changed; repairs are
     not committed). `--no-repair` runs `rdfix.py --full` (check + plan only, writes nothing); `--skip-verify` neither
     checks nor repairs; --dry-run / --check / --uninstall / --purge never repair. The installer's exit code does
-    not depend on the data-layer result.
+    not depend on the data-layer repair result;
+  * then creates/synchronizes .hve-studio/managed-data.json with streamed progress, even with --no-repair or
+    --skip-verify. This disposable display snapshot is not an authoritative requirements migration.
+    A sync failure returns exit 1 and leaves the installed toolkit in place.
+    --dry-run / --check / --uninstall / --purge never synchronize.
 """
 from __future__ import annotations
 
@@ -92,6 +96,7 @@ MANAGED = [
     "users-guide/images/architecture-diagram.png",
     "users-guide/images/dashboard.png",
     "HVE-Studio/eabk_model.py",
+    "HVE-Studio/managed_data.py",
     "HVE-Studio/repo_scan.py",
     "HVE-Studio/task_state.py",
     "HVE-Studio/remote_github.py",
@@ -103,6 +108,7 @@ MANAGED = [
     "HVE-Studio/web/sz.css",
     "HVE-Studio/web/index.html",
     "HVE-Studio/web/js/app.js",
+    "HVE-Studio/web/js/managed-data.js",
     "HVE-Studio/web/js/dashboard.js",
     "HVE-Studio/web/js/diagrams.js",
     "HVE-Studio/web/js/drawer.js",
@@ -178,7 +184,7 @@ INSTRUCTIONS_BLOCK = """## Enterprise App Build Kit Lite（要求定義書・カ
 - ファイルを足す・名前を変える・消すときは、`docs/catalog.md` の行も直します（`python scripts/rdfix.py --apply` で追従できます）。
 - 完了の前に `python scripts/verify.py` を実行して exit 0 にします（CI の `ebak-verify` も同じ検査をします）。
 - 一時ファイル（ログ・証跡・作業メモ）は `/work` に置きます（git の管理対象外）。"""
-GITIGNORE_LINES = ["/work/"]
+GITIGNORE_LINES = ["/work/", "/.hve-studio/"]
 GITATTR_LINES = ["docs/id-registry.md merge=union",
                  "scripts/*.sh text eol=lf", "HVE-Studio/*.sh text eol=lf"]
 GITIGNORE_HEADER = "# Enterprise App Build Kit: temporary files (logs, evidence, notes)"
@@ -193,6 +199,7 @@ DEFAULT_FILES = {
     "ledger": "tests/system/ledger.json",
     "manual_tests": "docs/manual-tests.md",
     "integrations": "docs/integrations.md",
+    "studio_data": ".hve-studio/managed-data.json",
 }
 
 
@@ -643,6 +650,13 @@ def main(argv=None) -> int:
                   "（導入した toolkit のファイルはそのまま残ります。修復は commit していません。要求定義書は変更しません）")
         if rc == 2:
             print("取り消しの理由は上の表示を確認します。インストーラの終了コードはデータ層の結果で変わりません")
+    print("\n--- HVE Studio 表示用管理データの作成・同期（要求の正本は変更しません） ---", flush=True)
+    synced = subprocess.run([sys.executable, str(target / "HVE-Studio" / "studio.py"),
+                             "--repo", str(target), "--sync-data"], cwd=str(target), check=False)
+    if synced.returncode:
+        print("ERROR: Studio の表示用管理データを同期できませんでした。上の原因を確認し、--sync-data で再試行してください。",
+              file=sys.stderr)
+        return 1
     print("\n次の手順（README.md の「インストール」「Quickstart」）:")
     print("  1. 変更を確認して commit します: git add -A && git commit -m \"Add Enterprise App Build Kit\"")
     print("  2. scripts/ebak.config.json の verify.commands に、ビルド・静的検査・テストのコマンドを登録します")

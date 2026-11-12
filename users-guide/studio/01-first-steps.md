@@ -47,6 +47,18 @@ Windows は `.\HVE-Studio\start.ps1 <リポジトリ>`、macOS / Linux は `./HV
 
 ## 最初の 10 分
 
+画面上部の **表示用管理データ** に、生成ファイルの有無・場所・同期状態を常に表示します。必要なときに **作成・同期** を押すと、段階と処理数の進捗を確認できます。参照後は **削除** で生成ファイルだけを除き、原本からの閲覧を続けられます。起動・閲覧だけでは作成しません。
+
+CLI でも同じ操作を行えます（サーバーは起動しません）。
+
+```powershell
+python HVE-Studio/studio.py --repo C:\path\to\your-repo --sync-data
+python HVE-Studio/studio.py --repo C:\path\to\your-repo --data-status
+python HVE-Studio/studio.py --repo C:\path\to\your-repo --delete-data
+```
+
+インストーラーの導入・更新時にも進捗付きで同期します。保存先は `.hve-studio/managed-data.json` で、要求正本への移行や試験合格の生成ではありません。詳しい保護範囲は[データリファレンス](08-data-reference.md#表示用管理データfr-1090)を参照してください。
+
 1. **ダッシュボード**を見ます。要求の数、承認済みの割合、実装が登録された割合、未回答の質問、BLOCKED（止まっている要求）が分かります。
 2. 「目的ごとの実装進捗」の棒をクリックします。その目的に属する要求が、地図で強調されます。
 3. **2D マップ**で、ホイールを回して拡大・縮小し、ドラッグで動かします。点にポイントすると、直接つながる項目が光ります。

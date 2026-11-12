@@ -41,6 +41,32 @@ def test_fresh_install_layout(empty_repo):
     assert not (empty_repo / "tests/toolkit/test_install.py").exists()
 
 
+# FR-1090 AC-488 AC-489: install synchronizes real PRD/code and streams progress; dry-run creates nothing.
+def test_install_creates_display_data_without_migrating_prd(empty_repo):
+    (empty_repo / "docs").mkdir()
+    prd = empty_repo / "docs/PRD.md"
+    prd.write_text("#### FR-ING-01 Import video\n", encoding="utf-8")
+    (empty_repo / "app.py").write_text("# FR-ING-01\n", encoding="utf-8")
+    data = empty_repo / ".hve-studio/managed-data.json"
+    assert install(empty_repo, "--dry-run").returncode == 0
+    assert not data.exists()
+    original = prd.read_bytes()
+    result = install(empty_repo)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "[####################] done 1/1" in result.stdout
+    snapshot = json.loads(data.read_text(encoding="utf-8"))["model"]
+    assert [r["id"] for r in snapshot["reqs"]] == ["FR-ING-01"]  # no commented template examples
+    assert snapshot["catalog"]["features"][0]["impl"] == ["app.py"]
+    assert prd.read_bytes() == original
+    assert "/.hve-studio/" in (empty_repo / ".gitignore").read_text(encoding="utf-8")
+    data.write_text('{"mine":true}', encoding="utf-8")
+    result = install(empty_repo)
+    assert result.returncode == 1
+    assert "generated data" in (result.stdout + result.stderr).lower()
+    assert data.read_text(encoding="utf-8") == '{"mine":true}'
+    assert prd.read_bytes() == original and (empty_repo / "HVE-Studio/studio.py").exists()
+
+
 OLD_FILES = {".github/agents/conductor.agent.md": "conductor\n", "scripts/hooks/gate.py": "print('gate')\n",
              ".github/hooks/quality-gates.json": "{}\n", "tests/toolkit/test_clean_work.py": "def test_x():\n    pass\n"}
 
@@ -71,8 +97,10 @@ def plant_old_version(repo) -> None:
 
 
 def tree(repo) -> dict:
+    # FR-1090 AC-488: compare installed toolkit bytes, not the per-repository display snapshot.
     return {p.relative_to(repo).as_posix(): p.read_bytes() for p in repo.rglob("*")
-            if p.is_file() and ".git" not in p.relative_to(repo).parts and p.name != "ebak-toolkit.json"}
+            if p.is_file() and not {".git", ".hve-studio"} & set(p.relative_to(repo).parts)
+            and p.name != "ebak-toolkit.json"}
 
 
 # FR-1085 AC-468: --clean deletes everything any version installed (modified or not) and installs from scratch

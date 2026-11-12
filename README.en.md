@@ -192,8 +192,8 @@ python tools/install.py --target /path/to/your-repo
 | `--clean` | `-Clean` | Clean install: deletes every file the toolkit installed (including files from older versions and files you modified), `*.ebak-backup-*`, the settings, the blocks, the appended lines and the manifest, then installs this version again. Keeps the management data, `/work`, and your application code and tests. Refuses to run when there are uncommitted changes ([Updating from an older version](#updating-from-an-older-version-clean-install)) |
 | `--force` | `-Force` | Also overwrites or removes toolkit files you modified locally (keeps `*.ebak-backup-<datetime>`) |
 | `--no-ci` | `-NoCi` | Does not install `.github/workflows/ebak-verify.yml` |
-| `--no-repair` | `-NoRepair` | Skips the post-install data-layer auto-repair and only shows the check and the repair plan (writes nothing) |
-| `--skip-verify` | — | Neither checks nor repairs the data layer after installing |
+| `--no-repair` | `-NoRepair` | Only shows the data-layer check and repair plan. Toolkit installation and display-data generation still run |
+| `--skip-verify` | — | Neither checks nor repairs the data layer; display-data generation still runs |
 | `--uninstall` | `-Uninstall` | Removes unmodified toolkit files, the blocks in `AGENTS.md` etc., the manifest, and emptied folders (keeps management data and settings). Also available as `uninstall.ps1` / `uninstall.sh` |
 | `--purge` | `-Purge` | In addition to `--uninstall`, removes management data (the requirements definition, catalog, integration catalog, ID registry, etc. under `docs/`, and `tests/system/ledger.json`), `scripts/ebak.config.json`, `/work`, lines appended to `.gitignore` / `.gitattributes`, and `*.ebak-backup-*` |
 
@@ -203,14 +203,17 @@ python tools/install.py --target /path/to/your-repo
 |---|---|---|
 | Toolkit files | `.github/agents/rd-auditor.agent.md`, `.github/skills/` (`requirement-definition`, `rd-audit`, `adopt-existing`), `.github/workflows/ebak-verify.yml`, `scripts/*.py`, `verify.ps1`, `verify.sh`, `HVE-Studio/` (the viewer; Studio's tests are not installed), `EABK-docs/` (same content as this repository's `users-guide/`; the HVE Studio guide is `EABK-docs/studio/`; the target's own `users-guide/` is not touched) | Updated to the new version if unmodified. If modified locally, **left as is** (`KEEP-LOCAL`; `--force` overwrites) |
 | Management data templates | `docs/requirements-definition.md`, `docs/catalog.md`, `docs/integrations.md` (integration catalog, optional), `docs/id-registry.md`, `tests/system/ledger.json` | Created **only if missing**. Existing files are never overwritten |
+| Display data | `.hve-studio/managed-data.json` | Created/synchronized with progress after installation/update. A disposable analysis snapshot, not an authoritative requirements migration. Normal uninstall preserves it; `--purge` removes it |
 | Settings | `scripts/ebak.config.json` | Created if missing. If present, only new keys are added; values you set are not changed |
-| Appended lines | `/work/` in `.gitignore` (header `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`); `docs/id-registry.md merge=union` in `.gitattributes` | Only missing lines are appended |
+| Appended lines | `/work/` and `/.hve-studio/` in `.gitignore` (header `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`); `docs/id-registry.md merge=union` in `.gitattributes` | Only missing lines are appended |
 | Block | The rules enclosed in `<!-- ebak-abk:begin -->` … `end` in `AGENTS.md` and `.github/copilot-instructions.md` ([Rules above](#rules-the-block-that-goes-into-agentsmd)) | Only the inside of the block is replaced. Text outside the block is not changed |
 | Manifest | `.github/ebak-toolkit.json` | The version and hashes of installed files (used to decide updates and removals) |
 
 At the end of an install or update, the data-layer common entry point `python scripts/rdfix.py --full --apply` runs once (check → auto-repair → re-check). It shows the repaired items, the remaining manual items (check ID, location, kind of work), and whether the re-check passed. Repairs are not committed but left in the working tree, and the requirements definition and the integration catalog are never changed. With `--no-repair` (`-NoRepair` in PowerShell), it becomes `python scripts/rdfix.py --full` (shows the check and repair plan only; writes nothing), and with `--skip-verify` it neither checks nor repairs. `--dry-run`, `--check`, `--uninstall`, and `--purge` never repair. Even when the repair is cancelled (exit 2) or manual items remain (exit 1), the toolkit files stay and the check and repair commands are shown. The installer's exit code does not depend on the data-layer result.
 
 ### Post-installation setup
+
+Display-data synchronization follows with progress, including with `--no-repair` and `--skip-verify`. Sync failures report a reason and return exit 1 while leaving toolkit files installed. Dry-run/check/removal operations do not generate it. The global Studio banner or `studio.py --repo <repo> --sync-data` / `--data-status` / `--delete-data` supports resync, presence checks and generated-only cleanup. See the [Studio guide](HVE-Studio/README.md#表示用管理データの作成同期削除--display-data).
 
 1. Review the diff and commit.
    ```bash

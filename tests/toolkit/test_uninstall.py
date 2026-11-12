@@ -63,6 +63,9 @@ def test_catalog_covers_this_version():
         assert inst.sha(SOURCE / rel) in cat["files"][inst.dest_of(rel)], rel
     for rel in inst.TEMPLATES:
         assert rel in cat["data"], rel
+    # FR-1090 AC-488 AC-491: current, not-yet-committed installer constants must also be covered.
+    assert ".hve-studio/managed-data.json" in cat["data"]
+    assert set(inst.GITIGNORE_LINES) <= set(cat["ignore"][".gitignore"]["lines"])
     assert {".github/ebak-toolkit.json", ".github/hve-toolkit.json"} <= set(cat["manifests"])
     assert {"scripts/ebak.config.json", "scripts/hve.config.json"} <= set(cat["configs"])
     assert ["<!-- hve-conductor:begin -->", "<!-- hve-conductor:end -->"] in cat["markers"]

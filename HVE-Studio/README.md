@@ -28,10 +28,31 @@ python HVE-Studio/studio.py --check                           # データ層が�
 | `--no-open` | ブラウザーを自動で開かない |
 | `--role pm\|architect\|swe` | 最初に開く画面（pm = ダッシュボード、architect = マップ（2D）、swe = 表）。画面右上のロールのボタンと同じ |
 | `--check` | 管理データのファイルの有無と、解析できた件数・警告を表示して終了（データ層があるか、コードのモードで見られれば 0、どちらでもなければ 1）。コードのモードでは `mode: code (...) requirement-docs=… requirements=… linked-to-code=… code-files=… test-files=… components=…` の行も出ます。サーバーは起動しません |
+| `--sync-data` | 表示用管理データを作成・同期し、実際の段階・処理数の進捗を出力して終了。失敗は理由付きで exit 1 |
+| `--data-status` | 生成ファイルの有無・絶対パス・同期状態を JSON で出力して終了 |
+| `--delete-data` | Studio 所有・内容の整合を確認できる表示用ファイルだけを削除して終了。原本は保持。競合は exit 1 |
 
 管理データがなく Git リポジトリでもないフォルダーは、理由を表示して終了コード 1 で終わります。空・文書だけ・バイナリだけの Git リポジトリも開けます。Git のコード解析には `git` コマンドが必要です。
 
 ブラウザー起動時はスプラッシュ画面に実際の起動段階を表示します。アプリの読込み、ソース・管理データの解析、初期画面の準備に応じて進みます。割合はファイル数や所要時間の推定ではありません。解析失敗時は原因と再試行を表示します。
+
+### 表示用管理データの作成・同期・削除 / Display data
+
+全画面の上部に、生成ファイルの有無・絶対パス・同期状態と **作成・同期／削除** を常設表示します。処理中は実際の段階と処理済み数／対象数の進捗バーが出ます。削除は対象パスを確認して実行します。
+
+```powershell
+python HVE-Studio/studio.py --repo C:\path\to\your-repo --sync-data
+python HVE-Studio/studio.py --repo C:\path\to\your-repo --data-status
+python HVE-Studio/studio.py --repo C:\path\to\your-repo --delete-data
+```
+
+- 保存先は対象の `.hve-studio/managed-data.json`。既存の要求文書・ソース・テストなどの解析結果で、**EABK の要求正本や合格した試験の自動作成ではありません**。原本・隣接ファイルは変更・削除しません。
+- `tools/install.py` の実際の導入・更新の最後にも、進捗を表示して同期します。`--skip-verify`・`--no-repair` でも同期し、`--dry-run`・`--check` は作成しません。同期失敗は exit 1 で知らせ、導入済み toolkit は残します。
+- 起動・閲覧・リポジトリ切替だけでは作成しません。参照だけの対象には、Studio をそのリポジトリへインストールせず、外から `--repo` で指定できます。
+- 原本が変われば「再同期が必要」と表示し、古い生成データでなく現在の原本を表示します。削除後も閲覧を続けられます。GitHub の取得結果と Studio 側のタスク編集は生成ファイルに含めません。
+- 外来・編集済みのファイルやリンクは上書き・削除せず、理由を表示します。中断後の `.hve-studio/.operation-lock` が残った場合は、他の同期が動作していないことと内容を確認してから、そのロックだけを手動で除いて再試行してください。
+
+*Installation and explicit CLI/UI actions create a disposable `.hve-studio/managed-data.json` snapshot with real progress. The global banner always shows its presence, path and state. Delete removes only an intact Studio-owned snapshot, not requirements or code; browsing continues from live sources. Viewing alone creates nothing. This is not a migration into approved EABK requirements.*
 
 ### EABK なしで使う（コードのモード） / Without EABK (code mode)
 
@@ -78,7 +99,7 @@ python HVE-Studio/studio.py --repo C:\path\to\any-git-repo
 | ⑥ 外部連携 | 外部のアプリ・データとの連携（連携先・方向・方式・データ分類）の一覧と詳細。一覧と詳細の表示は FR-1042 で実装します（現在は項目の居場所と案内だけです） |
 | ⑦ ソース対応 | カタログに書かれたパスのツリーマップ。ファイルを選ぶと結び付く要求・部品・テスト |
 | ⑧ 表 | 元の行を 要求・設計・証跡・運用 の 4 グループの種別で一覧。セルの ID はリンク（未解決 ID は明示）。並べ替え・絞り込み・CSV |
-| ⑨ 整合性保守 | 要求正本と違うカタログの題名・決定状態を、プレビュー後に更新（下記）。書込みはここだけ |
+| ⑨ 整合性保守 | 要求正本と違うカタログの題名・決定状態を、プレビュー後に更新（下記）。生成データの操作は画面上部の共通欄 |
 
 `#/structure`（6 つのデータ層の現状と理想の差）と `#/consistency`（要求 → AC → 試験 → カタログ → 実装ファイルの欠け）は、URL で開く ⑨ の補助画面です。
 
@@ -125,7 +146,7 @@ python HVE-Studio/studio.py --repo C:\path\to\any-git-repo
 
 Git リポジトリではソースの明示的な要求参照・import・TODO も読み取ります。管理データの定義・承認状態は優先し、コードから新しい要求や試験合格を推測しません。どの画面が何を読むかは [08-data-reference.md](../users-guide/studio/08-data-reference.md) にあります。サーバーは `127.0.0.1` だけで待ち受け、閲覧・検索・CSV 出力・リポジトリ切替で原本を書き換えません。タスクの明示的な編集は上記の Studio 専用保存先だけに書き込みます。
 
-例外は「整合性保守」画面で利用者が差分をプレビューし、`確認して実行` を押した場合だけです。この操作は `docs/catalog.md` の選択した要求行について、`題名` と `決定状態` の2列だけを要求正本へ合わせます。プレビュー後の競合、対象外ファイルへの影響、書込み失敗、`python scripts/verify.py --docs-only` の失敗を検出すると、変更をバイト単位で復元して明示的にエラーを表示します。
+原本への書込みの例外は「整合性保守」画面で利用者が差分をプレビューし、`確認して実行` を押した場合だけです。この操作は `docs/catalog.md` の選択した要求行について、`題名` と `決定状態` の2列だけを要求正本へ合わせます。プレビュー後の競合、対象外ファイルへの影響、書込み失敗、`python scripts/verify.py --docs-only` の失敗を検出すると、変更をバイト単位で復元して明示的にエラーを表示します。表示用管理データの明示的な作成・同期・削除は、原本とは別の生成ファイルだけを操作します。
 
 ## 保守 / Maintenance
 

@@ -431,9 +431,9 @@
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_all_views_are_read_only_and_do_not_issue_external_requests",
       "canary": false,
       "status": "pass",
-      "last_commit": "30ae6c99",
-      "last_run_at": "2026-11-06T06:17:50+09:00",
-      "evidence": "work/runs/202611060524/logs/system-test/E2E-010-202611060610.log",
+      "last_commit": "7c154f78",
+      "last_run_at": "2026-11-12T16:39:55+09:00",
+      "evidence": "work\\logs\\system-test\\E2E-010-202611121639.log",
       "history": [
         {
           "at": "2026-10-09T22:11:33+09:00",

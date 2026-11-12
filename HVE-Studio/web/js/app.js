@@ -7,6 +7,7 @@ import { decorate, mountStructure, mountConsistency, mountMaintenance } from './
 import { dimToggle, dimState, registerDim, hasDimHandler, runDim, headerDimToggle, publishDim, onHeaderDim, headerDim } from './dim.js';
 import { cameraCommands } from './camera3d.js';
 import { changeLayout, resetLayout } from './layout.js';
+import { initManagedData } from './managed-data.js';
 
 // NFR-UX-002 AC-015/041: 配置の変更・既定へ戻す。検索語・選択・絞り込みは再描画しないので保たれる。
 document.querySelector('[data-testid="layout-change"]')?.addEventListener('click', changeLayout);
@@ -217,6 +218,8 @@ async function loadModel(quiet, onModel) {
   fingerprint = model.meta.stateFingerprint || f.fingerprint; // the model's own state avoids a load/poll race
   if (!quiet) route();
 }
+
+initManagedData(() => loadModel(true));
 
 // ---------------------------------------------------------------- search
 const q = document.getElementById('q');

@@ -52,6 +52,19 @@ When the remote is GitHub, issues, pull requests and Actions runs are fetched re
 
 Task creation, title edits and status changes persist in `%LOCALAPPDATA%\hve-studio\tasks.sqlite3` on Windows, or `~/.local/share/hve-studio/tasks.sqlite3` elsewhere, isolated by canonical repository path. `HVE_STUDIO_DATA_DIR` can select another directory outside the repository. Imported status overrides can be reset and never change originals. No LLM is used; there are no LLM charges or budget settings.
 
+### Display data (FR-1090)
+
+The target repository's `.hve-studio/managed-data.json` is a **disposable snapshot of local analysis**, separate from authoritative requirements, catalog and test ledger. It does not invent requirements, approvals or test passes. Requirements in HTML comments and code examples are excluded. GitHub results and Studio task edits are not saved in this file.
+
+- Installation/updates, `studio.py --repo <repo> --sync-data`, and the global **Create / sync** button use the same operation. Installation still synchronizes with `--skip-verify` or `--no-repair`. Dry-run, check and ordinary browsing do not create it.
+- CLI output and the UI show actual stages and processed/total counts. The banner always shows presence, absolute path and current/stale/conflict state. `--data-status` returns this as JSON.
+- Stale or conflicting snapshots are not used for display; current sources are analyzed instead. Synchronization atomically replaces the snapshot.
+- `--delete-data` or **Delete** removes only an intact Studio-owned file. The UI confirms its path and permits cancellation. Requirements, code, tests, neighboring files and external task storage are preserved. Browsing continues after deletion, and data can be recreated.
+- Foreign/edited files, symbolic/hard links, Windows reparse points, concurrent operations, changing sources and write failures are rejected with a reason. CLI/installer sync failures return exit 1; installed toolkit files remain.
+- If interruption leaves `.hve-studio/.operation-lock`, first confirm no operation is active and inspect the lock, then remove only that lock and retry. Installation ignores the generated directory in Git. Normal uninstall preserves it; `--purge` removes the snapshot along with other management data.
+
+Lifecycle/browser tests in `HVE-Studio/tests/test_managed_data.py` and `test_managed_data_ui.py`, and installer/uninstaller tests verify this contract. Reference-only targets do not need a toolkit installation; select them externally with `--repo`.
+
 ## S8.2 Items Extracted from the Requirements Definition
 
 From `docs/requirements-definition.md` and `docs/requirements/*.md`, Studio extracts items in the following formats (code blocks are ignored). The formats follow the [management data format](../03-requirements-format.en.md) of EABK itself.
@@ -348,7 +361,7 @@ Data read: the requirement's `決定状態`, the AC's `検証レベル` and `BLO
 
 Normal browsing, search, CSV, and repository switching write nothing.
 
-The only thing written is **`docs/catalog.md`**, when you press `確認して実行` ("Confirm and run") in Consistency maintenance. The two cells `題名` and `決定状態` of the selected requirement's row are aligned to the requirement source of truth.
+The only original file written is **`docs/catalog.md`**, when you press `確認して実行` ("Confirm and run") in Consistency maintenance. The two cells `題名` and `決定状態` of the selected requirement's row are aligned to the requirement source of truth. Separately, explicit display-data operations create/sync/delete `.hve-studio/managed-data.json`, and task edits persist outside the repository (S8.1).
 
 1. Preview: shows before and after and issues a token (the file is not changed).
 2. Run: confirms that the file's contents have not changed since Studio started (or since the previous application). If they have, it stops with `preview-conflict` (after updating the catalog by another means, restart Studio).
@@ -363,6 +376,9 @@ The only thing written is **`docs/catalog.md`**, when you press `確認して実
 | `GET /api/model` | All parsed data (JSON). If the modification-time fingerprint is the same, returns the cache |
 | `GET /api/fingerprint` | Modification fingerprint of the management data (repository path + modification time and size of each file) |
 | `GET /api/repo` | Path of the current target repository |
+| `GET /api/data` | Generated-file presence, absolute path, synchronization state and operation progress/error |
+| `POST /api/data/sync` | Start synchronization; body `{"repo": "<current absolute path>"}`; returns 202 |
+| `POST /api/data/delete` | Start deletion; same body plus `"confirm": true`; returns 202. Same Studio header required for both POSTs |
 | `POST /api/repo` | Switches the target repository (body `{"path": …}`). Requires `X-EABK-Studio: 1` |
 | `POST /api/maintenance/preview` | Body `{"id": "<requirement ID>"}`. Requires the same header |
 | `POST /api/maintenance/apply` | Body `{"token": …}`. Requires the same header |

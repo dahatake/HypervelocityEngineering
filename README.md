@@ -192,8 +192,8 @@ python tools/install.py --target /path/to/your-repo
 | `--clean` | `-Clean` | クリーンインストール: toolkit が入れたファイル（旧版のもの・変更したものも）・`*.ebak-backup-*`・設定・ブロック・追記した行・マニフェストをすべて削除してから、この版を入れ直します。管理データ・`/work`・アプリのコードとテストは残します。未 commit の変更があると実行しません（[旧版からの更新](#旧版からの更新クリーンインストール)） |
 | `--force` | `-Force` | ローカルで変更した toolkit のファイルも上書き・削除します（`*.ebak-backup-<日時>` を残します） |
 | `--no-ci` | `-NoCi` | `.github/workflows/ebak-verify.yml` をインストールしません |
-| `--no-repair` | `-NoRepair` | 導入後のデータ層の自動修復をせず、検査と修復の計画だけを表示します（書き込みません） |
-| `--skip-verify` | — | 導入後のデータ層の検査も修復も行いません |
+| `--no-repair` | `-NoRepair` | 導入後のデータ層の自動修復をせず、検査と修復の計画だけを表示します。toolkit の導入と表示用管理データの生成は行います |
+| `--skip-verify` | — | 導入後のデータ層の検査も修復も行いません。表示用管理データの生成は行います |
 | `--uninstall` | `-Uninstall` | 変更していない toolkit のファイル、`AGENTS.md` などのブロック、マニフェスト、空になったフォルダーを削除します（管理データと設定は残します）。`uninstall.ps1` / `uninstall.sh` でも実行できます |
 | `--purge` | `-Purge` | `--uninstall` に加えて、管理データ（`docs/` の要求定義書・カタログ・外部連携カタログ・ID 台帳など、`tests/system/ledger.json`）、`scripts/ebak.config.json`、`/work`、`.gitignore`・`.gitattributes` に追記した行、`*.ebak-backup-*` も削除します |
 
@@ -203,14 +203,17 @@ python tools/install.py --target /path/to/your-repo
 |---|---|---|
 | toolkit のファイル | `.github/agents/rd-auditor.agent.md`、`.github/skills/`（`requirement-definition`・`rd-audit`・`adopt-existing`）、`.github/workflows/ebak-verify.yml`、`scripts/*.py`・`verify.ps1`・`verify.sh`、`HVE-Studio/`（ビューアー本体。Studio のテストは入れません）、`EABK-docs/`（このリポジトリの `users-guide/` と同じ内容。HVE Studio のガイドは `EABK-docs/studio/`。導入先の `users-guide/` は触りません） | 変更していなければ新しいバージョンに更新します。ローカルで変更していれば**そのまま残します**（`KEEP-LOCAL`。`--force` で上書き） |
 | 管理データの雛形 | `docs/requirements-definition.md`、`docs/catalog.md`、`docs/integrations.md`（外部連携カタログ。任意）、`docs/id-registry.md`、`tests/system/ledger.json` | **存在しない場合だけ**作成します。既存のファイルは上書きしません |
+| 表示用管理データ | `.hve-studio/managed-data.json` | 導入・更新の最後に進捗付きで作成・同期。要求正本への移行ではなく、既存文書・ソースなどの解析結果。通常アンインストールでは保持し、`--purge` では削除 |
 | 設定 | `scripts/ebak.config.json` | なければ作成します。あれば新しいキーだけを追加し、利用者が設定した値は変更しません |
-| 追記 | `.gitignore` に `/work/`（見出し `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`）、`.gitattributes` に `docs/id-registry.md merge=union` | 足りない行だけを追記します |
+| 追記 | `.gitignore` に `/work/`・`/.hve-studio/`（見出し `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`）、`.gitattributes` に `docs/id-registry.md merge=union` | 足りない行だけを追記します |
 | ブロック | `AGENTS.md`、`.github/copilot-instructions.md` に `<!-- ebak-abk:begin -->`〜`end` で囲んだ規則（[上の「規則」](#規則agentsmd-に入るブロック)） | ブロックの中だけを置き換えます。ブロック外の記述は変更しません |
 | マニフェスト | `.github/ebak-toolkit.json` | バージョンと、インストールしたファイルのハッシュ（更新・削除の判定に使います） |
 
 インストール・更新の最後に、データ層の共通の入口 `python scripts/rdfix.py --full --apply` を 1 回だけ実行します（検査→自動修復→再検査）。修復した項目・残った手動対応（検査項目 ID・位置・作業の種類）・再検査の合否を表示します。修復は commit せず作業ツリーに残し、要求定義書と外部連携カタログは変更しません。`--no-repair`（PowerShell では `-NoRepair`）を付けると `python scripts/rdfix.py --full`（検査と修復の計画の表示だけ。書き込まない）になり、`--skip-verify` では検査も修復も行いません。`--dry-run`・`--check`・`--uninstall`・`--purge` では修復しません。修復が取り消された（exit 2）・手動対応が残った（exit 1）場合も toolkit のファイルは残り、確認と修復のコマンドを表示します。インストーラの終了コードはデータ層の結果で変わりません。
 
 ### インストール後の設定
+
+このあと、HVE Studio の表示用管理データを進捗付きで同期します。これは `--no-repair`・`--skip-verify` でも実行し、同期失敗は理由を表示して exit 1 にします（導入した toolkit は保持）。`--dry-run`・`--check`・削除操作では生成しません。画面上部から、または `studio.py --repo <repo> --sync-data`／`--data-status`／`--delete-data` で再同期・存在確認・生成物だけの削除ができます。詳しくは [Studio の説明](HVE-Studio/README.md#表示用管理データの作成同期削除--display-data)を参照してください。
 
 1. 差分を確認して commit します。
    ```bash

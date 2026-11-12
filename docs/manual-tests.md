@@ -4,6 +4,12 @@
 
 コマンドで自動判定しにくく、手順で確かめる受入基準の一覧です。
 
+## FR-1090 AC-488 AC-489 AC-490 AC-491 AC-492 表示用管理データ
+
+自動検証: `python -m pytest HVE-Studio/tests/test_managed_data.py HVE-Studio/tests/test_managed_data_ui.py tests/toolkit/test_install.py tests/toolkit/test_uninstall.py -q`。PRD と明示的なソース参照の取込み、実処理の進捗、全画面の存在表示、原本・隣接ファイルの保持、同期失敗・競合・排他、導入・完全削除を確認します。
+
+利用者の確認: 参照用の Git リポジトリを外から `--repo` で開き、未作成の表示を確認します。「作成・同期」の進捗と生成先を確認し、別画面・再読み込み後も作成済みと表示されること、原本変更で再同期が必要と表示されることを確認します。「削除」でパスを確認して取り消すと残り、確認して削除すると生成ファイルだけが消え、原本からの閲覧を続けられることを確認します。実行前後の原本の内容・更新時刻と隣接ファイルを照合します。
+
 ## FR-1088 AC-480 AC-481 AC-482 AC-483 リポジトリ分析・タスク管理
 
 自動検証: `python -m pytest HVE-Studio/tests/test_repository_workspace.py -q`。文書のみ・空・大きい Git、管理データ優先、解析診断、更新検知、タスクの永続化・対象分離・保存失敗をモデル・HTTP・実ブラウザーで確認します。

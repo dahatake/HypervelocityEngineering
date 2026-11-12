@@ -47,6 +47,18 @@ Role-specific walkthroughs are in [05-product-manager.en.md](05-product-manager.
 
 ## Your first 10 minutes
 
+The global **Display data** banner always shows whether the generated file exists, its path and synchronization state. **Create / sync** reports actual stages and processed counts. After viewing a reference-only repository, **Delete** removes only that generated file; browsing continues from originals. Opening or browsing alone creates nothing.
+
+The same actions are available from the CLI without starting a server:
+
+```powershell
+python HVE-Studio/studio.py --repo C:\path\to\your-repo --sync-data
+python HVE-Studio/studio.py --repo C:\path\to\your-repo --data-status
+python HVE-Studio/studio.py --repo C:\path\to\your-repo --delete-data
+```
+
+Installation and updates also synchronize with progress. The file is `.hve-studio/managed-data.json`, not a migration into authoritative requirements or invented test passes. See the [data reference](08-data-reference.en.md#display-data-fr-1090) for preservation and conflict behavior.
+
 1. Look at the **Dashboard**. It shows the number of requirements, the share approved, the share with implementation registered, unanswered questions, and BLOCKED (stalled requirements).
 2. Click a bar in "Implementation progress by goal." The requirements belonging to that goal are highlighted on the map.
 3. On the **2D map**, scroll the wheel to zoom in and out, and drag to move. Point at a dot and the items directly connected to it light up.

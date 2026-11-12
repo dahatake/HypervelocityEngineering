@@ -50,12 +50,14 @@ def list_files(root: Path) -> list[str] | None:
     """Tracked files (including files of initialized submodules) and untracked, not ignored files."""
     if not (root / ".git").exists():
         return None
-    return sorted(_ls(root, "--cached", "--recurse-submodules") | _ls(root, "--others", "--exclude-standard"))
+    return sorted(p for p in _ls(root, "--cached", "--recurse-submodules") | _ls(root, "--others", "--exclude-standard")
+                  if p.split("/", 1)[0] != ".hve-studio")
 
 
 def list_ignored(root: Path) -> list[str]:
     """Ignored paths; a fully ignored directory is one entry ending in '/'. Contents are never read."""
-    return sorted(_ls(root, "--others", "--ignored", "--exclude-standard", "--directory"))
+    return sorted(p for p in _ls(root, "--others", "--ignored", "--exclude-standard", "--directory")
+                  if p.rstrip("/").split("/", 1)[0] != ".hve-studio")
 
 
 def list_submodules(root: Path) -> list[dict]:
@@ -109,7 +111,9 @@ def fingerprint(root: Path) -> str:
     return digest.hexdigest()
 
 
-def scan(root: Path, is_test) -> dict | None:
+def scan(root: Path, is_test, progress=None) -> dict | None:
+    if progress:
+        progress({"phase": "inventory", "completed": 0, "total": 1})
     paths = list_files(root)
     if paths is None:
         return None
@@ -121,7 +125,11 @@ def scan(root: Path, is_test) -> dict | None:
     submodules = {s["path"]: s for s in data["submodules"]}
     for rel in list_ignored(root):
         data["files"].append({"path": rel, "kind": "ignored", "bytes": None, "analysis": "inventory-only"})
-    for rel in paths:
+    if progress:
+        progress({"phase": "inventory", "completed": 1, "total": 1})
+    for index, rel in enumerate(paths):
+        if progress:
+            progress({"phase": "files", "completed": index, "total": len(paths), "detail": rel})
         if rel in submodules:
             state = submodules[rel]["state"]
             data["files"].append({"path": rel, "kind": "submodule", "bytes": None, "analysis": "inventory-only"})
@@ -193,6 +201,9 @@ def scan(root: Path, is_test) -> dict | None:
                 if match:
                     data["dependencies"].append({"name": match.group(1), "version": match.group(2) or "",
                                                  "kind": "python", "file": rel})
+    if progress:
+        progress({"phase": "files", "completed": len(paths), "total": len(paths)})
+        progress({"phase": "relationships", "completed": 0, "total": 1})
     # Exact, local module paths only. Dynamic and external imports are not guessed.
     for rel, text in texts.items():
         imports = []
@@ -226,6 +237,9 @@ def scan(root: Path, is_test) -> dict | None:
                                + [base + "/index" + ext for ext in (".ts", ".tsx", ".js", ".jsx")] if p in texts), None)
                 if target and target != rel:
                     data["links"].append({"source": rel, "target": target, "kind": "import"})
+    if progress:
+        progress({"phase": "relationships", "completed": 1, "total": 1})
+        progress({"phase": "history", "completed": 0, "total": 1})
     head = git(root, "rev-parse", "--verify", "HEAD")
     log = git(root, "log", "--all", *(["HEAD"] if head.returncode == 0 else []),
               "-z", "--format=%H%x00%cI%x00%s")
@@ -240,4 +254,6 @@ def scan(root: Path, is_test) -> dict | None:
     data["unavailable"] = ["Undeclared goals, acceptance criteria, entities, API contracts and test outcomes are not inferred.",
                            "Ignored and generated paths are listed but their contents are not analyzed; credentials-like files are never read.",
                            "Dependencies: package.json and requirements*.txt; imports: static local Python/JS/TS paths only."]
+    if progress:
+        progress({"phase": "history", "completed": 1, "total": 1})
     return data

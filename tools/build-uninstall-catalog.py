@@ -128,13 +128,14 @@ def build() -> dict:
     sets: Dict[str, Set] = {k: set() for k in ("manifests", "configs", "markers", "blocks", "data", "infixes")}
     ignore: Dict[str, Dict[str, Set[str]]] = {}
     versions = 0
-    for c in commits:
-        src = git("show", f"{c}:{INSTALLER}").decode("utf-8", "replace")
+    for c in [*commits, None]:
+        src = ((ROOT / INSTALLER).read_text(encoding="utf-8") if c is None
+               else git("show", f"{c}:{INSTALLER}").decode("utf-8", "replace"))
         try:
             k = constants(src)
         except SyntaxError:
             continue
-        versions += 1
+        versions += int(c is not None)
         gsrc, gdest = k.get("GUIDE_SRC"), k.get("GUIDE_DEST")
 
         def dest(rel: str) -> str:
@@ -166,11 +167,6 @@ def build() -> dict:
     head = commits[-1]
     current = constants((ROOT / INSTALLER).read_text(encoding="utf-8"))
     gsrc, gdest = current.get("GUIDE_SRC", ""), current.get("GUIDE_DEST", "")
-    for rel in current.get("MANAGED", []):
-        dest = (gdest + rel[len(gsrc):]) if gsrc and rel.startswith(gsrc) else rel
-        sources_of.setdefault(dest, set()).add(rel)
-    for rel in current.get("TEMPLATES", []):
-        template_sources.setdefault(rel, set()).add(TEMPLATE_DIR + rel)
     hashes = blob_hashes({s for v in sources_of.values() for s in v} | {s for v in template_sources.values() for s in v})
 
     def merged(mapping: Dict[str, Set[str]]) -> Dict[str, List[str]]:

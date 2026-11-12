@@ -4,6 +4,12 @@
 
 A list of acceptance criteria that are hard to judge automatically with a command and are verified by following a procedure.
 
+## FR-1090 AC-488 AC-489 AC-490 AC-491 AC-492 Display data
+
+Run `python -m pytest HVE-Studio/tests/test_managed_data.py HVE-Studio/tests/test_managed_data_ui.py tests/toolkit/test_install.py tests/toolkit/test_uninstall.py -q` to verify real PRD/source links, progress, persistent presence indicators, preservation, conflicts, concurrency, failures, installation and purge.
+
+For a manual check, open a reference-only Git repository externally with `--repo`. Confirm the missing-file state, then use **Create / sync** and observe progress and the generated path. Navigate and reload; presence must remain visible. Editing a source must show that synchronization is needed. Cancel deletion to retain the file, then confirm its path and delete. Only generated data must disappear, browsing must continue, and original contents/timestamps and neighboring files must match the pre-operation state.
+
 ## FR-1088 AC-480 AC-481 AC-482 AC-483 Repository analysis and tasks
 
 Run `python -m pytest HVE-Studio/tests/test_repository_workspace.py -q` for model, HTTP and real-browser checks covering empty/document-only/large repositories, management-data precedence, diagnostics, refresh, persistence, isolation and save errors.
