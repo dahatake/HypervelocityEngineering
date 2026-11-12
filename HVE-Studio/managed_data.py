@@ -127,9 +127,10 @@ def sync(root: Path, progress=None) -> dict:
     with _exclusive(root) as path:
         original = path.read_bytes() if path.exists() else None
         _read(root)  # Only an intact file produced by Studio may be replaced.
-        before = eabk_model.fingerprint(root)
+        inv = eabk_model.repo_scan.inventory(root)
+        before = eabk_model.fingerprint(root, inv)
         _progress(progress, "prepare", 1, 1)
-        model = eabk_model.build_model(root, progress=progress)
+        model = eabk_model.build_model(root, progress=progress, inv=inv, source_fingerprint=before)
         if model["meta"].get("error"):
             raise DataError("no management data or local Git repository to analyze")
         after = eabk_model.fingerprint(root)

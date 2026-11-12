@@ -167,6 +167,32 @@ def test_scan_diagnostics_and_git_failure(tmp_path, monkeypatch):
         m.build_model(root)
 
 
+# FR-1088 AC-480: imports nested in blocks are linked in ast.walk order; one build reads the git inventory once.
+def test_nested_python_imports_and_single_git_inventory(tmp_path, monkeypatch):
+    import ast
+    import sys
+    root = init_repo(tmp_path / "nested")
+    for rel in ("pkg/__init__.py", "pkg/a.py", "pkg/b.py", "pkg/c.py", "pkg/d.py"):
+        write(root, rel, "")
+    source = ("try:\n    import pkg.a\nexcept ImportError:\n    pass\n"
+              "class K:\n    def f(self):\n        if True:\n            from pkg import b\n"
+              "with open(__file__):\n    x = [lambda: 1]\n    from pkg import c\n")
+    if sys.version_info >= (3, 10):
+        source += "match x:\n    case _:\n        import pkg.d\n"
+    write(root, "main.py", source)
+    tree = ast.parse(source)
+    assert list(repo_scan._imports(tree)) == [n for n in ast.walk(tree) if isinstance(n, (ast.Import, ast.ImportFrom))]
+    calls = []
+    real = repo_scan.git
+    monkeypatch.setattr(repo_scan, "git", lambda path, *a: calls.append(a) or real(path, *a))
+    model = m.build_model(root)
+    targets = {link["target"] for link in model["repository"]["links"] if link["source"] == "main.py"}
+    assert {"pkg/a.py", "pkg/b.py", "pkg/c.py"} <= targets
+    assert sys.version_info < (3, 10) or "pkg/d.py" in targets
+    for name in ("cached", "others", "ignored", "refs"):
+        assert calls.count(repo_scan._INVENTORY_COMMANDS[name]) == 1, name
+
+
 # FR-1088 AC-482 AC-483: durable task edits never change originals and never bleed into another repository.
 def test_task_persistence_overrides_isolation_and_rejection(tmp_path):
     a = init_repo(tmp_path / "a")

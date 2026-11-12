@@ -118,12 +118,14 @@ class State:
     def model_bytes(self) -> bytes:
         with self.lock:
             root = self.root
-            fp = self._fingerprint()
+            inv = repo_scan.inventory(root)
+            source = eabk_model.fingerprint(root, inv)
+            fp = self._fingerprint(source)
             hit = self.cache.get(str(root))
             if hit and hit[0] == fp:
                 return hit[1]
-            data_status, saved_model = managed_data.inspect(root)
-            model = saved_model if saved_model is not None else eabk_model.build_model(root)
+            data_status, saved_model = managed_data.inspect(root, source)
+            model = saved_model if saved_model is not None else eabk_model.build_model(root, inv=inv, source_fingerprint=source)
             model["meta"]["generatedData"] = data_status
             model["tasks"] = self.tasks.list(root, self._imported(root, model))
             model["meta"]["taskStorage"] = str(self.tasks.path)
@@ -187,11 +189,13 @@ class State:
         threading.Thread(target=work, daemon=True).start()
         return {"repo": key, "status": "running"}
 
-    def _fingerprint(self) -> str:
+    def _fingerprint(self, source: str | None = None) -> str:
         stamp = self.tasks.path.stat().st_mtime_ns if self.tasks.path.exists() else 0
         remote = self._remote(self.root)
         refreshed = self.remote.get(str(self.root), {}).get("_at", "")
-        return eabk_model.fingerprint(self.root) + "#" + managed_data.stamp(self.root) + "#" + str(stamp) + "#" + str(refreshed) + "#" + "|".join(
+        if source is None:
+            source = eabk_model.fingerprint(self.root)
+        return source + "#" + managed_data.stamp(self.root) + "#" + str(stamp) + "#" + str(refreshed) + "#" + "|".join(
             str(remote.get(k)) for k in ("status", "fetchedAt", "loading"))
 
     @staticmethod

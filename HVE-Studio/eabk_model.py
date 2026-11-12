@@ -430,7 +430,7 @@ def data_layer_report(root: Path) -> dict:
     }
 
 
-def fingerprint(root: Path) -> str:
+def fingerprint(root: Path, inv: repo_scan.Inventory | None = None) -> str:
     files = load_config(root)
     stamps = []
     paths = [root / files[k] for k in ("requirements", "catalog", "ledger", "id_registry", "integrations")]
@@ -443,7 +443,7 @@ def fingerprint(root: Path) -> str:
             stamps.append(f"{p.name}:{st.st_mtime_ns}:{st.st_size}")
         except OSError:
             stamps.append(f"{p.name}:-")
-    stamps += [repo_scan.fingerprint(root)]
+    stamps += [repo_scan.fingerprint(root, inv)]
     for cand in CONFIG_CANDIDATES:
         p = root / cand
         if p.is_file():
@@ -1052,16 +1052,20 @@ def derive_hierarchy(model: dict, root: Path, docs: list[dict], cat_doc: dict | 
     return {"items": items, "tiers": tiers, "unclassified": UNCLASSIFIED, "kinds": list(HIER_KINDS)}
 
 
-def build_model(root: Path, progress=None) -> dict:
+def build_model(root: Path, progress=None, inv: repo_scan.Inventory | None = None, source_fingerprint: str | None = None) -> dict:
+    """inv / source_fingerprint let a caller that already read the repository state reuse it (one git inventory per build)."""
     root = Path(root).resolve()
     files = load_config(root)
     warnings: list[str] = []
-    scan = repo_scan.scan(root, is_test_path, progress=progress)
+    if inv is None:
+        inv = repo_scan.inventory(root)
+    scan = repo_scan.scan(root, is_test_path, progress=progress, inv=inv)
     if progress:
         progress({"phase": "model", "completed": 0, "total": 1})
     model: dict = {
         "meta": {"repo": str(root), "name": root.name, "studio": STUDIO_VERSION,
-                 "generatedAt": generated_at(root), "files": {}, "fingerprint": fingerprint(root)},
+                 "generatedAt": generated_at(root), "files": {},
+                 "fingerprint": source_fingerprint if source_fingerprint is not None else fingerprint(root, inv)},
         "goals": [], "reqs": [], "params": [], "terms": [], "stateMachines": [], "personas": [],         "integrations": [], "integrationCatalog": [],
         "questions": [], "decisions": [], "audits": [], "sources": [], "scenarios": [], "catalog": {"features": [], "apis": [], "tables": [], "parts": []},
         "hierarchy": {"items": [], "tiers": [], "unclassified": UNCLASSIFIED, "kinds": list(HIER_KINDS)},

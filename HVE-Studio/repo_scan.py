@@ -7,7 +7,8 @@ import json
 import os
 import re
 import subprocess
-from collections import Counter
+from collections import Counter, deque
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 TEXT_MAX_BYTES = 1_000_000
@@ -25,6 +26,8 @@ CONFIG_EXTS = {".json", ".yaml", ".yml", ".toml", ".xml", ".ini", ".cfg", ".cspr
 SECRET_NAME = re.compile(r"(^\.env($|\.)|\.pem$|\.key$|^id_(rsa|ed25519)$|credentials|secrets?)", re.I)
 CHECKBOX = re.compile(r"^\s*[-*+]\s+\[([ xX])\]\s+(.+)$")
 TODO = re.compile(r"^\s*(?:#|//|/\*+|\*|--|<!--)\s*(TODO|FIXME)\b[:\s-]*(.+?)(?:\*/|-->)?\s*$")
+# Nodes that can contain statements in list fields (match_case exists from Python 3.10).
+_STATEMENT_NODES = tuple(t for t in (ast.stmt, ast.excepthandler, getattr(ast, "match_case", None)) if t)
 
 
 class ScanError(Exception):
@@ -39,31 +42,63 @@ def git(root: Path, *args: str) -> subprocess.CompletedProcess:
         raise ScanError(f"git: {exc}") from exc
 
 
-def _ls(root: Path, *args: str) -> set[str]:
-    result = git(root, "ls-files", "-z", *args)
+_INVENTORY_COMMANDS = {
+    "cached": ("ls-files", "-z", "--cached", "--recurse-submodules"),
+    "others": ("ls-files", "-z", "--others", "--exclude-standard"),
+    "ignored": ("ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--directory"),
+    "head": ("rev-parse", "--verify", "HEAD"),
+    "refs": ("show-ref", "--head"),
+    "submodules": ("submodule", "status", "--recursive"),
+}
+
+
+class Inventory:
+    """Outputs of the read-only git commands one scan/fingerprint needs, run once and concurrently
+    (each git process costs tens of milliseconds, mostly start-up)."""
+
+    def __init__(self, root: Path):
+        names = [n for n in _INVENTORY_COMMANDS if n != "submodules" or (root / ".gitmodules").is_file()]
+        with ThreadPoolExecutor(len(names)) as pool:
+            futures = {n: pool.submit(git, root, *_INVENTORY_COMMANDS[n]) for n in names}
+            self.results = {n: f.result() for n, f in futures.items()}
+
+    def get(self, name: str) -> subprocess.CompletedProcess | None:
+        return self.results.get(name)
+
+
+def inventory(root: Path) -> Inventory | None:
+    return Inventory(root) if (root / ".git").exists() else None
+
+
+def _run(root: Path, inv: Inventory | None, name: str) -> subprocess.CompletedProcess:
+    return inv.get(name) if inv is not None else git(root, *_INVENTORY_COMMANDS[name])
+
+
+def _ls(root: Path, name: str, inv: Inventory | None = None) -> set[str]:
+    result = _run(root, inv, name)
     if result.returncode:
         raise ScanError(result.stderr.decode("utf-8", "replace").strip() or "git ls-files failed")
     return set(result.stdout.decode("utf-8", "strict").split("\0")) - {""}
 
 
-def list_files(root: Path) -> list[str] | None:
+def list_files(root: Path, inv: Inventory | None = None) -> list[str] | None:
     """Tracked files (including files of initialized submodules) and untracked, not ignored files."""
     if not (root / ".git").exists():
         return None
-    return sorted(p for p in _ls(root, "--cached", "--recurse-submodules") | _ls(root, "--others", "--exclude-standard")
+    return sorted(p for p in _ls(root, "cached", inv) | _ls(root, "others", inv)
                   if p.split("/", 1)[0] != ".hve-studio")
 
 
-def list_ignored(root: Path) -> list[str]:
+def list_ignored(root: Path, inv: Inventory | None = None) -> list[str]:
     """Ignored paths; a fully ignored directory is one entry ending in '/'. Contents are never read."""
-    return sorted(p for p in _ls(root, "--others", "--ignored", "--exclude-standard", "--directory")
+    return sorted(p for p in _ls(root, "ignored", inv)
                   if p.rstrip("/").split("/", 1)[0] != ".hve-studio")
 
 
-def list_submodules(root: Path) -> list[dict]:
+def list_submodules(root: Path, inv: Inventory | None = None) -> list[dict]:
     if not (root / ".gitmodules").is_file():
         return []
-    result = git(root, "submodule", "status", "--recursive")
+    result = (inv.get("submodules") if inv is not None else None) or _run(root, None, "submodules")
     if result.returncode:
         raise ScanError(result.stderr.decode("utf-8", "replace").strip() or "git submodule status failed")
     states = {" ": "initialized", "-": "not-initialized", "+": "checked-out-commit-differs", "U": "merge-conflict"}
@@ -80,13 +115,27 @@ def excluded(rel: str) -> bool:
     return bool(set(Path(rel).parts[:-1]) & SKIP_DIRS)
 
 
-def safe_file(root: Path, rel: str) -> bool:
+def safe_file(root: Path, rel: str, symlinks: dict[Path, bool] | None = None) -> bool:
+    """symlinks memoizes is_symlink() of shared parent directories across the files of one scan."""
     path = root / rel
-    return root in path.resolve().parents and not any(p.is_symlink() for p in (path, *path.parents) if p != root)
+    if root not in path.resolve().parents:
+        return False
+    if symlinks is None:
+        symlinks = {}
+    for p in (path, *path.parents):
+        if p == root:
+            continue
+        if p not in symlinks:
+            symlinks[p] = p.is_symlink()
+        if symlinks[p]:
+            return False
+    return True
 
 
-def fingerprint(root: Path) -> str:
-    paths = list_files(root)
+def fingerprint(root: Path, inv: Inventory | None = None) -> str:
+    if inv is None:
+        inv = inventory(root)
+    paths = list_files(root, inv)
     if paths is None:
         return ""
     digest = hashlib.sha256()
@@ -100,30 +149,45 @@ def fingerprint(root: Path) -> str:
         except OSError:
             stamp = None
         digest.update(f"{rel}\0{stamp}\0".encode("utf-8"))
-    head = git(root, "rev-parse", "--verify", "HEAD")
-    digest.update(head.stdout)
-    refs = git(root, "show-ref", "--head")
+    digest.update(_run(root, inv, "head").stdout)
+    refs = _run(root, inv, "refs")
     if refs.returncode not in (0, 1) or refs.stderr:
         raise ScanError(refs.stderr.decode("utf-8", "replace").strip() or "git show-ref failed")
     digest.update(refs.stdout)
-    digest.update("\0".join(list_ignored(root)).encode("utf-8"))
-    digest.update(json.dumps(list_submodules(root)).encode("utf-8"))
+    digest.update("\0".join(list_ignored(root, inv)).encode("utf-8"))
+    digest.update(json.dumps(list_submodules(root, inv)).encode("utf-8"))
     return digest.hexdigest()
 
 
-def scan(root: Path, is_test, progress=None) -> dict | None:
+def _imports(tree: ast.AST):
+    """Import nodes in ast.walk order. Imports are statements, so expression subtrees (the bulk of a module) are skipped."""
+    queue = deque([tree])
+    while queue:
+        node = queue.popleft()
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            yield node
+        for name in node._fields:
+            value = getattr(node, name, None)
+            if isinstance(value, list):
+                queue.extend(v for v in value if isinstance(v, _STATEMENT_NODES))
+
+
+def scan(root: Path, is_test, progress=None, inv: Inventory | None = None) -> dict | None:
     if progress:
         progress({"phase": "inventory", "completed": 0, "total": 1})
-    paths = list_files(root)
+    if inv is None:
+        inv = inventory(root)
+    paths = list_files(root, inv)
     if paths is None:
         return None
     data = {"files": [], "tasks": [], "dependencies": [], "history": [], "diagnostics": [],
             "texts": {}, "links": [], "limits": {"textBytes": TEXT_MAX_BYTES},
-            "submodules": list_submodules(root),
+            "submodules": list_submodules(root, inv),
             "scope": "local Git: tracked, untracked and ignored paths, initialized submodule files, all local refs"}
     texts = data["texts"]
+    symlinks: dict[Path, bool] = {}
     submodules = {s["path"]: s for s in data["submodules"]}
-    for rel in list_ignored(root):
+    for rel in list_ignored(root, inv):
         data["files"].append({"path": rel, "kind": "ignored", "bytes": None, "analysis": "inventory-only"})
     if progress:
         progress({"phase": "inventory", "completed": 1, "total": 1})
@@ -146,7 +210,7 @@ def scan(root: Path, is_test, progress=None) -> dict | None:
             "document" if suffix in DOC_EXTS else "config" if suffix in CONFIG_EXTS else "asset")
         rec = {"path": rel, "kind": kind, "bytes": None, "analysis": "inventory-only"}
         data["files"].append(rec)
-        if not safe_file(root, rel):
+        if not safe_file(root, rel, symlinks):
             rec["analysis"] = "excluded"
             data["diagnostics"].append({"path": rel, "reason": "symlink or path outside repository"})
             continue
@@ -210,7 +274,7 @@ def scan(root: Path, is_test, progress=None) -> dict | None:
         if rel.endswith(".py"):
             try:
                 tree = ast.parse(text)
-                for item in ast.walk(tree):
+                for item in _imports(tree):
                     if isinstance(item, ast.Import):
                         imports.extend((alias.name.replace(".", "/"), 0) for alias in item.names)
                     elif isinstance(item, ast.ImportFrom):
