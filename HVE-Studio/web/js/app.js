@@ -199,10 +199,11 @@ function mountMapDim(host, name, inner) {
   if (inner) inner.destroy = () => { off(); orig?.call(inner); };
 }
 
-async function loadModel(quiet) {
+async function loadModel(quiet, onModel) {
   const res = await fetch('/api/model', { cache: 'no-store' });
   const model = await res.json();
   if (!res.ok) throw new Error(model.detail || model.error || 'HTTP ' + res.status);
+  onModel?.();
   store.load(model);
   setDocName(model.meta.name);   // the project name is managed data: shown as written
   document.getElementById('repoBtn').replaceChildren(icon('folder', { size: 16 }), ' ' + model.meta.name);
@@ -386,7 +387,25 @@ initDrawer(document.getElementById('drawer'));
 installXref();
 for (const k of ['dashboard', 'implstatus', 'diagrams', 'map2d', 'map3d']) ROUTES[k].load().catch(() => {}); // warm the module cache (the 2D map is the default map target; the 3D map is one mode switch away — no empty view while its module loads)
 function showLoadError(e) {
+  finishSplash();
   view.replaceChildren(statePanel({ state: 'error', heading: t('state.error.h'), description: `${t('state.error.d')} (${(e && e.message) || e})`,
     action: el('button', { type: 'button', class: 'btn', onclick: () => { view.replaceChildren(statePanel({ state: 'loading', heading: t('loading'), description: t('state.loading.d') })); loadModel().catch(showLoadError); } }, t('state.retry')) }));
 }
-loadModel().catch(showLoadError);
+function splashProgress(completed, key) {
+  document.getElementById('splashBar').value = completed;
+  document.getElementById('splashSteps').textContent = `${completed} / 3`;
+  document.getElementById('splashStatus').textContent = t(key);
+}
+function finishSplash() {
+  document.getElementById('splash').hidden = true;
+  document.querySelectorAll('body > [inert]').forEach((node) => node.removeAttribute('inert'));
+}
+async function start() {
+  splashProgress(1, 'splash.model');
+  await loadModel(true, () => splashProgress(1, 'splash.index'));
+  splashProgress(2, 'splash.view');
+  await route();
+  splashProgress(3, 'splash.done');
+  finishSplash();
+}
+start().catch(showLoadError);

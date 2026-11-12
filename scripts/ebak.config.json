@@ -14,6 +14,14 @@
   },
   "checks": {
     "_note": "EABK Lite: profile が lite（既定）のときは lite_checks の CHK だけを報告します（構造と追跡性）。full にすると CHK-00〜34 をすべて報告します。プロファイルは rdcheck・verify・rdfix のすべてに同じように効きます（--profile でも切り替えられます）。",
+    "_id_scan_exclude_note": "既定の除外を維持し、他リポジトリ固有の要求 ID を引用する比較履歴だけを追加する。配列は既定値を置き換えるため、既定の変更時はこの一覧も確認する。",
+    "id_scan_exclude": [
+      "docs/**", "work/**", ".github/**", "scripts/**", "tools/**", "users-guide/**",
+      "EABK-docs/**", "HVE-Studio/**", "EABK-Studio/**", "tests/toolkit/**", "templates/**",
+      "node_modules/**", "**/node_modules/**", ".git/**", "**/*.lock", "**/package-lock.json",
+      "AGENTS.md", "README.md", "CHANGELOG.md", "**/*.svg", ".specify/**", "specs/**/*.md",
+      "HVE-History/202611082015-HVEandEABK-Gone-AnalyticsReport.md"
+    ],
     "profile": "lite",
     "lite_checks": [
       "CHK-01",

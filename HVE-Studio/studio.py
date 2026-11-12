@@ -498,11 +498,11 @@ def main(argv=None) -> int:
         print(format_report(report))
         return 0 if report["ok"] else 1
     try:
-        initial = eabk_model.build_model(root)
+        viewable = eabk_model.can_view(root)
     except (repo_scan.ScanError, OSError) as exc:
         print(f"repository analysis failed: {exc}", file=sys.stderr)
         return 1
-    if initial["meta"].get("error"):
+    if not viewable:
         print(no_data_message(root), file=sys.stderr)
         return 1
     STATE = State(root, remote=not args.no_remote)

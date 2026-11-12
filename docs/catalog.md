@@ -120,6 +120,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1087 | 全版に対応したアンインストール | 承認済み | `tools/uninstall.py`、`tools/uninstall-catalog.json`、`tools/build-uninstall-catalog.py`、`tools/uninstall.ps1`、`tools/uninstall.sh` | `tests/toolkit/test_uninstall.py`、`tools/verify-uninstall-matrix.py`、`docs/manual-tests.md` | - |
 | FR-1086 | EABK を導入していないリポジトリの表示（コードのモード） | 承認済み（依頼 2026-11-12） | `HVE-Studio/eabk_model.py`、`HVE-Studio/studio.py`、`HVE-Studio/repo_scan.py` | `HVE-Studio/tests/test_studio.py`、`HVE-Studio/tests/test_repository_workspace.py` | 管理データモデル |
 | FR-1088 | リポジトリ分析と分離されたタスク管理 | 承認済み（依頼 2026-11-12） | `HVE-Studio/repo_scan.py`、`HVE-Studio/remote_github.py`、`HVE-Studio/task_state.py`、`HVE-Studio/eabk_model.py`、`HVE-Studio/studio.py`、`HVE-Studio/web/js/workspace.js`、`HVE-Studio/web/js/dashboard.js`、`HVE-Studio/web/js/app.js`、`HVE-Studio/web/js/i18n.js`、`HVE-Studio/web/app.css` | `HVE-Studio/tests/test_repository_workspace.py` | 管理データモデル、HTTP サーバー、ストア |
+| FR-1089 | 起動時の進捗表示 | 承認済み | `HVE-Studio/studio.py`, `HVE-Studio/web/index.html`, `HVE-Studio/web/app.css`, `HVE-Studio/web/js/app.js`, `HVE-Studio/web/js/i18n.js` | `HVE-Studio/tests/test_splash_ui.py`, `HVE-Studio/tests/test_studio.py`, `tests/integration/test_semantic_zoom_ui.py` | HTTP サーバー、デザイン基盤 |
 
 
 ## API・イベント

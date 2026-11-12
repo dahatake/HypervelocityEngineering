@@ -589,6 +589,13 @@ def test_start_without_data_layer_does_not_serve_and_explains(tmp_path, capsys):
     assert "no EABK data layer" in err and studio.GUIDE in err
 
 
+# FR-1089 AC-485: the server starts before the expensive model build.
+def test_start_does_not_build_model_before_serving(repo, monkeypatch):
+    monkeypatch.setattr(m, "build_model", lambda root: pytest.fail("model built before serving"))
+    monkeypatch.setattr(ThreadingHTTPServer, "serve_forever", lambda self: None)
+    assert studio.main(["--repo", str(repo), "--no-open", "--no-remote", "--port", "0"]) == 0
+
+
 def test_role_sets_the_first_screen(repo, monkeypatch, capsys):
     def fake_serve(self):
         raise KeyboardInterrupt

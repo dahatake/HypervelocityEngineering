@@ -5,6 +5,8 @@ const listeners = new Set();
 
 const D = {
   ja: {
+    'splash.mark': 'H', 'splash.brand': 'HVE STUDIO', 'splash.kicker': 'HYPERVELOCITY ENGINEERING', 'splash.title': 'すべてのつながりを、ひとつの視点に。', 'splash.subtitle': 'プロジェクトの全体像を準備しています。', 'splash.initial': 'アプリケーションを読み込み中…', 'splash.progress': '起動の進捗', 'splash.note': '処理が完了した段階を表示しています。', 'splash.reload': '再読み込み',
+    'splash.model': 'ソースと管理データを解析中…', 'splash.index': 'データと関連を準備中…', 'splash.view': '画面を準備中…', 'splash.done': '準備ができました',
     'ws.title': 'リポジトリ分析・タスク管理', 'ws.scope': 'ローカル Git の追跡済み・未追跡のファイル、初期化済みサブモジュールのファイル、無視対象と生成物のパス、全ローカル参照の履歴を取得します。GitHub の Issue・PR・Actions の実行は、この端末で認証済みの GitHub CLI（gh）から読み取り専用で取得し、メモリにだけ保持します。コードの実行・原本の変更はしません。',
     'ws.tasks': 'タスク', 'ws.new': '新しいタスクの題名', 'ws.add': '追加', 'ws.save': '題名を保存', 'ws.delete': '削除', 'ws.reset': '原本の状態に戻す', 'ws.confirmDelete': '「{title}」を削除しますか？この操作は取り消せません。',
     'ws.todo': '未着手', 'ws.doing': '進行中', 'ws.done': '完了', 'ws.status': '状態', 'ws.name': '題名', 'ws.local': 'Studio で作成',
@@ -157,6 +159,8 @@ const D = {
         // @@ja6
       },
   en: {
+    'splash.mark': 'H', 'splash.brand': 'HVE STUDIO', 'splash.kicker': 'HYPERVELOCITY ENGINEERING', 'splash.title': 'See the whole picture, in one place.', 'splash.subtitle': 'Preparing your project workspace.', 'splash.initial': 'Loading the application…', 'splash.progress': 'Startup progress', 'splash.note': 'Progress shows completed stages.', 'splash.reload': 'Reload',
+    'splash.model': 'Analyzing source and project data…', 'splash.index': 'Preparing data and relationships…', 'splash.view': 'Preparing your view…', 'splash.done': 'Ready',
     'ws.title': 'Repository analysis & tasks', 'ws.scope': 'Collects tracked and untracked local Git files, files of initialized submodules, ignored and generated paths, and history of all local refs. GitHub issues, pull requests and Actions runs are read-only fetched through the GitHub CLI (gh) already authenticated on this device and kept in memory only. No repository code execution or changes to originals.',
     'ws.tasks': 'Tasks', 'ws.new': 'New task title', 'ws.add': 'Add', 'ws.save': 'Save title', 'ws.delete': 'Delete', 'ws.reset': 'Reset to original status', 'ws.confirmDelete': 'Delete "{title}"? This cannot be undone.',
     'ws.todo': 'To do', 'ws.doing': 'In progress', 'ws.done': 'Done', 'ws.status': 'Status', 'ws.name': 'Title', 'ws.local': 'Created in Studio',

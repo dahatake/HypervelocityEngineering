@@ -10,6 +10,31 @@ html.snapshot[data-route="tables"] #view::after{content:"";position:fixed;left:0
 .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 html,body{margin:0;height:100%;background:var(--color-bg-canvas);color:var(--color-fg-default);overflow:hidden}
 body{display:flex;flex-direction:column;font-family:var(--font-family-base);font-size:var(--font-size-body);line-height:var(--line-height-body)}
+.splash{position:fixed;inset:0;z-index:300;overflow:auto;background:radial-gradient(ellipse at 82% 32%,var(--color-deco-2),transparent 50%),radial-gradient(ellipse at 72% 78%,var(--color-deco-1),transparent 50%),var(--color-bg-canvas);color:var(--color-fg-default)}
+.splash[hidden]{display:none}
+.splash-content{position:relative;z-index:1;min-height:100%;display:flex;flex-direction:column;align-items:flex-start;padding:clamp(var(--space-6),6vw,var(--space-12));gap:var(--space-8)}
+.splash-brand{display:flex;align-items:center;gap:var(--space-3);font-size:var(--font-size-caption);font-weight:var(--font-weight-bold);letter-spacing:.14em}
+.splash-mark{display:grid;place-items:center;width:var(--size-control);height:var(--size-control);border-radius:var(--radius-md);background:var(--color-accent);color:var(--color-on-accent);letter-spacing:0;font-size:var(--font-size-subtitle)}
+.splash-intro{margin:auto 0;max-width:38rem;padding-block:var(--space-8)}
+.splash-kicker{font-size:var(--font-size-caption);font-weight:var(--font-weight-semibold);letter-spacing:.16em;color:var(--color-fg-muted)}
+.splash h1{font-size:clamp(var(--font-size-display),5vw,4rem);line-height:1.2;letter-spacing:-.04em;text-wrap:balance;margin:var(--space-4) 0}
+.splash-subtitle{font-size:var(--font-size-subtitle);color:var(--color-fg-muted)}
+.splash-progress{width:min(100%,32rem);padding:var(--space-5);background:var(--color-bg-surface);border:var(--stroke-thin) solid var(--color-border-default);border-radius:var(--radius-container);box-shadow:var(--elevation-card)}
+.splash-progress-head{display:flex;justify-content:space-between;gap:var(--space-4);font-weight:var(--font-weight-semibold)}
+.splash-progress progress{display:block;width:100%;height:var(--space-2);margin-top:var(--space-4);appearance:none;border:0;border-radius:var(--radius-pill);overflow:hidden;background:var(--color-bg-hover)}
+.splash-progress progress::-webkit-progress-bar{background:var(--color-bg-hover)}
+.splash-progress progress::-webkit-progress-value{background:var(--color-accent);transition:width var(--duration-normal) var(--ease-standard)}
+.splash-progress progress::-moz-progress-bar{background:var(--color-accent)}
+.splash-progress p{margin:var(--space-3) 0 0;color:var(--color-fg-muted);font-size:var(--font-size-caption)}
+.splash-progress button{margin-top:var(--space-4)}
+.splash-progress button[hidden]{display:none}
+.splash-art{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.splash-orbit{position:absolute;right:-8%;top:8%;width:min(65vw,52rem);aspect-ratio:1;border:var(--stroke-thin) solid var(--color-border-strong);border-radius:50%;opacity:.25;transform:rotate(-25deg) scaleX(.7)}
+.splash-orbit.orbit-two{transform:rotate(35deg) scaleX(.7)}
+.splash-core{position:absolute;right:17%;top:30%;width:min(24vw,18rem);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 30% 25%,var(--color-deco-3),var(--color-deco-2) 45%,var(--color-deco-1));box-shadow:var(--shadow-4)}
+@media (max-width:600px){.splash-art{opacity:.45}.splash-intro{padding-block:var(--space-4)}.splash-core{right:-8%;top:18%;width:48vw}}
+@media (prefers-reduced-motion: reduce){.splash-progress progress::-webkit-progress-value{transition:none}}
+@media (forced-colors: active){.splash{background:Canvas;color:CanvasText}.splash-progress{background:Canvas;border:1px solid CanvasText}.splash-art{display:none}}
 button,input,select{font:inherit;color:inherit}
 a{color:var(--color-fg-link)}
 button,a,input,select{touch-action:manipulation}

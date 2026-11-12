@@ -13,9 +13,46 @@
 <script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script>
 </head>
 <body>
-<a class="skip-link" href="#view" data-i18n="skip.main">Skip to content</a>
+<section id="splash" class="splash" aria-labelledby="splashTitle">
+  <div class="splash-art" aria-hidden="true"><div class="splash-orbit orbit-one"></div><div class="splash-orbit orbit-two"></div><div class="splash-core"></div></div>
+  <div class="splash-content">
+    <div class="splash-brand"><span class="splash-mark" aria-hidden="true" data-i18n="splash.mark">H</span><span data-i18n="splash.brand">HVE STUDIO</span></div>
+    <div class="splash-intro">
+      <p class="splash-kicker" data-i18n="splash.kicker">HYPERVELOCITY ENGINEERING</p>
+      <h1 id="splashTitle" data-i18n="splash.title">すべてのつながりを、ひとつの視点に。</h1>
+      <p class="splash-subtitle" data-i18n="splash.subtitle">プロジェクトの全体像を準備しています。</p>
+    </div>
+    <div class="splash-progress">
+      <div class="splash-progress-head"><span id="splashStatus" role="status" aria-live="polite" data-i18n="splash.initial">アプリケーションを読み込み中…</span><span id="splashSteps" aria-hidden="true">0 / 3</span></div>
+      <progress id="splashBar" max="3" value="0" aria-label="起動の進捗" data-i18n-aria="splash.progress"></progress>
+      <p id="splashNote" data-i18n="splash.note">処理が完了した段階を表示しています。</p>
+      <button id="splashReload" class="btn" type="button" data-i18n="splash.reload" hidden onclick="location.reload()">再読み込み</button>
+    </div>
+  </div>
+</section>
+<script>
+  (() => {
+    let saved;
+    try { saved = localStorage.getItem('eabk-studio.lang'); } catch { saved = null; }
+    const en = saved === 'en' || (saved !== 'ja' && !navigator.language.toLowerCase().startsWith('ja'));
+    if (en) {
+      document.getElementById('splashTitle').textContent = 'See the whole picture, in one place.';
+      document.querySelector('.splash-subtitle').textContent = 'Preparing your project workspace.';
+      document.getElementById('splashStatus').textContent = 'Loading the application…';
+      document.getElementById('splashBar').setAttribute('aria-label', 'Startup progress');
+      document.getElementById('splashNote').textContent = 'Progress shows completed stages.';
+      document.getElementById('splashReload').textContent = 'Reload';
+    }
+    document.documentElement.lang = en ? 'en' : 'ja';
+    window.splashModuleError = () => {
+      document.getElementById('splashStatus').textContent = en ? 'The application could not be loaded. Check the server and reload.' : 'アプリケーションを読み込めませんでした。サーバーを確認して再読み込みしてください。';
+      document.getElementById('splashReload').hidden = false;
+    };
+  })();
+</script>
+<a class="skip-link" href="#view" data-i18n="skip.main" inert>Skip to content</a>
 <div class="bg" aria-hidden="true"><i></i><i></i><i></i></div>
-<header class="top">
+<header class="top" inert>
   <a class="brand" href="#/dashboard" title="HVE Studio (Hypervelocity Engineering Studio)">
     <svg viewBox="0 0 64 64" width="30" height="30"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#39d0ff"/><stop offset="1" stop-color="#b36bff"/></linearGradient></defs><rect width="64" height="64" rx="16" fill="url(#lg)"/><path d="M32 12 50 22v20L32 52 14 42V22z" fill="none" stroke="#fff" stroke-width="4" stroke-linejoin="round"/><circle cx="32" cy="32" r="5" fill="#fff"/></svg>
     <span><b>HVE</b> Studio</span>
@@ -46,11 +83,11 @@
   </div>
   <div id="themeLive" class="sr-only" aria-live="polite"></div>
 </header>
-<p id="navDesc" class="navdesc" role="note"></p>
-<main id="view" tabindex="-1"></main>
-<aside id="drawer" class="drawer" hidden></aside>
-<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-<script type="module" src="js/app.js"></script>
+<p id="navDesc" class="navdesc" role="note" inert></p>
+<main id="view" tabindex="-1" inert></main>
+<aside id="drawer" class="drawer" hidden inert></aside>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden inert></div>
+<script type="module" src="js/app.js" onerror="window.splashModuleError()"></script>
 <link rel="modulepreload" href="js/viz.js">
 </body>
 </html>

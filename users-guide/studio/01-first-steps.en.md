@@ -39,6 +39,8 @@ python HVE-Studio/studio.py --check
 
 The browser opens and shows `http://127.0.0.1:8765/` (if that port is in use, the next number; check the URL shown in the terminal). To stop, press `Ctrl+C` in the terminal.
 
+The startup splash shows application loading, source and project data analysis, and preparation of the initial view. Progress represents completed stages, not an estimate of files or remaining time. If loading fails, the error and a retry action are shown.
+
 On Windows you can also launch with `.\HVE-Studio\start.ps1 <repository>`, and on macOS / Linux with `./HVE-Studio/start.sh <repository>`. Options can be passed as `-Role pm`, `-Check`, `-NoOpen` in PowerShell, and in the shell like `./HVE-Studio/start.sh . 8765 --role pm`.
 
 Role-specific walkthroughs are in [05-product-manager.en.md](05-product-manager.en.md), [06-architect.en.md](06-architect.en.md), and [07-software-engineer.en.md](07-software-engineer.en.md).

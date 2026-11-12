@@ -39,6 +39,8 @@ python HVE-Studio/studio.py --check
 
 ブラウザーが開き、`http://127.0.0.1:8765/` を表示します（使用中なら次の番号。ターミナルに出る URL を見てください）。止めるときはターミナルで `Ctrl+C` です。
 
+起動中はスプラッシュ画面にアプリの読込み、ソース・管理データの解析、初期画面の準備を表示します。進捗は完了した段階を示し、ファイル数や残り時間の推定ではありません。読込みに失敗した場合は原因と再試行を確認できます。
+
 Windows は `.\HVE-Studio\start.ps1 <リポジトリ>`、macOS / Linux は `./HVE-Studio/start.sh <リポジトリ>` でも起動できます。オプションは、PowerShell では `-Role pm`・`-Check`・`-NoOpen`、シェルでは `./HVE-Studio/start.sh . 8765 --role pm` のように渡せます。
 
 役割別の進め方は [05-product-manager.md](05-product-manager.md)・[06-architect.md](06-architect.md)・[07-software-engineer.md](07-software-engineer.md) にあります。

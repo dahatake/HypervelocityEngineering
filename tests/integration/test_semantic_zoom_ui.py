@@ -66,6 +66,26 @@ def state(page, scale=None):
     return page.evaluate("() => window.eabkView.getState()")
 
 
+# FR-1089 AC-485 AC-486: the requested deep link remains intact while initial model loading is pending.
+def test_splash_waits_for_model_before_opening_deep_link(browser, zoom):
+    page = browser.new_context(locale="en-US").new_page()
+    page.add_init_script("""
+      const originalFetch = window.fetch;
+      window.fetch = (...args) => String(args[0]) === '/api/model'
+        ? new Promise(resolve => { window.releaseModel = () => resolve(originalFetch(...args)); })
+        : originalFetch(...args);
+    """)
+    page.goto(f"{zoom[1]}/#/tables", wait_until="domcontentloaded")
+    page.wait_for_function("Boolean(window.releaseModel)")
+    assert page.locator("#splash").is_visible()
+    assert page.locator("#splashBar").get_attribute("value") == "1"
+    page.evaluate("window.releaseModel()")
+    page.locator("#splash").wait_for(state="hidden")
+    assert page.evaluate("location.hash") == "#/tables"
+    assert page.locator("#view").inner_text()
+    page.context.close()
+
+
 # FR-1027 AC-175: zoom keeps the selection and the filter, the selected target stays on screen; wheel, buttons and keys all zoom
 def test_ac175_zoom_keeps_selection_filter_and_target_on_screen(browser, zoom):
     page = open_page(browser, zoom[1], "map2d")
