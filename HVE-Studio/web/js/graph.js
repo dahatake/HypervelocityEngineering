@@ -133,7 +133,7 @@ export function forceLayout(nodes, edges, iterations = 250) {
     }
     if (!moved) break;
   }
-  const minX = Math.min(...x, 0), minY = Math.min(...y, 0);
+  const minX = x.reduce((m, v) => (v < m ? v : m), 0), minY = y.reduce((m, v) => (v < m ? v : m), 0);
   const at = new Map();
   let w = 0, h = 0;
   nodes.forEach((nd, i) => {

@@ -67,7 +67,7 @@ export function buildTree(hier, filter) {
     root.shown += n;
     let cur = root;
     for (let i = 0; i < 3; i++) { cur = touch(path.slice(0, i + 1)); cur.shown += n; }
-    cur.items.push(...byPath.get(k));
+    for (const item of byPath.get(k)) cur.items.push(item);   // no spread: one tier can hold 100k+ items
   }
   const fin = (node, path) => {
     for (const ch of node.children.values()) {

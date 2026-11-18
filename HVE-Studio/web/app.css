@@ -34,6 +34,17 @@ body{display:flex;flex-direction:column;font-family:var(--font-family-base);font
 .splash-core{position:absolute;right:17%;top:30%;width:min(24vw,18rem);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 30% 25%,var(--color-deco-3),var(--color-deco-2) 45%,var(--color-deco-1));box-shadow:var(--shadow-4)}
 @media (max-width:600px){.splash-art{opacity:.45}.splash-intro{padding-block:var(--space-4)}.splash-core{right:-8%;top:18%;width:48vw}}
 @media (prefers-reduced-motion: reduce){.splash-progress progress::-webkit-progress-value{transition:none}}
+.splash-phase{margin-top:var(--space-4)}
+.splash-phase .splash-progress-head{font-weight:var(--font-weight-regular,400);font-size:var(--font-size-caption);color:var(--color-fg-muted)}
+.splash-phase progress{margin-top:var(--space-2)}
+.splash-phase[hidden],.build-banner[hidden]{display:none}
+.build-banner{position:fixed;z-index:60;top:calc(var(--hh,56px) + var(--space-2));left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:var(--space-3);max-width:min(96vw,44rem);padding:var(--space-2) var(--space-4);background:var(--color-bg-surface);border:var(--stroke-thin) solid var(--color-accent);border-radius:var(--radius-pill);box-shadow:var(--elevation-card);font-size:var(--font-size-caption)}
+.build-banner progress{flex:0 0 8rem;height:var(--space-2);appearance:none;border:0;border-radius:var(--radius-pill);overflow:hidden;background:var(--color-bg-hover)}
+.build-banner progress::-webkit-progress-bar{background:var(--color-bg-hover)}
+.build-banner progress::-webkit-progress-value{background:var(--color-accent)}
+.build-banner progress::-moz-progress-bar{background:var(--color-accent)}
+.build-banner .spin.build-spin{flex:none;width:var(--size-icon-sm);height:var(--size-icon-sm);border-width:var(--stroke-thick)}
+@media (forced-colors: active){.build-banner{border:1px solid CanvasText}}
 @media (forced-colors: active){.splash{background:Canvas;color:CanvasText}.splash-progress{background:Canvas;border:1px solid CanvasText}.splash-art{display:none}}
 button,input,select{font:inherit;color:inherit}
 a{color:var(--color-fg-link)}

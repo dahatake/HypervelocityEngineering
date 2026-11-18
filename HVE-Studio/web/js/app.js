@@ -200,23 +200,92 @@ function mountMapDim(host, name, inner) {
   if (inner) inner.destroy = () => { off(); orig?.call(inner); };
 }
 
+function showMeta(meta) {
+  setDocName(meta.name);   // the project name is managed data: shown as written
+  document.getElementById('repoBtn').replaceChildren(icon('folder', { size: 16 }), ' ' + meta.name);
+  document.getElementById('repoBtn').title = meta.repo;
+  const modelTime = document.getElementById('modelTime');
+  modelTime.dateTime = meta.generatedAt;
+  modelTime.textContent = meta.generatedAt;
+}
+
 async function loadModel(quiet, onModel) {
   const res = await fetch('/api/model', { cache: 'no-store' });
   const model = await res.json();
   if (!res.ok) throw new Error(model.detail || model.error || 'HTTP ' + res.status);
   onModel?.();
   store.load(model);
-  setDocName(model.meta.name);   // the project name is managed data: shown as written
-  document.getElementById('repoBtn').replaceChildren(icon('folder', { size: 16 }), ' ' + model.meta.name);
-  document.getElementById('repoBtn').title = model.meta.repo;
-  const modelTime = document.getElementById('modelTime');
-  modelTime.dateTime = model.meta.generatedAt;
-  modelTime.textContent = model.meta.generatedAt;
+  showMeta(model.meta);
   const fp = await fetch('/api/fingerprint', { cache: 'no-store' });
   const f = await fp.json();
   if (!fp.ok) throw new Error(f.detail || f.error || 'HTTP ' + fp.status);
   fingerprint = model.meta.stateFingerprint || f.fingerprint; // the model's own state avoids a load/poll race
   if (!quiet) route();
+}
+
+// FR-1089: while the server builds the model, show what it has really done (phase, processed / total, elapsed time —
+// no estimated remaining time) and, with `partials`, render the model built so far, refreshed at most every 5 seconds.
+const PARTIAL_EVERY_MS = 5000;
+const POLL_MS = 1000;
+let partialShown = false;
+function buildLabel(p) {
+  const pr = p?.progress;
+  if (!pr || p.status === 'idle') return t('build.waiting');
+  if (pr.phase === 'model') {
+    const label = t('build.model.' + Math.min(pr.completed, 5));
+    const n = /^requirements (\d+)$/.exec(pr.detail || '');
+    return n ? t('build.reqs', { label, n: n[1] }) : label;
+  }
+  const label = t('data.phase.' + pr.phase);
+  return pr.total > 1 ? t('build.count', { label, done: pr.completed, total: pr.total }) : label;
+}
+function setBar(bar, pr) {
+  bar.max = Math.max(1, pr?.total || 1);
+  bar.value = Math.min(bar.max, pr?.completed || 0);
+}
+function showBuild(p, lead) {
+  const label = buildLabel(p), elapsed = t('build.elapsed', { s: Math.floor((p?.elapsedMs || 0) / 1000) });
+  document.getElementById('splashPhase').hidden = false;
+  document.getElementById('splashPhaseText').textContent = label;
+  document.getElementById('splashElapsed').textContent = elapsed;
+  setBar(document.getElementById('splashPhaseBar'), p?.progress);
+  if (!document.getElementById('splash').hidden) return;
+  const banner = document.getElementById('buildBanner');
+  document.getElementById('buildText').textContent = (lead ? lead + ' — ' : '') + label;
+  document.getElementById('buildElapsed').textContent = elapsed;
+  setBar(document.getElementById('buildBar'), p?.progress);
+  banner.hidden = false;
+}
+function watchBuild({ partials = false, lead = '' } = {}) {
+  let stopped = false, timer = 0, shown = 0, rendered = 0;
+  const tick = async () => {
+    try {
+      const r = await fetch('/api/model/progress', { cache: 'no-store' });
+      const p = r.ok ? await r.json() : null;
+      if (stopped || !p) return;
+      let text = lead;
+      if (partials && p.status === 'running' && p.partial > shown && Date.now() - rendered >= PARTIAL_EVERY_MS) {
+        const pr = await fetch('/api/model/partial', { cache: 'no-store' });
+        if (pr.status === 200) {
+          const model = await pr.json();
+          if (stopped) return;
+          shown = p.partial; rendered = Date.now(); partialShown = true;
+          store.load(model);
+          showMeta(model.meta);
+          finishSplash();
+          route();
+        } else pr.body?.cancel?.();
+      }
+      if (partialShown) text = t('build.partial', { n: store.model?.meta?.partial?.requirements ?? store.model?.reqs?.length ?? 0 });
+      showBuild(p, text);
+    } catch { /* progress is best effort; the blocking model request reports failures */ }
+    finally { if (!stopped) timer = setTimeout(tick, POLL_MS); }
+  };
+  timer = setTimeout(tick, 300);
+  return () => {
+    stopped = true; clearTimeout(timer); partialShown = false;
+    document.getElementById('buildBanner').hidden = true;
+  };
 }
 
 initManagedData(() => loadModel(true));
@@ -344,7 +413,9 @@ document.getElementById('repoBtn').addEventListener('click', () => { pickAndSwit
 // NFR-OPS-003 AC-028: on failure keep the current model, show cause + Retry / Back.
 async function switchRepository(cur, path) {
   if (!path || path === cur) return; // cancelled: change nothing, show nothing
-  const res = await fetch('/api/repo', { method: 'POST', headers: HDR, body: JSON.stringify({ path }) });
+  const stop = watchBuild({ lead: t('build.switch') });
+  let res;
+  try { res = await fetch('/api/repo', { method: 'POST', headers: HDR, body: JSON.stringify({ path }) }); } finally { stop(); }
   if (!res.ok) {
     const j = await res.json().catch(() => ({}));
     toast((j.error === 'no-data-layer' ? t('repo.nodata') : t('repo.bad')) + (j.detail ? ' ' + j.detail : ''), [
@@ -362,23 +433,25 @@ async function switchRepository(cur, path) {
   await loadModel();
 }window.addEventListener('hashchange', route);
 
-let refreshFailed = false;
+let refreshFailed = false, refreshing = false;
 setInterval(async () => {
-  if (document.hidden || !store.model || routeName() === 'maintenance') return;
+  if (refreshing || document.hidden || !store.model || routeName() === 'maintenance') return;
+  refreshing = true;
   try {
     const response = await fetch('/api/fingerprint', { cache: 'no-store' });
     const f = await response.json();
     if (!response.ok) throw new Error(f.detail || f.error || 'HTTP ' + response.status);
     if (fingerprint && f.fingerprint !== fingerprint) {
       toast(t('update.avail'));
-      await loadModel(true);
+      const stop = watchBuild({ lead: t('build.refresh') });
+      try { await loadModel(true); } finally { stop(); }
       if (routeName() !== 'workspace') route();
     }
     refreshFailed = false;
   } catch (e) {
     if (!refreshFailed) toast(t('state.stale.d') + ' ' + String(e.message || e));
     refreshFailed = true;
-  }
+  } finally { refreshing = false; }
 }, 4000);
 
 const headerEl = document.querySelector('.top');
@@ -405,7 +478,10 @@ function finishSplash() {
 }
 async function start() {
   splashProgress(1, 'splash.model');
-  await loadModel(true, () => splashProgress(1, 'splash.index'));
+  const stop = watchBuild({ partials: true });
+  try {
+    await loadModel(true, () => splashProgress(1, 'splash.index'));
+  } finally { stop(); }
   splashProgress(2, 'splash.view');
   await route();
   splashProgress(3, 'splash.done');

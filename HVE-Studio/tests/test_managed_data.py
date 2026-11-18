@@ -55,7 +55,8 @@ def test_sync_refresh_and_delete_preserve_originals(data_repo, tmp_path):
     assert {"inventory", "files", "relationships", "model", "write", "done"} <= {e["phase"] for e in events}
     assert all(0 <= e["completed"] <= e["total"] for e in events)
     assert next(e for e in reversed(events) if e["phase"] == "files")["completed"] == 3
-    assert next(e for e in reversed(events) if e["phase"] == "model")["completed"] == 1
+    last_model = next(e for e in reversed(events) if e["phase"] == "model")
+    assert last_model["completed"] == last_model["total"] == m.MODEL_STEPS
 
     state = studio.State(root, tmp_path / "state")
     assert json.loads(state.model_bytes())["meta"]["generatedData"]["state"] == "current"

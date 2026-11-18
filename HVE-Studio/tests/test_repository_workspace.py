@@ -72,6 +72,66 @@ def test_partial_management_is_supplemented_with_provenance(tmp_path):
     assert _snapshot(root) == before
 
 
+# FR-1086 AC-493: short IDs and committed requirement documents in work/ are requirement sources in code mode.
+def test_code_mode_short_ids_and_committed_work_prd(tmp_path):
+    root = init_repo(tmp_path / "short")
+    write(root, "docs/requirements.md", "| ID | 内容 |\n|---|---|\n| FR-01 | ログイン |\n| NFR-02 | 速い |\n\n残りは FR-10xx で採番\n")
+    write(root, "src/login.ts", "// FR-01\n")
+    write(root, "tests/login.test.ts", "// FR-01\n")
+    prd = write(root, "work/prd.md", "| ID | 題名 |\n|---|---|\n| FR-CLU-01 | 統合 |\n")
+    write(root, "work/notes.md", "| ID | 題名 |\n|---|---|\n| FR-999 | メモ |\n")
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+    model = m.build_model(root)
+    reqs = {r["id"]: r for r in model["reqs"]}
+    assert set(reqs) == {"FR-01", "NFR-02", "FR-CLU-01"}
+    assert reqs["NFR-02"]["kind"] == "NFR" and reqs["FR-CLU-01"]["file"] == "work/prd.md"
+    feature = next(f for f in model["catalog"]["features"] if f["req"] == "FR-01")
+    assert feature["impl"] == ["src/login.ts"] and feature["tests"] == ["tests/login.test.ts"]
+    before = m.fingerprint(root)
+    prd.write_text("| ID | 題名 |\n|---|---|\n| FR-CLU-01 | 統合（改） |\n", encoding="utf-8")
+    assert m.fingerprint(root) != before
+
+
+# FR-1086 AC-494: acceptance criteria written as a table, with or without a data layer.
+@pytest.mark.parametrize("managed", [False, True])
+def test_acceptance_criteria_tables(tmp_path, managed):
+    root = init_repo(tmp_path / "ac")
+    doc = "docs/requirements-definition.md" if managed else "docs/PRD.md"
+    write(root, doc, "#### FR-001 ログイン\n- 要求: 入れる\n- 受入基準 AC-001: 箇条書き\n\n"
+                     "| ID | 対応要求 | 操作／合格条件 |\n|---|---|---|\n| AC-001 | FR-001 | 重複 |\n| AC-002 | FR-001、FR-404 | 表の基準 |\n\n"
+                     "| AC | 自動テスト |\n|---|---|\n| AC-003 | test_a.py |\n")
+    model = m.build_model(root)
+    assert model["meta"]["mode"] == ("eabk" if managed else "code")
+    acs = next(r for r in model["reqs"] if r["id"] == "FR-001")["acs"]
+    assert [a["id"] for a in acs] == ["AC-001", "AC-002"]
+    assert acs[0]["text"] == "箇条書き" and acs[1]["text"] == "表の基準" and acs[1]["line"] == 8 and acs[1]["file"] == doc
+
+
+# FR-1086 AC-495: other ID prefixes count in code mode only inside requirement tables or priority-marked bold leads.
+@pytest.mark.parametrize("managed", [False, True])
+def test_code_mode_other_prefixes_from_requirement_tables(tmp_path, managed):
+    root = init_repo(tmp_path / "prefix")
+    if managed:
+        write(root, "docs/catalog.md", CATALOG)
+    write(root, "docs/PRD.md",
+          "| ID | 区分 | 要求 |\n|---|---|---|\n| FR-16 | P | 一覧 |\n| FR-17 | P | 詳細 |\n| FR-18 | P | 編集 |\n\n"
+          "| ID | 優先度 | 要求 |\n|---|---|---|\n| UX-01 | Must | テーマを選べる |\n| TBD-01 | Must | 未定 |\n\n"
+          "- **SEC-01（P・Must）**：HTTPS を使う\n- **SEC-02（Should）**：鍵を出さない\n- **API-09（参考）**：規則\n\n"
+          "| ID | 事項 | 規則 |\n|---|---|---|\n| API-01 | 形式 | JSON |\n\n"
+          "| ID | 対応要求 | 合格条件 |\n|---|---|---|\n| AC-01 | UX-01、SEC-01～SEC-02 | 確認 |\n| AC-02 | FR-16～FR-18 | 範囲 |\n")
+    write(root, "src/theme.ts", "// UX-01\n")
+    model = m.build_model(root)
+    reqs = {r["id"]: r for r in model["reqs"]}
+    if managed:
+        assert not {"UX-01", "SEC-01", "SEC-02"} & set(reqs)
+        return
+    assert set(reqs) == {"FR-16", "FR-17", "FR-18", "UX-01", "SEC-01", "SEC-02"}
+    assert reqs["UX-01"]["title"] == "テーマを選べる" and reqs["SEC-01"]["title"] == "HTTPS を使う"
+    assert reqs["FR-16"]["title"] == "一覧" and reqs["SEC-01"]["line"] == 12
+    assert [a["id"] for a in reqs["SEC-02"]["acs"]] == ["AC-01"] and [a["id"] for a in reqs["FR-17"]["acs"]] == ["AC-02"]
+    assert next(f for f in model["catalog"]["features"] if f["req"] == "UX-01")["impl"] == ["src/theme.ts"]
+
+
 # FR-1088 AC-480: schema-free configuration and ledger-only data are not rejected.
 def test_ledger_only_and_nested_repository_selection(tmp_path):
     outer = init_repo(tmp_path / "outer")
@@ -142,6 +202,34 @@ def test_inventory_does_not_truncate_large_components(tmp_path):
     assert len([n for n in model["graph"]["nodes"] if n["type"] == "file"]) == 5002
 
 
+# FR-1088 AC-496: legacy encodings are decoded strictly and labelled; large texts are analyzed up to the limit.
+def test_legacy_encodings_and_large_texts(tmp_path, monkeypatch):
+    root = init_repo(tmp_path / "legacy")
+    (root / "docs").mkdir()
+    (root / "docs/prd.md").write_bytes("| ID | 要求 | 優先度 |\r\n|---|---|---|\r\n| FR-01 | ログイン機能 | Must |\r\n- [ ] 画面を作る\r\n".encode("cp932"))
+    (root / "notes.md").write_bytes("- [x] 旧形式のメモ\n".encode("euc_jp"))
+    (root / "wide.md").write_bytes("- [ ] 幅広の文字\n".encode("utf-16"))
+    (root / "binary.txt").write_bytes(b"\x93\xfa\0\x96\x7b")
+    monkeypatch.setattr(repo_scan, "TEXT_MAX_BYTES", 1000)
+    head = "- [ ] 前半のタスク\nx" + "あ" * 330
+    (root / "large.md").write_bytes((head + "\n- [ ] 上限の後ろのタスク\n").encode("utf-8"))
+    assert (1000 - len("- [ ] 前半のタスク\nx".encode("utf-8"))) % 3 and len(head.encode("utf-8")) > 1000  # cut inside a character
+    model = m.build_model(root)
+    assert model["meta"]["mode"] == "code" and model["reqs"][0]["id"] == "FR-01" and model["reqs"][0]["title"] == "ログイン機能"
+    assert {(t["title"], t["status"]) for t in model["tasks"]} == {
+        ("画面を作る", "todo"), ("旧形式のメモ", "done"), ("幅広の文字", "todo"), ("前半のタスク", "todo")}
+    files = {f["path"]: (f["analysis"], f.get("encoding")) for f in model["repository"]["files"]}
+    assert files["docs/prd.md"] == ("read", "cp932") and files["notes.md"] == ("read", "euc_jp")
+    assert files["wide.md"] == ("read", None) and files["binary.txt"][0] == "unreadable" and files["large.md"] == ("partial", None)
+    diags = {d["path"]: d["reason"] for d in model["repository"]["diagnostics"]}
+    assert "cp932" in diags["docs/prd.md"] and "first 1000 bytes" in diags["large.md"]
+    monkeypatch.setattr(repo_scan, "TEXT_TOTAL_BYTES", 0)
+    budget = m.build_model(root)
+    unread = {f["path"] for f in budget["repository"]["files"] if f["analysis"] == "inventory-only"}
+    assert unread == set(files) and not budget["tasks"]
+    assert all("total text" in d["reason"] for d in budget["repository"]["diagnostics"])
+
+
 # FR-1088 AC-480: excluded/unreadable content is explicit, never a successful empty parse.
 def test_scan_diagnostics_and_git_failure(tmp_path, monkeypatch):
     root = init_repo(tmp_path / "diagnostics")
@@ -149,6 +237,7 @@ def test_scan_diagnostics_and_git_failure(tmp_path, monkeypatch):
     write(root, "ignored.py", "# TODO: ignored")
     write(root, ".env", "TOKEN=do-not-read")
     write(root, "node_modules/dependency/a.py", "# TODO: generated")
+    monkeypatch.setattr(repo_scan, "TEXT_MAX_BYTES", 1000)
     write(root, "big.py", " " * (repo_scan.TEXT_MAX_BYTES + 1))
     write(root, "boundary.py", " " * repo_scan.TEXT_MAX_BYTES)
     (root / "invalid.py").write_bytes(b"\xff")
@@ -156,7 +245,8 @@ def test_scan_diagnostics_and_git_failure(tmp_path, monkeypatch):
     diags = {d["path"]: d["reason"] for d in model["repository"]["diagnostics"]}
     assert "potential credentials" in diags[".env"]
     assert "big.py" in diags and "invalid.py" in diags and "node_modules/dependency/a.py" in diags
-    assert next(f for f in model["repository"]["files"] if f["path"] == "boundary.py")["analysis"] == "read"
+    analysis = {f["path"]: f["analysis"] for f in model["repository"]["files"]}
+    assert (analysis["boundary.py"], analysis["big.py"], analysis["invalid.py"]) == ("read", "partial", "unreadable")
     assert not model["tasks"]
     kinds = {f["path"]: (f["kind"], f["analysis"]) for f in model["repository"]["files"]}
     assert kinds["ignored.py"] == ("ignored", "inventory-only")
@@ -264,7 +354,7 @@ def test_task_api_rejects_stale_repo_invalid_payload_and_storage_failure(api, mo
 def test_repository_switch_analysis_failure_preserves_root(api, tmp_path, monkeypatch):
     url, root = api
     other = init_repo(tmp_path / "other")
-    def fail(*args):
+    def fail(*args, **kwargs):
         raise repo_scan.ScanError("cannot read repository")
     monkeypatch.setattr(m, "build_model", fail)
     code, body = post(url + "/api/repo", {"path": str(other)})

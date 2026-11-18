@@ -3,9 +3,11 @@ import json
 import shutil
 import hashlib
 import re
+import socket
 import subprocess
 import sys
 import threading
+import time
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
@@ -554,6 +556,86 @@ def test_pick_returns_path_cancel_or_501(server, monkeypatch):
     monkeypatch.delenv("EABK_STUDIO_PICK_PATH")
     monkeypatch.setattr(studio, "pick_folder", lambda _: None)
     assert _pick(server, H) == (501, {"error": "picker-unavailable"})
+
+
+# FR-010 AC-498: a rejected request gets its 403 even with a large body the server does not read (no connection reset).
+def test_rejected_request_with_large_unread_body_gets_the_403(server):
+    port = int(server.rsplit(":", 1)[1])
+    body = b"x" * 2_000_000
+    for _ in range(5):
+        with socket.create_connection(("127.0.0.1", port), timeout=10) as s:
+            s.sendall(b"POST /api/repo/pick HTTP/1.1\r\nHost: 127.0.0.1:%d\r\nContent-Length: %d\r\n\r\n" % (port, len(body)))
+            try:
+                s.sendall(body)
+            except OSError:
+                pass  # the server may stop reading early; the response must still arrive
+            assert s.recv(32).split(b" ")[1] == b"403"
+
+
+# FR-1089 AC-497: progress and partial endpoints answer immediately; nothing partial is served when no build runs.
+def test_progress_and_partial_endpoints(server):
+    assert get(server + "/api/model/partial")[0] == 204
+    status, body = get(server + "/api/model")
+    assert status == 200
+    status, body = get(server + "/api/model/progress")
+    p = json.loads(body)
+    assert status == 200 and p["status"] == "done" and p["partial"] == 0
+    assert p["progress"] == {"phase": "model", "completed": m.MODEL_STEPS, "total": m.MODEL_STEPS, "detail": ""}
+    assert get(server + "/api/model/partial")[0] == 204
+
+
+# FR-1089 AC-497: while the build runs, progress is real and partial models are complete enough for the browser to load.
+def test_running_build_publishes_progress_and_loadable_partial_models(repo, monkeypatch):
+    state = studio.State(repo)
+    state.PARTIAL_FIRST = state.PARTIAL_INTERVAL = 0.0
+    seen = []
+    build = m.build_model
+
+    def observed(root, **kwargs):
+        publish = kwargs["snapshot"]
+
+        def snapshot(stage, make):
+            publish(stage, make)
+            seen.append((stage, state.build_progress(), state.partial_bytes()))
+        return build(root, **{**kwargs, "snapshot": snapshot})
+
+    monkeypatch.setattr(m, "build_model", observed)
+    final = json.loads(state.model_bytes())
+    assert [stage for stage, _, _ in seen] == ["repository", "requirements", "catalog"]
+    for i, (stage, progress, data) in enumerate(seen, 1):
+        assert progress["status"] == "running" and progress["partial"] == i and progress["progress"]["phase"] == "model"
+        partial = json.loads(data)
+        assert partial["meta"]["partial"]["stage"] == stage and partial["remote"]["status"] == "loading"
+        assert set(final) - {"tasks", "remote"} <= set(partial) and "generatedData" in partial["meta"]
+    assert json.loads(seen[-1][2])["meta"]["partial"]["requirements"] == len(final["reqs"]) == 2
+    assert "partial" not in final["meta"] and state.partial_bytes() is None
+    assert state.build_progress()["status"] == "done"
+    state.model_bytes()
+    assert len(seen) == 3  # an unchanged repository is served from the finished build, not analyzed again
+
+
+def _prd_repo(root, n):
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    (root / "docs").mkdir(parents=True)
+    rows = "\n".join(f"| FR-{i:05d} | 機能 {i} は FR-{max(1, i - 1):05d} を使う | Must |" for i in range(1, n + 1))
+    (root / "docs" / "prd.md").write_text("# PRD\n\n| ID | 要求 | 優先度 |\n|---|---|---|\n" + rows + "\n", encoding="utf-8")
+    (root / "app.js").write_text("// FR-00001 FR-00002\n", encoding="utf-8")
+    return root
+
+
+# FR-1089 AC-497: the model build grows about linearly with the number of requirements (4x requirements, not over 8x time).
+def test_model_build_time_is_about_linear_in_requirements(tmp_path):
+    def best(n):
+        root = _prd_repo(tmp_path / str(n), n)
+        times = []
+        for _ in range(2):
+            started = time.perf_counter()
+            model = m.build_model(root)
+            times.append(time.perf_counter() - started)
+        assert len(model["reqs"]) == n
+        return min(times)
+    small, large = best(1500), best(6000)
+    assert large < 8 * small, (small, large)
 
 
 # FR-011 AC-479: the existing CLI entry point reports the new display name.

@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 import re
+import socket
 import sqlite3
 import stat
 import subprocess
@@ -50,6 +51,8 @@ MIME = {
 
 class State:
     REMOTE_TTL = 600
+    PARTIAL_FIRST = 1.0  # seconds before the first partial model is published (fast builds publish none)
+    PARTIAL_INTERVAL = 5.0  # PARAM-065: minimum seconds between partial models
 
     def __init__(self, root: Path, data_dir: Path | None = None, remote: bool = False):
         self.lock = threading.Lock()
@@ -63,6 +66,10 @@ class State:
         self.remote_loading: set[str] = set()
         self.data_lock = threading.Lock()
         self.data_jobs: dict[str, dict] = {}
+        # FR-1089: one background model build per repository, shared by every request; read under build_lock only
+        self.build_lock = threading.Lock()
+        self.builds: dict[str, dict] = {}
+        self.latest_build: dict | None = None
 
     def _remote(self, root: Path, force: bool = False) -> dict:
         """Current GitHub data for root; starts a background fetch when missing, stale or forced. Caller holds lock."""
@@ -115,30 +122,134 @@ class State:
             self.previews.clear()
             self.catalog_baseline = self._catalog_hash(root)
 
-    def model_bytes(self) -> bytes:
-        with self.lock:
-            root = self.root
+    def build_for(self, root: Path, inv: repo_scan.Inventory | None = None, source: str | None = None) -> dict:
+        """The background build of root's raw model for this source state: joins a running build, reuses a finished one."""
+        if inv is None:
+            inv = repo_scan.inventory(root)
+        if source is None:
+            source = eabk_model.fingerprint(root, inv)
+        state = source + "#" + managed_data.stamp(root)  # generated display data changes what is shown, not the source
+        key = str(root)
+        with self.build_lock:
+            job = self.builds.get(key)
+            running = job is not None and not job["done"].is_set()
+            if running or (job is not None and job["state"] == state and job["error"] is None):
+                return job  # a running build is joined even if the source moved on; the caller re-checks afterwards
+            job = {"repo": key, "source": source, "state": state, "started": time.monotonic(), "finished": None,
+                   "done": threading.Event(),
+                   "model": None, "dataStatus": None, "error": None, "published": None, "partial": None, "revision": 0,
+                   "stage": None, "progress": {"phase": "prepare", "completed": 0, "total": 1}}
+            self.builds = {k: v for k, v in self.builds.items() if k == str(self.root)}  # bounded: current + this one
+            self.builds[key] = job
+            self.latest_build = job
+        threading.Thread(target=self._build, args=(job, root, inv), daemon=True).start()
+        return job
+
+    def _build(self, job: dict, root: Path, inv: repo_scan.Inventory) -> None:
+        def progress(event):
+            with self.build_lock:
+                job["progress"] = dict(event)
+
+        data_status = None
+
+        def snapshot(stage, make):
+            now = time.monotonic()
+            last = job["published"]
+            if now - (last if last is not None else job["started"]) < (self.PARTIAL_INTERVAL if last is not None else self.PARTIAL_FIRST):
+                return
+            model = make()
+            model["meta"]["generatedData"] = data_status
+            model.setdefault("tasks", [])
+            model["remote"] = {"status": "loading", "issues": [], "pulls": [], "runs": []}
+            data = json.dumps(model, ensure_ascii=False).encode("utf-8")
+            with self.build_lock:
+                job.update(partial=data, revision=job["revision"] + 1, stage=stage, published=time.monotonic())
+
+        try:
+            data_status, saved = managed_data.inspect(root, job["source"])
+            model = saved if saved is not None else eabk_model.build_model(
+                root, progress=progress, inv=inv, source_fingerprint=job["source"], snapshot=snapshot)
+            with self.build_lock:
+                job.update(model=model, dataStatus=data_status)
+        except Exception as exc:  # reported to every waiting request
+            with self.build_lock:
+                job["error"] = exc
+        finally:
+            with self.build_lock:
+                job.update(finished=time.monotonic(), partial=None)
+            job["done"].set()
+
+    @staticmethod
+    def wait_build(job: dict) -> dict:
+        job["done"].wait()
+        if job["error"] is not None:
+            raise job["error"]
+        return job["model"]
+
+    def raw_model(self, root: Path) -> dict:
+        """root's freshly built model, without Studio-side decoration (tasks, GitHub data). Do not mutate."""
+        while True:
             inv = repo_scan.inventory(root)
             source = eabk_model.fingerprint(root, inv)
-            fp = self._fingerprint(source)
-            hit = self.cache.get(str(root))
-            if hit and hit[0] == fp:
-                return hit[1]
-            data_status, saved_model = managed_data.inspect(root, source)
-            model = saved_model if saved_model is not None else eabk_model.build_model(root, inv=inv, source_fingerprint=source)
-            model["meta"]["generatedData"] = data_status
-            model["tasks"] = self.tasks.list(root, self._imported(root, model))
-            model["meta"]["taskStorage"] = str(self.tasks.path)
-            model["meta"]["stateFingerprint"] = str(root) + "#" + fp
-            data = json.dumps(model, ensure_ascii=False).encode("utf-8")
-            self.cache = {str(root): (fp, data)}
-            return data
+            job = self.build_for(root, inv, source)
+            model = self.wait_build(job)
+            if job["source"] == source:
+                return model
+
+    def build_progress(self) -> dict:
+        """FR-1089: progress of the latest model build (polled by the browser; never blocks on a running build)."""
+        with self.build_lock:
+            job = self.latest_build
+            if job is None:
+                return {"repo": str(self.root), "status": "idle"}
+            status = "running" if not job["done"].is_set() else "error" if job["error"] is not None else "done"
+            return {"repo": job["repo"], "status": status, "progress": dict(job["progress"]),
+                    "elapsedMs": int(((job["finished"] or time.monotonic()) - job["started"]) * 1000),
+                    "partial": job["revision"] if job["partial"] is not None else 0, "stage": job["stage"],
+                    "error": str(job["error"]) if job["error"] is not None else None}
+
+    def partial_bytes(self) -> bytes | None:
+        with self.build_lock:
+            job = self.builds.get(str(self.root))
+            return job["partial"] if job is not None and not job["done"].is_set() else None
+
+    def model_bytes(self) -> bytes:
+        while True:
+            with self.lock:
+                root = self.root
+                inv = repo_scan.inventory(root)
+                source = eabk_model.fingerprint(root, inv)
+                fp = self._fingerprint(source)
+                hit = self.cache.get(str(root))
+                if hit and hit[0] == fp:
+                    return hit[1]
+            job = self.build_for(root, inv, source)
+            raw = self.wait_build(job)
+            if job["source"] != source:
+                continue  # joined an older build; build the current state
+            with self.lock:
+                if self.root != root:
+                    continue
+                # Studio-side decoration on a shallow copy: the raw model stays reusable when only tasks or GitHub data change
+                model = dict(raw)
+                model["meta"] = dict(raw["meta"])
+                model["meta"]["generatedData"] = job["dataStatus"]
+                model["tasks"] = self.tasks.list(root, self._imported(root, model))
+                model["meta"]["taskStorage"] = str(self.tasks.path)
+                fp = self._fingerprint(source)
+                model["meta"]["stateFingerprint"] = str(root) + "#" + fp
+                data = json.dumps(model, ensure_ascii=False).encode("utf-8")
+                self.cache = {str(root): (fp, data)}
+                return data
 
     def update_task(self, payload: dict) -> dict:
+        root = self.root
+        if payload.get("repo") != str(root):
+            raise ValueError("repository changed; reload before editing tasks")
+        model = dict(self.raw_model(root))
         with self.lock:
             if payload.get("repo") != str(self.root):
                 raise ValueError("repository changed; reload before editing tasks")
-            model = eabk_model.build_model(self.root)
             result = self.tasks.update(self.root, payload, self._imported(self.root, model))
             self.cache.clear()
             return result
@@ -354,6 +465,8 @@ STATE: State
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "EABKStudio/" + eabk_model.STUDIO_VERSION
+    DISCARD_SECONDS = 2.0  # upper bound for discarding an unread request body
+    _unread = 0
 
     def log_message(self, fmt, *args):  # quiet
         pass
@@ -386,6 +499,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_bytes(STATE.model_bytes(), MIME[".json"])
             except (repo_scan.ScanError, OSError, ValueError, sqlite3.Error) as exc:
                 return self.send_json({"error": "analysis-failed", "detail": str(exc)}, HTTPStatus.UNPROCESSABLE_ENTITY)
+        if path == "/api/model/progress":
+            return self.send_json(STATE.build_progress())
+        if path == "/api/model/partial":
+            partial = STATE.partial_bytes()
+            if partial is None:
+                return self.send_bytes(b"", MIME[".json"], HTTPStatus.NO_CONTENT)
+            return self.send_bytes(partial, MIME[".json"])
         if path == "/api/fingerprint":
             try:
                 return self.send_json({"fingerprint": STATE.fingerprint()})
@@ -405,26 +525,60 @@ class Handler(BaseHTTPRequestHandler):
         ctype = MIME.get(target.suffix, "application/octet-stream")
         self.send_bytes(target.read_bytes(), ctype)
 
+    def _body(self, limit: int = 8192) -> bytes:
+        data = self.rfile.read(min(self._unread, limit)) if self._unread > 0 else b""
+        self._unread -= len(data)
+        return data
+
+    def _discard_body(self) -> None:
+        """Lingering close for a request whose body was not read (rejected early or oversized): without it the client
+        can get a connection reset instead of the response (seen on Windows with multi-megabyte bodies)."""
+        if self._unread <= 0:
+            return
+        self.close_connection = True
+        try:
+            self.wfile.flush()
+            self.connection.shutdown(socket.SHUT_WR)
+            self.connection.settimeout(self.DISCARD_SECONDS)
+            deadline = time.monotonic() + self.DISCARD_SECONDS
+            while self._unread > 0 and time.monotonic() < deadline:
+                chunk = self.rfile.read1(min(self._unread, 65536))
+                if not chunk:
+                    break
+                self._unread -= len(chunk)
+        except OSError:
+            pass
+
     def do_POST(self) -> None:  # noqa: N802
+        try:
+            self._unread = max(0, int(self.headers.get("Content-Length") or 0))
+        except ValueError:
+            self._unread = 0
+        try:
+            self._post()
+        finally:
+            self._discard_body()
+
+    def _post(self) -> None:
         if not self.host_ok() or self.headers.get("X-EABK-Studio") != "1":
             return self.send_json({"error": "forbidden"}, HTTPStatus.FORBIDDEN)
         endpoint = urlparse(self.path).path
         if endpoint == "/api/repo/pick":
             # FR-010 AC-332..336: the OS folder dialog is opened on the server (this machine); body is unused.
-            self.rfile.read(min(int(self.headers.get("Content-Length") or 0), 8192))
+            self._body()
             picked = pick_folder(str(STATE.root))
             if picked is None:
                 return self.send_json({"error": "picker-unavailable"}, HTTPStatus.NOT_IMPLEMENTED)
             return self.send_json({"path": picked})
         if endpoint == "/api/remote/refresh":
-            self.rfile.read(min(int(self.headers.get("Content-Length") or 0), 8192))
+            self._body()
             return self.send_json(STATE.refresh_remote())
         if endpoint not in ("/api/repo", "/api/tasks", "/api/maintenance/preview", "/api/maintenance/apply",
                             "/api/data/sync", "/api/data/delete"):
             return self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
         try:
             length = int(self.headers.get("Content-Length") or 0)
-            payload = json.loads(self.rfile.read(min(length, 8192)) or b"{}")
+            payload = json.loads(self._body() or b"{}")
             if not isinstance(payload, dict) or length > 8192:
                 raise ValueError("invalid payload")
         except (ValueError, TypeError):
@@ -460,7 +614,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"error": "not-a-directory"}, HTTPStatus.BAD_REQUEST)
         root = eabk_model.find_root(p)
         try:
-            model = eabk_model.build_model(root)
+            # FR-1089: the validating analysis is the shared background build, so its progress is visible
+            # (GET /api/model/progress) and the browser's next model request reuses it instead of analyzing again.
+            model = STATE.wait_build(STATE.build_for(root))
             if model["meta"].get("error"):
                 return self.send_json({"error": "no-data-layer", "repo": str(root)}, HTTPStatus.UNPROCESSABLE_ENTITY)
             STATE.tasks.list(root, model.get("tasks", []))

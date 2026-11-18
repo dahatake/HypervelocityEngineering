@@ -10,6 +10,7 @@ import hashlib
 import re
 import subprocess
 from collections import Counter, OrderedDict
+from collections.abc import Set as AbstractSet
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -28,7 +29,12 @@ DEFAULT_FILES = {
 }
 CONFIG_CANDIDATES = ("scripts/ebak.config.json", "scripts/hve.config.json")
 
-REQ_ID = r"(?:FR-\d{3,}|FR-[A-Z][A-Z0-9_-]*|NFR-[A-Z0-9]+-\d{2,})"
+# Short numbers (FR-01, NFR-11) appear in PRDs of repositories without EABK; "FR-10xx" placeholders are not IDs.
+REQ_ID = r"(?:FR-\d+(?![A-Za-z0-9])|FR-[A-Z][A-Z0-9_-]*|NFR-[A-Z0-9]+-\d{2,}|NFR-\d+(?![A-Za-z0-9]))"
+AC_ID = r"AC-(?:\d+|[A-Z][A-Z0-9_-]*)"
+AC_TABLE_KEYS = {"AC", "ACID", "AC-ID", "受入基準ID", "受入基準", "ID"}
+AC_REQ_KEYS = ("要求", "requirement")  # column name contains (e.g. 対応要求, 要求ID); or is exactly FR
+AC_TEXT_KEYS = ("受入基準", "合格条件", "基準", "条件", "内容", "criteria")
 REQ_ID_RE = re.compile(r"(?<![A-Za-z0-9\-])(" + REQ_ID + r")(?![0-9])")
 ANY_ID_RE = re.compile(r"(?<![A-Za-z0-9\-])((?:FR|AC|G|Q|PARAM|SRC|E2E|IT|AUD|NFR-[A-Z0-9]+)-\d{3,})(?![0-9])")
 REQ_HEADING_RE = re.compile(r"^(#{2,6})\s+\**(" + REQ_ID + r")\**\s*(.*)$")
@@ -38,6 +44,15 @@ RANGE_RE = re.compile(
     r"(?<![A-Za-z0-9\-])((?:FR|NFR-[A-Z0-9]+)-)(\d{3,})\s*[〜~～]\s*(?:(?:FR|NFR-[A-Z0-9]+)-)?(\d{3,})")
 LIST_RE = re.compile(
     r"(?<![A-Za-z0-9\-])((?:FR|NFR-[A-Z0-9]+)-)(\d{3,})((?:\s*[・,、，]\s*\d{3,}(?![0-9\-]))+)")
+# Code mode: PRDs also number requirements as UX-01, DEP-01, AI-01 … Only rows of a requirement table count (see
+# _requirement_table); other IDs are matched against the IDs found there and never guessed.
+GENERIC_ID = r"[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]+)*-\d+"
+GENERIC_ID_RE = re.compile(r"(?<![A-Za-z0-9\-])(" + GENERIC_ID + r")(?![A-Za-z0-9])")
+GENERIC_RANGE_RE = re.compile(
+    r"(?<![A-Za-z0-9\-])([A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]+)*-)(\d+)\s*[〜~～]\s*(?:\1)?(\d+)(?![A-Za-z0-9])")
+NON_REQ_PREFIXES = {"AC", "G", "Q", "PARAM", "SRC", "AUD", "E2E", "IT", "INT", "TBD", "TBR", "ASM", "D", "P", "A"}
+BOLD_REQ_RE = re.compile(r"^\s*(?:[-*]\s+)?\*\*(" + GENERIC_ID + r")\s*[（(]([^）)]*(?:Must|Should|Could|Later|必須|推奨)[^）)]*)[）)]"
+                         r"[^*]*\*\*\s*[:：]?\s*(.*)$")
 def _load_field_roles() -> "OrderedDict[str, str]":
     """欄名 -> 役割。メタデータ定義（scripts/metadata.json, FR-1058）から読む。欄名の一覧をここに重ねて持たない。"""
     for p in (Path(__file__).resolve().parent.parent / "scripts" / "metadata.json",):
@@ -86,7 +101,7 @@ def status_kind(s: str) -> str:
 
 def read_text(path: Path) -> str:
     try:
-        return path.read_text(encoding="utf-8-sig")
+        return repo_scan.read_text(path)[0]
     except (OSError, UnicodeDecodeError):
         return ""
 
@@ -178,7 +193,7 @@ def parse_text(text: str, rel: str) -> dict:
     return {"rel": rel, "lines": lines, "headings": headings, "tables": tables}
 
 
-def expand_ids(text: str, known: set[str] | None = None) -> list[str]:
+def expand_ids(text: str, known: AbstractSet[str] | None = None) -> list[str]:
     """Requirement IDs in text, expanding 'FR-102〜104' and 'FR-105・131・132'."""
     out: OrderedDict[str, None] = OrderedDict()
     for m in RANGE_RE.finditer(text or ""):
@@ -199,6 +214,17 @@ def expand_ids(text: str, known: set[str] | None = None) -> list[str]:
         rid = m.group(1)
         if known is None or rid in known:
             out[rid] = None
+    if known:  # code-mode IDs with other prefixes (UX-01, SEC-01～SEC-06) resolve only against known IDs
+        for m in GENERIC_RANGE_RE.finditer(text or ""):
+            pre, a, b = m.group(1), int(m.group(2)), int(m.group(3))
+            if 0 <= b - a <= 400:
+                for n in range(a, b + 1):
+                    rid = f"{pre}{n:0{len(m.group(2))}d}"
+                    if rid in known:
+                        out[rid] = None
+        for m in GENERIC_ID_RE.finditer(text or ""):
+            if m.group(1) in known:
+                out[m.group(1)] = None
     return list(out)
 
 
@@ -297,7 +323,7 @@ def find_root(start: Path) -> Path:
 CODE_EXTS = repo_scan.SOURCE_EXTS
 SKIP_DIRS = repo_scan.SKIP_DIRS
 INVENTORY_ONLY_KINDS = {"ignored", "generated", "submodule"}
-PRD_NAME_RE = re.compile(r"prd|requirement|要求|spec", re.I)
+PRD_NAME_RE = repo_scan.PRD_NAME_RE
 
 
 def _repo_files(root: Path) -> list[str] | None:
@@ -316,9 +342,26 @@ def _cell(text: str) -> str:
     return re.sub(r"\s+", " ", strip_md(text)).replace("|", "／").strip()[:160]
 
 
+REQ_TEXT_KEYS = ("要求", "要件", "ストーリー", "requirement", "story", "description", "題名", "title")
+
+
+def _requirement_table(keys: list[str]) -> bool:
+    """| ID | … | 要求 … | or | ID | 優先度 | … |: the first column holds IDs and another one is the requirement
+    itself or its priority. 対応要求 (an AC table's reference column) does not count."""
+    if not keys or "id" not in strip_md(keys[0]).lower():
+        return False
+    rest = [strip_md(k).lower() for k in keys[1:]]
+    return any(k.startswith(("要求", "requirement", "優先度", "priority")) for k in rest)
+
+
+def _extra_requirement_id(rid: str) -> bool:
+    return (bool(re.fullmatch(GENERIC_ID, rid)) and rid.split("-", 1)[0] not in NON_REQ_PREFIXES
+            and not re.fullmatch(AC_ID, rid))
+
+
 def synthesize_from_code(root: Path, scan: dict | None = None) -> tuple[list[dict], dict, dict] | None:
     """Derive explicit definitions and source links; return None only for a non-Git folder."""
-    scan = scan if scan is not None else repo_scan.scan(root, is_test_path)
+    scan = scan if scan is not None else repo_scan.scan(root, is_test_path, read_scratch_docs=not has_data_layer(root))
     if scan is None:
         return None
     files = [f["path"] for f in scan["files"] if f["kind"] not in INVENTORY_ONLY_KINDS]
@@ -338,16 +381,27 @@ def synthesize_from_code(root: Path, scan: dict | None = None) -> tuple[list[dic
         for record in parse_requirements(doc):
             records.setdefault(record["id"], record)
         for t in doc["tables"]:
+            req_table = not managed and _requirement_table(t["key"])
+            keys = [strip_md(k).lower() for k in t["key"]]
+            text_col = next((k for k, key in enumerate(keys) if k and key.startswith(REQ_TEXT_KEYS)), None)
             for row in t["rows"]:
                 cells = row["cells"]
                 rid = strip_md(cells[0]) if cells else ""
-                if re.fullmatch(REQ_ID, rid) and rid not in defs:
-                    title = next((_cell(c) for c in cells[1:] if _cell(c)), rid)
+                if rid in defs:
+                    continue
+                if re.fullmatch(REQ_ID, rid) or (req_table and _extra_requirement_id(rid)):
+                    title = (_cell(cells[text_col]) if text_col is not None and text_col < len(cells) else "") \
+                        or next((_cell(c) for c in cells[1:] if _cell(c)), rid)
                     defs[rid] = (title, rel, row["line"])
         for ln, level, title in doc["headings"]:
             m = REQ_HEADING_RE.match("#" * level + " " + title)
             if m and m.group(2) not in defs:
                 defs[m.group(2)] = (_cell(m.group(3)) or m.group(2), rel, ln)
+        if not managed:  # - **SEC-01（P・Must）**：… / **BR-05（P・Must）受入**：… (the priority marks a definition)
+            for ln, raw in enumerate(doc["lines"], 1):
+                m = BOLD_REQ_RE.match(raw)
+                if m and m.group(1) not in defs and _extra_requirement_id(m.group(1)):
+                    defs[m.group(1)] = (_cell(m.group(3)) or m.group(1), rel, ln)
         if len(defs) > before:
             used_docs.append(rel)
             source_tables.extend(doc["tables"])
@@ -356,9 +410,11 @@ def synthesize_from_code(root: Path, scan: dict | None = None) -> tuple[list[dic
     tests: dict[str, list[str]] = {}
     mentions: dict[str, set[str]] = {}
     known = set(defs)
+    extra = sorted((rid for rid in defs if not re.fullmatch(REQ_ID, rid)), key=len, reverse=True)
     for rel in code:
         text = texts.get(rel, "")
-        ids = {m.group(1) for m in REQ_ID_RE.finditer(text)} & known if known else set()
+        ids = ({m.group(1) for m in REQ_ID_RE.finditer(text)}
+               | ({m.group(1) for m in GENERIC_ID_RE.finditer(text)} if extra else set())) & known if known else set()
         mentions[rel] = ids
         for rid in ids:
             (tests if is_test_path(rel) else impl).setdefault(rid, []).append(rel)
@@ -384,6 +440,9 @@ def synthesize_from_code(root: Path, scan: dict | None = None) -> tuple[list[dic
         ct.append(f"| {comp} | {', '.join(shown)} | コードから導出: {len(rels)} ファイル（テスト {n_test}）{more} | "
                   f"{'、'.join(ids) or '-'} |")
     req_doc = parse_text("\n".join(rq) + "\n", "(code mode)")
+    if extra:
+        req_doc["headingRe"] = re.compile(r"^(#{2,6})\s+\**(" + REQ_ID + "|" + "|".join(map(re.escape, extra))
+                                          + r")\**(?![A-Za-z0-9])\s*(.*)$")
     req_doc["origin"] = {rid: (f, ln) for rid, (_, f, ln) in defs.items()}
     req_doc["records"] = records
     req_doc["tables"] = source_tables
@@ -465,12 +524,13 @@ def generated_at(root: Path) -> str:
 # --------------------------------------------------------------------------- requirements
 def parse_requirements(doc: dict) -> list[dict]:
     lines, reqs = doc["lines"], []
+    heading_re = doc.get("headingRe", REQ_HEADING_RE)
     i, n, fence = 0, len(lines), False
     while i < n:
         ln = lines[i]
         if ln.lstrip().startswith("```"):
             fence = not fence
-        m = None if fence else REQ_HEADING_RE.match(ln)
+        m = None if fence else heading_re.match(ln)
         if not m:
             i += 1
             continue
@@ -481,7 +541,7 @@ def parse_requirements(doc: dict) -> list[dict]:
             h = HEADING_RE.match(lines[j])
             if h and len(h.group(1)) <= level:
                 break
-            if REQ_HEADING_RE.match(lines[j]):
+            if heading_re.match(lines[j]):
                 break
             block.append((j + 1, lines[j]))
             j += 1
@@ -540,9 +600,15 @@ def parse_req_placement(value: str) -> dict:
     return out
 
 
+def nfr_category(rid: str) -> str:
+    """NFR-SEC-001 -> SEC; FR-… and the short NFR-11 have none."""
+    parts = rid.split("-")
+    return parts[1] if parts[0] == "NFR" and len(parts) > 2 else ""
+
+
 def parse_req_block(rid: str, title: str, rel: str, line: int, block: list[tuple[int, str]]) -> dict:
-    kind = "FR" if rid.startswith("FR-") else "NFR"
-    cat = "" if kind == "FR" else rid.split("-")[1]
+    kind = "NFR" if rid.startswith("NFR-") else "FR"  # code-mode IDs such as UX-01 are listed with the functional ones
+    cat = nfr_category(rid)
     r = {"id": rid, "kind": kind, "cat": cat, "title": title, "text": "", "status": "", "statusKind": "unknown",
          "origin": "", "priority": "", "priorityNote": "", "goal": "", "sources": "", "entities": [], "states": [],
          "params": [], "assets": "", "relation": "", "placement": parse_req_placement(""), "acs": [], "blocked": [], "file": rel, "line": line, "body": ""}
@@ -587,6 +653,9 @@ def parse_req_block(rid: str, title: str, rel: str, line: int, block: list[tuple
                 cur_ac = None
                 first = f"{key}: {rest}"
                 apply_kv(r, first)
+            continue
+        if line_s.lstrip().startswith("|") or (cur_key == "ac" and not line_s.strip()):
+            cur_key = None
             continue
         if cur_key == "text":
             texts.append(raw.strip())
@@ -986,7 +1055,7 @@ def derive_hierarchy(model: dict, root: Path, docs: list[dict], cat_doc: dict | 
     for r in model["reqs"]:
         a = (r.get("area") or "").strip()
         req_area[r["id"]] = a or UNCLASSIFIED
-        add("要求", "機能" if r["id"].startswith("FR-") else "非機能", a, r["id"], title=r.get("title"))
+        add("要求", "機能" if r["kind"] == "FR" else "非機能", a, r["id"], title=r.get("title"))
         for ac in r.get("acs", []):
             add("受入基準", ac.get("level") or UNCLASSIFIED, a, ac["id"], title=(ac.get("text") or "")[:80])
     sect: dict[str, str] = {}
@@ -1052,16 +1121,45 @@ def derive_hierarchy(model: dict, root: Path, docs: list[dict], cat_doc: dict | 
     return {"items": items, "tiers": tiers, "unclassified": UNCLASSIFIED, "kinds": list(HIER_KINDS)}
 
 
-def build_model(root: Path, progress=None, inv: repo_scan.Inventory | None = None, source_fingerprint: str | None = None) -> dict:
-    """inv / source_fingerprint let a caller that already read the repository state reuse it (one git inventory per build)."""
+MODEL_STEPS = 5  # progress steps of the model phase: documents, requirements, catalog and ledger, analysis, done
+
+
+def _partial_model(model: dict, reqs: dict, parts: list[dict], root: Path, stage: str) -> dict:
+    """A display-ready copy of the model built so far (FR-1089). Only reads the builder's objects, so it must be
+    serialized before the builder continues."""
+    p = dict(model)
+    p["meta"] = {**model["meta"], "partial": {"stage": stage, "requirements": len(reqs)}}
+    p["reqs"] = list(reqs.values())
+    p.setdefault("placements", {"locations": [], "links": [], "requirements": []})
+    p.setdefault("entities", {"available": False, "entities": [], "scenarios": {}, "relations": [], "clusters": [],
+                              "supplement": {"files": [], "diagnostics": []}})
+    p["implStatus"] = build_impl_status(p, root)
+    build_graph(p, reqs, parts)
+    return p
+
+
+def build_model(root: Path, progress=None, inv: repo_scan.Inventory | None = None, source_fingerprint: str | None = None,
+                snapshot=None) -> dict:
+    """inv / source_fingerprint let a caller that already read the repository state reuse it (one git inventory per build).
+
+    snapshot(stage, make) is called at points where the model built so far is consistent; the caller decides whether
+    to call make() (cost: one graph build) and must serialize its result before returning."""
     root = Path(root).resolve()
     files = load_config(root)
     warnings: list[str] = []
     if inv is None:
         inv = repo_scan.inventory(root)
-    scan = repo_scan.scan(root, is_test_path, progress=progress, inv=inv)
-    if progress:
-        progress({"phase": "model", "completed": 0, "total": 1})
+    scan = repo_scan.scan(root, is_test_path, progress=progress, inv=inv, read_scratch_docs=not has_data_layer(root))
+
+    def step(done: int, detail: str = "") -> None:
+        if progress:
+            progress({"phase": "model", "completed": done, "total": MODEL_STEPS, "detail": detail})
+
+    def publish(stage: str, parts_now: list[dict] | None = None) -> None:
+        if snapshot:
+            snapshot(stage, lambda: _partial_model(model, reqs, parts_now or [], root, stage))
+
+    step(0)
     model: dict = {
         "meta": {"repo": str(root), "name": root.name, "studio": STUDIO_VERSION,
                  "generatedAt": generated_at(root), "files": {},
@@ -1085,12 +1183,12 @@ def build_model(root: Path, progress=None, inv: repo_scan.Inventory | None = Non
     cat_doc = parse_document(cat_path, files["catalog"]) if cat_path.is_file() else None
     model["meta"]["files"] = {k: (v if (root / v).exists() else None) for k, v in files.items()}
     model["meta"]["mode"] = "eabk"
+    reqs: OrderedDict[str, dict] = OrderedDict()
     derived = synthesize_from_code(root, scan) if scan is not None else None
     if not has_data_layer(root):
         if derived is None:
             model["meta"]["error"] = "no-data-layer"
-            if progress:
-                progress({"phase": "model", "completed": 1, "total": 1})
+            step(MODEL_STEPS)
             return model
         docs, cat_doc, model["meta"]["derivedFrom"] = derived
         model["meta"]["mode"] = "code"
@@ -1105,9 +1203,10 @@ def build_model(root: Path, progress=None, inv: repo_scan.Inventory | None = Non
         model["repository"] = {"files": [], "counts": {}, "tasks": [], "dependencies": [], "history": [], "submodules": [],
                                "links": [], "diagnostics": [], "unavailable": ["No local Git inventory: management files only."]}
         model["tasks"] = []
+    step(1, "documents")
+    publish("repository")
 
     # requirements
-    reqs: OrderedDict[str, dict] = OrderedDict()
     for d in docs:
         for r in parse_requirements(d):
             r = d.get("records", {}).get(r["id"], r)
@@ -1119,6 +1218,10 @@ def build_model(root: Path, progress=None, inv: repo_scan.Inventory | None = Non
                 warnings.append(f"duplicate {r['id']} ({d['rel']}:{r['line']})")
                 continue
             reqs[r["id"]] = r
+            if len(reqs) % 500 == 0:
+                step(1, f"requirements {len(reqs)}")
+            if len(reqs) % 2000 == 0:
+                publish("requirements")
     all_tables = [t for d in docs for t in d["tables"]]
     # Compact/synthetic repositories may declare goals and external boundaries as bullets.
     for d in docs:
@@ -1155,11 +1258,37 @@ def build_model(root: Path, progress=None, inv: repo_scan.Inventory | None = Non
                 if REQ_ID_RE.fullmatch(rid) and rid not in reqs and len(c) > idx["題名"]:
                     kind = "FR" if rid.startswith("FR-") else "NFR"
                     st = strip_md(c[idx["決定状態"]]) if "決定状態" in idx and len(c) > idx["決定状態"] else ""
-                    reqs[rid] = {"id": rid, "kind": kind, "cat": "" if kind == "FR" else rid.split("-")[1],
+                    reqs[rid] = {"id": rid, "kind": kind, "cat": nfr_category(rid),
                                  "title": strip_md(c[idx["題名"]]), "text": "", "status": st, "statusKind": status_kind(st),
                                  "origin": "", "priority": strip_md(c[idx["優先度"]]) if "優先度" in idx and len(c) > idx["優先度"] else "",
                                  "priorityNote": "", "goal": "", "sources": "", "entities": [], "states": [], "params": [],
                                  "assets": "", "relation": "", "acs": [], "blocked": [], "file": t["file"], "line": row["line"], "body": ""}
+
+    # acceptance criteria written as a table (| AC | 要求 | 受入基準 | 検証 |) instead of bullets under a requirement
+    ac_table_keys = {k.lower() for k in AC_TABLE_KEYS}
+    for t in all_tables:
+        keys = [k.lower() for k in t["key"]]
+        if not keys or keys[0] not in ac_table_keys:
+            continue
+        req_col = next((k for k, key in enumerate(keys) if k and (key in ("fr", "frid") or any(w in key for w in AC_REQ_KEYS))), None)
+        if req_col is None:
+            continue
+        text_col = next((k for w in AC_TEXT_KEYS for k, key in enumerate(keys) if k and k != req_col and w in key), None)
+        level_col = keys.index("検証レベル") if "検証レベル" in keys else None
+        for row in t["rows"]:
+            c = row["cells"] + [""] * len(keys)
+            aid = strip_md(c[0])
+            if not re.fullmatch(AC_ID, aid):
+                continue
+            text = strip_md(c[text_col]) if text_col is not None else next(
+                (strip_md(x) for k, x in enumerate(c[1:], 1) if k != req_col and strip_md(x)), "")
+            level = strip_md(c[level_col]).split()[0].lower() if level_col is not None and strip_md(c[level_col]) else ""
+            for rid in expand_ids(c[req_col], reqs.keys()):
+                if not any(a["id"] == aid for a in reqs[rid]["acs"]):
+                    reqs[rid]["acs"].append({"id": aid, "text": text, "level": level, "blocked": "",
+                                             "line": row["line"], "file": t["file"]})
+    step(2, f"requirements {len(reqs)}")
+    publish("requirements")
 
     # generic ID tables
     for t in all_tables:
@@ -1238,7 +1367,7 @@ def build_model(root: Path, progress=None, inv: repo_scan.Inventory | None = Non
                 for row in t["rows"]:
                     c = row["cells"] + [""] * len(k)
                     rid = strip_md(c[idx["要求ID"]])
-                    if not REQ_ID_RE.fullmatch(rid):
+                    if not (REQ_ID_RE.fullmatch(rid) or rid in reqs):
                         continue
                     impl_raw = strip_md(c[idx["実装ファイル"]])
                     model["catalog"]["features"].append({
@@ -1283,7 +1412,7 @@ def build_model(root: Path, progress=None, inv: repo_scan.Inventory | None = Non
         for rel, text in scan["texts"].items():
             if Path(rel).suffix.lower() not in CODE_EXTS:
                 continue
-            for rid in set(REQ_ID_RE.findall(text)) & set(reqs):
+            for rid in set(REQ_ID_RE.findall(text)) & known:
                 feature = feats.get(rid)
                 if feature is None:
                     feature = {"req": rid, "title": reqs[rid]["title"], "status": reqs[rid]["status"],
@@ -1333,6 +1462,8 @@ def build_model(root: Path, progress=None, inv: repo_scan.Inventory | None = Non
                              "file": files["id_registry"], "line": row["line"]}
                         )
         model["registry"] = [{"kind": k, "state": s, "count": n} for (k, s), n in sorted(cnt.items())]
+    step(3, "catalog")
+    publish("catalog", parts)
     model["reqs"] = list(reqs.values())
     # FR-1034 AC-206: per-requirement 配置先 (run location / stores / links) handed to the diagram and the list
     model["placements"]["requirements"] = [
@@ -1341,13 +1472,13 @@ def build_model(root: Path, progress=None, inv: repo_scan.Inventory | None = Non
     model["implStatus"] = build_impl_status(model, root)
     build_management_analysis(model, docs, cat_doc, files, warnings)
     build_graph(model, reqs, parts)
+    step(4, "graph")
     model["hierarchy"] = derive_hierarchy(model, root, docs, cat_doc)
     if scan is not None and scan["files"]:
         latest = max(((root / f["path"]).stat().st_mtime for f in scan["files"]
-                      if f["analysis"] == "read" and (root / f["path"]).is_file()), default=root.stat().st_mtime)
+                      if f["analysis"] in ("read", "partial") and (root / f["path"]).is_file()), default=root.stat().st_mtime)
         model["meta"]["generatedAt"] = datetime.fromtimestamp(latest).astimezone().isoformat(timespec="seconds")
-    if progress:
-        progress({"phase": "model", "completed": 1, "total": 1})
+    step(MODEL_STEPS)
     return model
 
 
@@ -1415,7 +1546,7 @@ def build_management_analysis(model: dict, docs: list[dict], cat_doc: dict | Non
             for ref in sorted(refs - known_req - known_goal - known_ac):
                 add(req_layer, "参照不整合", ac["id"], f"{ref} を参照",
                     "参照IDが管理データに存在", "参照制約",
-                    f"参照先 {ref} が解析済みIDに存在しない", r["file"], ac["line"])
+                    f"参照先 {ref} が解析済みIDに存在しない", ac.get("file") or r["file"], ac["line"])
     for warning in warnings:
         match = re.match(r"duplicate\s+(\S+)\s+\((.*):(\d+)\)", warning)
         if match:
@@ -1713,9 +1844,9 @@ def build_graph(model: dict, reqs: dict, parts: list[dict]) -> None:
             edge(rid, q, "req-question")
         for ac in r["acs"]:
             node(ac["id"], "ac", ac["id"], title=ac["text"][:160], req=rid, level=ac["level"], blocked=ac["blocked"],
-                 file=r["file"], line=ac["line"])
+                 file=ac.get("file") or r["file"], line=ac["line"])
             edge(rid, ac["id"], "req-ac")
-        for other in expand_ids(r["text"] + " " + " ".join(a["text"] for a in r["acs"]), set(reqs)):
+        for other in expand_ids(r["text"] + " " + " ".join(a["text"] for a in r["acs"]), reqs.keys()):
             if other != rid:
                 edge(rid, other, "ref")
         f = feats.get(rid)

@@ -128,7 +128,7 @@ function mountGraph(host) {
         const flat = [];
         for (const [, arr] of [...comps.entries()].sort((a, b) => rank(a[1]) - rank(b[1]))) {
           arr.sort((a, b) => (a.module || '').localeCompare(b.module || '') || (bary(a) ?? 1e9) - (bary(b) ?? 1e9) || a.label.localeCompare(b.label));
-          flat.push(...arr);
+          for (const n of arr) flat.push(n);
         }
         place(flat, (n) => n.comp, Href, 4, (k) => k);
         continue;

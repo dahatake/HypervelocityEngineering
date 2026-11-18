@@ -175,7 +175,7 @@ export function mount(host) {
       const frs = items.filter((r) => /^FR-\d+$/.test(r.id)); // FR-1061: one row per approved FR (NFRs are not charted)
       const dated = frs.filter((r) => ms(r.start) !== null && ms(r.end) !== null);
       const undated = frs.length - dated.length;
-      let lo = Math.min(...dated.map((r) => ms(r.start))), hi = Math.max(...dated.map((r) => ms(r.end)));
+      let lo = dated.reduce((m, r) => Math.min(m, ms(r.start)), Infinity), hi = dated.reduce((m, r) => Math.max(m, ms(r.end)), -Infinity);
       if (!dated.length) { lo = 0; hi = 1; }
       if (hi <= lo) hi = lo + 86400000;
       const span = hi - lo;

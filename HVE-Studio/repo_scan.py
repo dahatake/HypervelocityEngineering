@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ast
+import codecs
 import hashlib
 import json
 import os
@@ -11,10 +12,17 @@ from collections import Counter, deque
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-TEXT_MAX_BYTES = 1_000_000
+TEXT_MAX_BYTES = 16_000_000  # PARAM-062: per file; a larger text is read up to this many bytes
+TEXT_TOTAL_BYTES = 200_000_000  # PARAM-064: per scan, bounds memory on repositories full of large texts
+# Strict, in order, after UTF-8: legacy Japanese encodings common in older repositories.
+LEGACY_ENCODINGS = ("cp932", "euc_jp")
+_IMPLAUSIBLE = re.compile("[\u0080-\u009f\ue000-\uf8ff]")
 SKIP_DIRS = {".git", "node_modules", "bin", "obj", "dist", "build", "out", "target",
              ".venv", "venv", "__pycache__", ".next", ".nuxt", "coverage", "vendor",
              ".idea", ".vs", "work", "TestResults"}
+# Scratch (not generated) directories: a committed requirement document in them is still a requirement source.
+SCRATCH_DIRS = {"work"}
+PRD_NAME_RE = re.compile(r"prd|requirement|要求|spec", re.I)
 SOURCE_EXTS = {".py", ".cs", ".fs", ".vb", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
                ".vue", ".svelte", ".java", ".kt", ".kts", ".scala", ".go", ".rs", ".rb",
                ".php", ".swift", ".m", ".mm", ".c", ".h", ".cc", ".cpp", ".hpp", ".dart",
@@ -32,6 +40,54 @@ _STATEMENT_NODES = tuple(t for t in (ast.stmt, ast.excepthandler, getattr(ast, "
 
 class ScanError(Exception):
     pass
+
+
+def decode_text(raw: bytes, legacy: bool = True) -> tuple[str, str]:
+    """Deterministic, strict decoding: BOM (UTF-8/UTF-16), UTF-8, then LEGACY_ENCODINGS.
+    Returns (text, encoding); raises the UTF-8 error when nothing decodes. Never substitutes characters."""
+    if raw.startswith(codecs.BOM_UTF8):
+        return raw[len(codecs.BOM_UTF8):].decode("utf-8"), "utf-8"
+    if raw.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+        return raw.decode("utf-16"), "utf-16"
+    try:
+        return raw.decode("utf-8"), "utf-8"
+    except UnicodeDecodeError as exc:
+        error = exc
+    if legacy and b"\0" not in raw:
+        for encoding in LEGACY_ENCODINGS:
+            try:
+                text = raw.decode(encoding)
+            except UnicodeDecodeError:
+                continue
+            # cp932 maps stray bytes (0x80, 0xA0, 0xFD-0xFF, user-defined area) to C1 controls / private use.
+            if not _IMPLAUSIBLE.search(text):
+                return text, encoding
+    raise error
+
+
+def decode_prefix(raw: bytes) -> tuple[str, str]:
+    """Decodes a byte prefix cut at an arbitrary offset: drops at most 3 bytes of a split character.
+    A Unicode reading at any cut wins over a legacy one, so a cut UTF-8 text is not misread as cp932."""
+    error = None
+    for legacy in (False, True):
+        for cut in range(4):
+            try:
+                return decode_text(raw[:len(raw) - cut], legacy)
+            except UnicodeDecodeError as exc:
+                error = error or exc
+    raise error
+
+
+def read_text(path: Path, limit: int | None = None) -> tuple[str, str, bool]:
+    """Returns (text, encoding, truncated) with newlines translated like Path.read_text.
+    With a limit, only that many leading bytes are read."""
+    with path.open("rb") as handle:
+        # read(n) preallocates n bytes, so only bound the read when the file is actually larger.
+        size = os.fstat(handle.fileno()).st_size
+        raw = handle.read() if limit is None or size <= limit else handle.read(limit + 1)
+    truncated = limit is not None and len(raw) > limit
+    text, encoding = decode_prefix(raw[:limit]) if truncated else decode_text(raw)
+    return text.replace("\r\n", "\n").replace("\r", "\n"), encoding, truncated
 
 
 def git(root: Path, *args: str) -> subprocess.CompletedProcess:
@@ -115,6 +171,14 @@ def excluded(rel: str) -> bool:
     return bool(set(Path(rel).parts[:-1]) & SKIP_DIRS)
 
 
+def scratch_requirement_doc(rel: str) -> bool:
+    """A requirement-named Markdown file excluded only by a scratch directory (e.g. a committed work/prd.md)."""
+    path = Path(rel)
+    skipped = set(path.parts[:-1]) & SKIP_DIRS
+    return (bool(skipped) and skipped <= SCRATCH_DIRS and path.suffix.lower() in {".md", ".markdown"}
+            and bool(PRD_NAME_RE.search(path.name)))
+
+
 def safe_file(root: Path, rel: str, symlinks: dict[Path, bool] | None = None) -> bool:
     """symlinks memoizes is_symlink() of shared parent directories across the files of one scan."""
     path = root / rel
@@ -140,7 +204,7 @@ def fingerprint(root: Path, inv: Inventory | None = None) -> str:
         return ""
     digest = hashlib.sha256()
     for rel in paths:
-        if excluded(rel):
+        if excluded(rel) and not scratch_requirement_doc(rel):
             digest.update(f"{rel}\0".encode("utf-8"))
             continue
         try:
@@ -172,7 +236,9 @@ def _imports(tree: ast.AST):
                 queue.extend(v for v in value if isinstance(v, _STATEMENT_NODES))
 
 
-def scan(root: Path, is_test, progress=None, inv: Inventory | None = None) -> dict | None:
+def scan(root: Path, is_test, progress=None, inv: Inventory | None = None,
+         read_scratch_docs: bool = False) -> dict | None:
+    """read_scratch_docs: also read committed requirement documents in scratch directories (code mode)."""
     if progress:
         progress({"phase": "inventory", "completed": 0, "total": 1})
     if inv is None:
@@ -181,10 +247,11 @@ def scan(root: Path, is_test, progress=None, inv: Inventory | None = None) -> di
     if paths is None:
         return None
     data = {"files": [], "tasks": [], "dependencies": [], "history": [], "diagnostics": [],
-            "texts": {}, "links": [], "limits": {"textBytes": TEXT_MAX_BYTES},
+            "texts": {}, "links": [], "limits": {"textBytes": TEXT_MAX_BYTES, "totalTextBytes": TEXT_TOTAL_BYTES},
             "submodules": list_submodules(root, inv),
             "scope": "local Git: tracked, untracked and ignored paths, initialized submodule files, all local refs"}
     texts = data["texts"]
+    budget_used = 0
     symlinks: dict[Path, bool] = {}
     submodules = {s["path"]: s for s in data["submodules"]}
     for rel in list_ignored(root, inv):
@@ -200,7 +267,7 @@ def scan(root: Path, is_test, progress=None, inv: Inventory | None = None) -> di
             if state == "not-initialized":
                 data["diagnostics"].append({"path": rel, "reason": "submodule not initialized: run `git submodule update --init` to analyze its files"})
             continue
-        if excluded(rel):
+        if excluded(rel) and not (read_scratch_docs and scratch_requirement_doc(rel)):
             data["files"].append({"path": rel, "kind": "generated", "bytes": None, "analysis": "inventory-only"})
             data["diagnostics"].append({"path": rel, "reason": "generated/dependency directory: content not analyzed"})
             continue
@@ -224,14 +291,22 @@ def scan(root: Path, is_test, progress=None, inv: Inventory | None = None) -> di
                 continue
             if kind == "asset":
                 continue
-            if rec["bytes"] > TEXT_MAX_BYTES:
-                data["diagnostics"].append({"path": rel, "reason": f"text exceeds {TEXT_MAX_BYTES} bytes"})
+            remaining = TEXT_TOTAL_BYTES - budget_used
+            if remaining <= 0:
+                data["diagnostics"].append({"path": rel, "reason": f"total text read in this scan reached {TEXT_TOTAL_BYTES} bytes: content not analyzed"})
                 continue
-            text = path.read_text(encoding="utf-8-sig")
+            limit = min(TEXT_MAX_BYTES, remaining)
+            text, encoding, truncated = read_text(path, limit)
             if "\0" in text:
                 raise ValueError("binary content")
+            budget_used += min(rec["bytes"], limit)
             texts[rel] = text
-            rec["analysis"] = "read"
+            rec["analysis"] = "partial" if truncated else "read"
+            if encoding not in ("utf-8", "utf-16"):
+                rec["encoding"] = encoding
+                data["diagnostics"].append({"path": rel, "reason": f"not UTF-8: decoded as {encoding}"})
+            if truncated:
+                data["diagnostics"].append({"path": rel, "reason": f"text exceeds {limit} bytes: only the first {limit} bytes were analyzed"})
         except (OSError, UnicodeError, ValueError) as exc:
             rec["analysis"] = "unreadable"
             data["diagnostics"].append({"path": rel, "reason": str(exc)})

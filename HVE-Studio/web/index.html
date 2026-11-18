@@ -25,6 +25,10 @@
     <div class="splash-progress">
       <div class="splash-progress-head"><span id="splashStatus" role="status" aria-live="polite" data-i18n="splash.initial">アプリケーションを読み込み中…</span><span id="splashSteps" aria-hidden="true">0 / 3</span></div>
       <progress id="splashBar" max="3" value="0" aria-label="起動の進捗" data-i18n-aria="splash.progress"></progress>
+      <div id="splashPhase" class="splash-phase" data-testid="splash-phase" hidden>
+        <div class="splash-progress-head"><span id="splashPhaseText"></span><span id="splashElapsed"></span></div>
+        <progress id="splashPhaseBar" max="1" value="0" aria-label="解析の進捗" data-i18n-aria="build.progress"></progress>
+      </div>
       <p id="splashNote" data-i18n="splash.note">処理が完了した段階を表示しています。</p>
       <button id="splashReload" class="btn" type="button" data-i18n="splash.reload" hidden onclick="location.reload()">再読み込み</button>
     </div>
@@ -84,6 +88,12 @@
   <div id="themeLive" class="sr-only" aria-live="polite"></div>
 </header>
 <section id="generatedData" class="generated-data" aria-labelledby="generatedDataTitle" inert></section>
+<div id="buildBanner" class="build-banner" data-testid="build-banner" role="status" hidden>
+  <span class="spin build-spin" aria-hidden="true"></span>
+  <span id="buildText"></span>
+  <progress id="buildBar" max="1" value="0" aria-label="解析の進捗" data-i18n-aria="build.progress"></progress>
+  <span id="buildElapsed" class="mini"></span>
+</div>
 <p id="navDesc" class="navdesc" role="note" inert></p>
 <main id="view" tabindex="-1" inert></main>
 <aside id="drawer" class="drawer" hidden inert></aside>
