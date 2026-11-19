@@ -101,6 +101,22 @@ def test_ac501_a_real_call_in_this_repository_is_an_edge():
         (e["s"], e["t"], e["kind"], e["conf"]) for e in g["edges"]}
 
 
+# FR-1091 AC-505: files and functions carry the one-line description written in the source (docstring / leading comment), and a module reached
+# through sys.path (a unique path suffix) is an import.
+def test_ac505_descriptions_and_suffix_imports(tmp_path):
+    g = _repo(tmp_path, {
+        "pkg/core.py": '"""Core: does the work."""\n\n\ndef work():\n    """Do it."""\n',
+        "tests/test_core.py": "from core import work\n\n\ndef test_it():\n    work()\n",
+        "web/app.js": "// App: draws the screen.\n// Second line.\nfunction draw() {}\n",
+    })
+    files = {f["path"]: f for f in g["files"]}
+    assert files["pkg/core.py"]["doc"] == "Core: does the work."
+    assert files["web/app.js"]["doc"].startswith("App: draws the screen.")
+    assert files["tests/test_core.py"]["imports"] == ["pkg/core.py"]
+    assert ("test_it", "work", "call", "exact") in _edges(g)
+    assert {n["name"]: n["doc"] for n in g["nodes"]}["work"] == "Do it."
+
+
 # FR-1091 AC-501: secrets, vendored code and big files are not read; a non-git folder yields an empty graph.
 def test_ac501_secrets_vendor_and_non_git_are_skipped(tmp_path):
     g = _repo(tmp_path, {"vendor/x.js": "function v() {}\n", "secrets.py": "def s():\n    pass\n", "ok.py": "def fine():\n    pass\n"})

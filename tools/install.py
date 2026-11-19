@@ -110,6 +110,7 @@ MANAGED = [
     "HVE-Studio/web/index.html",
     "HVE-Studio/web/js/app.js",
     "HVE-Studio/web/js/codegraph.js",
+    "HVE-Studio/web/js/floorplan.js",
     "HVE-Studio/web/js/managed-data.js",
     "HVE-Studio/web/js/dashboard.js",
     "HVE-Studio/web/js/diagrams.js",

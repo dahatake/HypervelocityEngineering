@@ -12,6 +12,7 @@ REPO = ROOT.parent
 sync_api = pytest.importorskip("playwright.sync_api")
 
 CANVAS = '[data-testid="cg-canvas"]'
+FP_CARD = '[data-testid="fp-card"]'
 UI_EL = "HVE-Studio/web/js/ui.js::el"
 
 
@@ -130,8 +131,68 @@ def test_ac504_entry_points_and_english(studio):
     page.goto(f"{url}/#/source")
     page.wait_for_selector('[data-testid="open-codegraph"]', timeout=60000)
     page.locator('[data-testid="open-codegraph"]').click()
+    page.wait_for_selector(FP_CARD, timeout=60000)
+    assert "Code floorplan" in page.locator("#view h1").first.inner_text()
+    page.locator('[data-testid="open-network"]').click()
     page.wait_for_selector(CANVAS, timeout=60000)
     assert "Code relations" in page.locator("#view h1").first.inner_text()
+    page.locator('[data-testid="open-floorplan"]').click()
+    page.wait_for_selector(FP_CARD)
     page.locator('[data-testid="command-search"]').fill("> code")
     assert page.locator('[data-testid="command-item"]').count() >= 1
     ctx.close()
+
+
+def _fp(studio, query="", lang="en"):
+    browser, url = studio
+    ctx = browser.new_context(viewport={"width": 1400, "height": 900})
+    page = ctx.new_page()
+    page.add_init_script(f"localStorage.setItem('eabk-studio.lang','{lang}')")
+    page.goto(f"{url}/#/floorplan{query}")
+    page.wait_for_selector(FP_CARD, timeout=60000)
+    return page
+
+
+# FR-1091 AC-505: parts -> files -> functions as cards and arrows; opening a card goes one level down, the breadcrumb and Esc go back.
+def test_ac505_floorplan_levels_cards_and_arrows(studio):
+    page = _fp(studio)
+    top = page.evaluate("() => window.eabkView.getState()")
+    assert top["level"] == 0 and top["cards"] >= 5 and top["arrows"] >= 1
+    assert page.locator(".fp-lane-head").count() >= 2
+    page.locator(f'{FP_CARD}[data-key="HVE-Studio/web/js"]').click()
+    page.locator('[data-testid="fp-open"]').click()
+    page.wait_for_function("() => window.eabkView.getState().level === 1")
+    files = page.evaluate("() => window.eabkView.getState()")
+    assert files["cards"] >= 10 and files["arrows"] >= 10
+    assert page.locator(f'{FP_CARD}[data-key="HVE-Studio/web/js/ui.js"] .fp-desc').inner_text().strip()   # plain-language line from the source
+    page.locator(f'{FP_CARD}[data-key="HVE-Studio/web/js/ui.js"]').dblclick()
+    page.wait_for_function("() => window.eabkView.getState().level === 2")
+    assert page.locator(f'{FP_CARD}[data-type="sym"]').count() >= 5
+    page.locator('[data-testid="fp-stage"]').focus()
+    page.keyboard.press("Escape")
+    page.wait_for_function("() => window.eabkView.getState().level === 1")
+    page.locator('[data-testid="fp-crumb"]').first.click()
+    page.wait_for_function("() => window.eabkView.getState().level === 0")
+    page.context.close()
+
+
+# FR-1091 AC-506: selecting dims the rest and lights the arrows of that card; details list the neighbours; dev names, search, deep link, keyboard.
+def test_ac506_floorplan_selection_search_dev_names_and_deep_link(studio):
+    page = _fp(studio, "?g=HVE-Studio/web/js")
+    page.locator(f'{FP_CARD}[data-key="HVE-Studio/web/js/dashboard.js"]').click()
+    assert page.locator(".fp-edge.hot").count() >= 1 and page.locator(".fp-card.dim").count() >= 1
+    assert page.locator('[data-testid="fp-name"]').inner_text() == "Dashboard"
+    assert page.locator("#view .cg-rel .cg-sym").count() >= 1
+    page.locator('[data-testid="fp-dev"]').check()
+    assert page.locator('[data-testid="fp-name"]').inner_text() == "dashboard.js"
+    page.locator('[data-testid="fp-dev"]').uncheck()
+    page.locator('[data-testid="fp-search"]').fill("codegraph_bytes")
+    page.locator('[data-testid="fp-hit"]').first.wait_for()
+    page.locator('[data-testid="fp-search"]').press("Enter")
+    page.wait_for_function("() => window.eabkView.getState().level === 2 && window.eabkView.getState().selected.includes('codegraph_bytes')")
+    page.locator(f'{FP_CARD}.sel').focus()
+    page.keyboard.press("Escape")
+    deep = _fp(studio, "?g=HVE-Studio/web/js&f=HVE-Studio/web/js/ui.js")
+    assert deep.evaluate("() => window.eabkView.getState().level") == 2
+    deep.context.close()
+    page.context.close()

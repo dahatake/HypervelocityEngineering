@@ -28,6 +28,31 @@ JS_KEYWORDS = {"if", "for", "while", "switch", "catch", "function", "return", "t
                "import", "else", "do", "try", "with", "constructor", "delete", "void", "yield", "in", "of"}
 
 
+def _sentence(text: str) -> str:
+    text = " ".join(text.split())
+    m = re.match(r"(.{8,170}?[。.!?])(?:\s|$)", text)
+    return (m.group(1) if m else text)[:170]
+
+
+def _js_lead_doc(lines: list[str], line: int) -> str:
+    """The comment lines right above a declaration (1-based line), as one plain sentence."""
+    got, i = [], line - 2
+    while i >= 0 and re.match(r"\s*(//|/\*|\*)", lines[i]):
+        got.append(re.sub(r"^\s*(//+|/\*+|\*+/?)\s?|\*/\s*$", "", lines[i]).strip())
+        i -= 1
+    return _sentence(" ".join(reversed([g for g in got if g])))
+
+
+def _js_file_doc(lines: list[str]) -> str:
+    got = []
+    for ln in lines[:12]:
+        if re.match(r"\s*(//|/\*|\*)", ln):
+            got.append(re.sub(r"^\s*(//+|/\*+|\*+/?)\s?|\*/\s*$", "", ln).strip())
+        elif got or ln.strip():
+            break
+    return _sentence(" ".join(g for g in got if g))
+
+
 def _sym(file: str, qual: str, name: str, kind: str, line: int, end: int, lang: str, parent: str | None = None) -> dict:
     return {"id": f"{file}::{qual}", "name": name, "qual": qual, "kind": kind, "file": file, "line": line,
             "end": end, "lang": lang, "parent": parent}
@@ -44,6 +69,11 @@ def _py_module_target(files: set[str], rel: str, name: str, level: int) -> str |
         for p in (cand.with_suffix(".py"), cand / "__init__.py"):
             if p.as_posix() in files and p.as_posix() != rel:
                 return p.as_posix()
+    if not level and name:
+        # scripts and tests often reach a module through sys.path: accept a path suffix that matches exactly one file
+        hits = [f for f in files if f.endswith("/" + name + ".py") or f.endswith("/" + name + "/__init__.py")]
+        if len(hits) == 1 and hits[0] != rel:
+            return hits[0]
     return None
 
 
@@ -112,6 +142,7 @@ def _py_extract(rel: str, text: str, files: set[str], out: dict) -> None:
                 elif target:
                     imports[alias] = ("sym", target, a.name)
     out["imports"][rel] = sorted({v[1] for v in imports.values()})
+    out["fdoc"][rel] = _sentence(ast.get_docstring(tree) or "")
 
     out["raw"].append({"file": rel, "lang": "py", "syms": syms, "scope": scope, "methods": methods,
                        "bases": bases, "imports": imports, "tree": tree})
@@ -327,6 +358,8 @@ def _js_target(files: set[str], rel: str, spec: str) -> str | None:
 
 def _js_extract(rel: str, text: str, files: set[str], out: dict) -> None:
     masked = _mask(text)
+    lines = text.split("\n")
+    out["fdoc"][rel] = _js_file_doc(lines)
     starts = [0] + [m.end() for m in re.finditer("\n", text)]
     syms: dict[str, dict] = {}
     ranges: list[tuple[int, int, str]] = []  # (start, end, id) offsets for innermost lookup
@@ -354,6 +387,7 @@ def _js_extract(rel: str, text: str, files: set[str], out: dict) -> None:
                  _line_of(starts, end), "js", parent)
         if s["id"] in syms:
             return None
+        s["doc"] = _js_lead_doc(lines, s["line"])
         syms[s["id"]] = s
         ranges.append((start, end, s["id"]))
         return s
@@ -569,7 +603,7 @@ def build(root: Path, inv: repo_scan.Inventory | None = None) -> dict:
     cand = [p for p in paths if Path(p).suffix.lower() in ({".py"} | JS_EXTS)
             and not repo_scan.excluded(p) and not VENDOR_RE.search(p) and not repo_scan.SECRET_NAME.search(Path(p).name)]
     fileset = set(cand)
-    out = {"raw": [], "imports": {}, "stats": {"parseErrors": 0}}
+    out = {"raw": [], "imports": {}, "fdoc": {}, "stats": {"parseErrors": 0}}
     texts: dict[str, str] = {}
     symlinks: dict[Path, bool] = {}
     skipped = 0
@@ -634,7 +668,8 @@ def build(root: Path, inv: repo_scan.Inventory | None = None) -> dict:
     for rel, text in texts.items():
         reqs = sorted(set(REQ_RE.findall(text)))[:12]
         files.append({"path": rel, "lang": "py" if rel.endswith(".py") else "js", "loc": text.count("\n") + 1,
-                      "test": bool(TEST_RE.search(rel)), "imports": out["imports"].get(rel, []), "reqs": reqs})
+                      "test": bool(TEST_RE.search(rel)), "imports": out["imports"].get(rel, []), "reqs": reqs,
+                      "doc": out["fdoc"].get(rel, "")})
     nodes.sort(key=lambda n: (n["file"], n["line"]))
     return {"nodes": nodes, "edges": edge_list, "files": files,
             "stats": {"files": len(files), "nodes": len(nodes), "edges": len(edge_list), "unresolved": unresolved,

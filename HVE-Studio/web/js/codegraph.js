@@ -540,7 +540,7 @@ export function mount(host) {
     const color = el('button', { type: 'button', class: 'btn ghost', 'data-testid': 'cg-color', onclick: () => { ui.color = ui.color === 'kind' ? 'folder' : 'kind'; color.textContent = t('cg.color.' + ui.color); dirty = true; } }, t('cg.color.' + ui.color));
     const kindChips = KINDS.map((k) => el('label', { class: 'row mini cg-toggle' }, el('input', { type: 'checkbox', 'data-testid': 'cg-kind-' + k, checked: ui.kinds.has(k) || null,
       onchange: (e) => { if (e.target.checked) ui.kinds.add(k); else ui.kinds.delete(k); rebuild(); } }), el('i', { class: 'dot', style: { background: token(KIND_VAR[k]) } }), t('cg.kind.' + k)));
-    page.replaceChildren(el('h1', {}, t('cg.title')), el('p', { class: 'sub' }, t('cg.sub')),
+    page.replaceChildren(el('h1', {}, t('cg.title')), el('p', { class: 'sub' }, t('cg.sub')), el('p', {}, el('a', { class: 'btn ghost', href: '#/floorplan', 'data-testid': 'open-floorplan' }, t('fp.floorplan'))),
       el('div', { class: 'tbar cg-bar' }, search, ...kindChips,
         toggle(t('cg.show.tests'), 'tests', 'cg-tests'), toggle(t('cg.show.ref'), 'ref', 'cg-ref'), toggle(t('cg.show.guess'), 'guess', 'cg-guess'),
         toggle(t('cg.show.labels'), 'labels', 'cg-labels', () => { dirty = true; }), toggle(t('cg.show.flow'), 'flow', 'cg-flow', () => { dirty = true; })),

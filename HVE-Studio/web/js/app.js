@@ -34,6 +34,7 @@ const ROUTES = {
   integrations: { icon: 'integrations', load: () => import('./integrations.js') },
   source: { icon: 'source', load: () => import('./source.js') },
   codegraph: { navKey: 'source', icon: 'source', hidden: true, load: () => import('./codegraph.js') },
+  floorplan: { navKey: 'source', icon: 'source', hidden: true, load: () => import('./floorplan.js') },
   tables: { icon: 'tables', load: () => import('./tables.js') },
   maintenance: { icon: 'maintenance', mount: mountMaintenance },
   structure: { navKey: 'maintenance', hidden: true, mount: mountStructure },
@@ -304,7 +305,7 @@ function hl(text, toks) {
 // FR-1041 AC-226: every nav item (and the 2D / 3D switch) is reachable from the command box.
 function navCommands() {
   const list = NAV.map((k) => ({ cmd: true, id: 'cmd:nav:' + k, label: t('cmd.goto') + t('nav.' + k), key: t('nav.' + k), run: () => { location.hash = '#/' + navTarget(k); } }));
-  list.push({ cmd: true, id: 'cmd:codegraph', label: t('cmd.codegraph'), key: t('nav.codegraph'), run: () => { location.hash = '#/codegraph'; } });
+  list.push({ cmd: true, id: 'cmd:codegraph', label: t('cmd.codegraph'), key: t('nav.codegraph'), run: () => { location.hash = '#/floorplan'; } });
   for (const c of window.eabkTheme.choices) list.push({ cmd: true, id: 'cmd:theme:' + c, label: t('theme.cmd') + t('theme.' + c), key: t('theme.keys') + ' ' + t('theme.' + c), run: () => window.eabkTheme.set(c) });
   if (hasDimHandler()) {
     list.push({ cmd: true, id: 'cmd:dim', label: t('cmd.dim'), key: '2D 3D', run: () => runDim() });

@@ -1096,3 +1096,5 @@
 | PARAM-066 | PARAM | 採番済み | 2026-11-19T23:57:28+09:00 | main@2451fc2c | code graph limits |
 | PARAM-067 | PARAM | 採番済み | 2026-11-19T23:57:28+09:00 | main@2451fc2c | code graph limits |
 | SRC-050 | SRC | 採番済み | 2026-11-19T23:57:29+09:00 | main@2451fc2c | code relations request |
+| AC-505 | AC | 採番済み | 2026-11-20T00:43:23+09:00 | main@cb2cd499 | FR-1091 floorplan |
+| AC-506 | AC | 採番済み | 2026-11-20T00:43:23+09:00 | main@cb2cd499 | FR-1091 floorplan |
