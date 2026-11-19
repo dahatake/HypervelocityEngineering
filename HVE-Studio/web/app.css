@@ -524,6 +524,12 @@ i[data-testid=chart-segment]{min-width:var(--space-6)}
 .cg-bar{row-gap:var(--space-2)}
 @media (max-width:900px){.cg-body{grid-template-columns:1fr}}
 .fp-page{display:flex;flex-direction:column;padding:0;overflow:hidden;background:var(--color-bg-canvas)}
+.src-tabs{display:flex;gap:var(--space-1);border-bottom:var(--stroke-thin) solid var(--color-border-default);margin:0 0 var(--space-3);padding:0 var(--space-2)}
+.fp-page .src-tabs{margin:0;background:var(--color-bg-surface)}
+.src-tab{padding:var(--space-2) var(--space-4);color:var(--color-fg-muted);text-decoration:none;border-bottom:3px solid transparent;margin-bottom:-1px}
+.src-tab:hover{background:var(--color-bg-hover)}
+.src-tab.on{color:var(--color-fg-default);font-weight:700;border-bottom-color:var(--color-accent)}
+.src-tab:focus-visible{outline:2px solid var(--color-focus);outline-offset:-2px}
 .fp-loading{padding:var(--space-6)}
 .fp-header{position:relative;display:flex;align-items:center;gap:var(--space-4);flex-wrap:wrap;padding:var(--space-2) var(--space-4);border-bottom:var(--stroke-thin) solid var(--color-border-default);background:var(--color-bg-surface)}
 .fp-brand{display:flex;align-items:center;gap:var(--space-2);min-width:0}

@@ -129,13 +129,18 @@ def test_ac504_entry_points_and_english(studio):
     page = ctx.new_page()
     page.add_init_script("localStorage.setItem('eabk-studio.lang','en')")
     page.goto(f"{url}/#/source")
-    page.wait_for_selector('[data-testid="open-codegraph"]', timeout=60000)
-    page.locator('[data-testid="open-codegraph"]').click()
+    page.wait_for_selector('[data-testid="src-tab-map"][aria-selected="true"]', timeout=60000)
+    page.locator('[data-testid="src-tab-functions"]').click()
     page.wait_for_selector(FP_CARD, timeout=60000)
+    assert page.locator('[data-testid="src-tab-functions"]').get_attribute("aria-selected") == "true" and page.locator('[role="tablist"] [role="tab"]').count() == 2
     page.locator('[data-testid="open-network"]').click()
     page.wait_for_selector(CANVAS, timeout=60000)
+    assert page.locator('[data-testid="src-tab-functions"]').get_attribute("aria-selected") == "true"      # the network view stays on the same tab
     assert "Code relations" in page.locator("#view h1").first.inner_text()
-    page.locator('[data-testid="open-floorplan"]').click()
+    page.locator('[data-testid="src-tab-map"]').click()
+    page.wait_for_selector('[data-testid="src-tab-map"][aria-selected="true"]')
+    page.locator('[data-testid="src-tab-functions"]').focus()
+    page.keyboard.press("Enter")
     page.wait_for_selector(FP_CARD)
     page.locator('[data-testid="command-search"]').fill("> code")
     assert page.locator('[data-testid="command-item"]').count() >= 1

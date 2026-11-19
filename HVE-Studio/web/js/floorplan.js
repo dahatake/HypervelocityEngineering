@@ -4,6 +4,7 @@
 // Data: GET /api/floorplan (read only) and, inside a file, GET /api/codegraph for its functions.
 import { t, onLang } from './i18n.js';
 import { el, esc, toast, showTip, hideTip } from './ui.js';
+import { sourceTabs } from './srctabs.js';
 import { createBoard, icon } from './fp-board.js';
 import { indexModel, boardOf, membersOf, chain, parentOf, memberFor, outsideFor, describe, labelOf, shortestPath, allFiles, folderFiles, KIND_ORDER } from './fp-data.js';
 import { mountPanels } from './fp-panels.js';
@@ -16,17 +17,17 @@ export function mount(host) {
   const page = el('div', { class: 'page fp-page' });
   host.append(page);
   const S = { g: null, m: null, view: '', sel: null, answer: null, kinds: new Set(KIND_ORDER), technical: false, recentOn: true, panelOpen: true, flow: null, marks: null, dismissed: new Set(), cg: null, noTour: false };
-  let board = null, panelEl, headerEl, flowBar, hoverId = null, destroyed = false, menuEl = null, modalCtl = null;
+  let board = null, panelEl, headerEl, flowBar, hoverId = null, destroyed = false, menuEl = null, modalCtl = null, tabsEl = null;
   const stateKey = () => 'hve-floorplan.dismissed:' + (S.g?.meta.repo || '');
 
   // ------------------------------------------------------------ load
   async function load() {
-    page.replaceChildren(el('div', { class: 'fp-loading mini', role: 'status' }, t('cg.loading')));
+    page.replaceChildren(sourceTabs('functions'), el('div', { class: 'fp-loading mini', role: 'status' }, t('cg.loading')));
     try {
       const r = await fetch('/api/floorplan', { cache: 'no-store' });
       if (!r.ok) throw new Error('HTTP ' + r.status);
       S.g = await r.json();
-    } catch (e) { if (!destroyed) page.replaceChildren(el('div', { class: 'warnbox' }, t('cg.error') + ' ' + String(e.message || e))); return false; }
+    } catch (e) { if (!destroyed) page.replaceChildren(sourceTabs('functions'), el('div', { class: 'warnbox' }, t('cg.error') + ' ' + String(e.message || e))); return false; }
     S.m = indexModel(S.g);
     try { S.dismissed = new Set(JSON.parse(localStorage.getItem(stateKey()) || '[]')); } catch { S.dismissed = new Set(); }
     return true;
@@ -305,7 +306,8 @@ export function mount(host) {
     headerEl = el('header', { class: 'fp-header' });
     panelEl = el('aside', { class: 'fp-panel', 'data-testid': 'fp-side', 'aria-live': 'polite' });
     const body = el('div', { class: 'fp-body' }, stageWrap, panelEl);
-    page.replaceChildren(headerEl, body);
+    tabsEl = sourceTabs('functions');
+    page.replaceChildren(tabsEl, headerEl, body);
     board = createBoard(stageWrap, {
       renderCard, isSelected: (id) => id === S.sel,
       onSelect: (id) => select(id), onOpen: (id) => openItem(id),
@@ -318,7 +320,7 @@ export function mount(host) {
   }
   document.addEventListener('keydown', onKey);
   document.addEventListener('pointerdown', onClickAway);
-  const offLang = onLang(() => { if (S.g) { S.index = null; renderHeader(); renderPanel(); draw({ keepCamera: true }); } });
+  const offLang = onLang(() => { if (S.g) { S.index = null; const nt = sourceTabs('functions'); tabsEl?.replaceWith(nt); tabsEl = nt; renderHeader(); renderPanel(); draw({ keepCamera: true }); } });
   const view = { mode: 'floorplan', getState: () => ({ view: S.view, selected: S.sel, answer: !!S.answer, cards: board?.cards?.size || 0, technical: S.technical, flow: S.flow ? S.flow.i : null, health: S.g?.health.summary || null, ready: !!board?.cards }),
     go: (v, o) => go(v, o), select: (id) => select(id), reveal, ask };
   window.eabkView = view;

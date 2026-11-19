@@ -3,6 +3,7 @@
 // (repulsion on a grid, link springs, a pull towards the file each symbol lives in, collision) — no external library, nothing fetched.
 // prefers-reduced-motion: the layout is solved at once and drawn still; no particles, no pulses.
 import { t, onLang } from './i18n.js';
+import { sourceTabs } from './srctabs.js';
 import { store } from './store.js';
 import { el, token, vscodeUrl, showTip, hideTip, esc } from './ui.js';
 import { reduced } from './viz.js';
@@ -49,12 +50,12 @@ export function mount(host) {
 
   // ------------------------------------------------------------ data
   async function load() {
-    page.replaceChildren(el('h1', {}, t('cg.title')), el('div', { class: 'mini', role: 'status' }, t('cg.loading')));
+    page.replaceChildren(sourceTabs('functions'), el('h1', {}, t('cg.title')), el('div', { class: 'mini', role: 'status' }, t('cg.loading')));
     try {
       const r = await fetch('/api/codegraph', { cache: 'no-store' });
       if (!r.ok) throw new Error('HTTP ' + r.status);
       data = await r.json();
-    } catch (e) { loadError = true; if (!destroyed) page.replaceChildren(el('h1', {}, t('cg.title')), el('div', { class: 'warnbox' }, t('cg.error') + ' ' + String(e.message || e))); return; }
+    } catch (e) { loadError = true; if (!destroyed) page.replaceChildren(sourceTabs('functions'), el('h1', { class: 'cg-h' }, t('cg.title')), el('div', { class: 'warnbox' }, t('cg.error') + ' ' + String(e.message || e))); return; }
     if (destroyed) return;
     byId = new Map(data.nodes.map((n) => [n.id, n]));
     out = new Map(); inn = new Map();
@@ -540,7 +541,10 @@ export function mount(host) {
     const color = el('button', { type: 'button', class: 'btn ghost', 'data-testid': 'cg-color', onclick: () => { ui.color = ui.color === 'kind' ? 'folder' : 'kind'; color.textContent = t('cg.color.' + ui.color); dirty = true; } }, t('cg.color.' + ui.color));
     const kindChips = KINDS.map((k) => el('label', { class: 'row mini cg-toggle' }, el('input', { type: 'checkbox', 'data-testid': 'cg-kind-' + k, checked: ui.kinds.has(k) || null,
       onchange: (e) => { if (e.target.checked) ui.kinds.add(k); else ui.kinds.delete(k); rebuild(); } }), el('i', { class: 'dot', style: { background: token(KIND_VAR[k]) } }), t('cg.kind.' + k)));
-    page.replaceChildren(el('h1', {}, t('cg.title')), el('p', { class: 'sub' }, t('cg.sub')), el('p', {}, el('a', { class: 'btn ghost', href: '#/floorplan', 'data-testid': 'open-floorplan' }, t('fp.floorplan'))),
+    page.replaceChildren(sourceTabs('functions'), el('nav', { class: 'fp-crumbs', 'aria-label': t('fp.crumbs'), 'data-testid': 'fp-crumbs' }, el('ol', {},
+      el('li', {}, el('a', { class: 'fp-crumb', href: '#/floorplan', 'data-testid': 'fp-crumb' }, el('small', {}, t('fp.codebase')), t('fp.crumb.root'))),
+      el('li', {}, el('span', { class: 'fp-crumb cur', 'aria-current': 'location', 'data-testid': 'fp-crumb' }, el('small', {}, t('fp.crumb.view')), t('fp.network'))))),
+      el('h1', {}, t('cg.title')), el('p', { class: 'sub' }, t('cg.sub')), el('p', {}, el('a', { class: 'btn ghost', href: '#/floorplan', 'data-testid': 'open-floorplan' }, t('fp.floorplan'))),
       el('div', { class: 'tbar cg-bar' }, search, ...kindChips,
         toggle(t('cg.show.tests'), 'tests', 'cg-tests'), toggle(t('cg.show.ref'), 'ref', 'cg-ref'), toggle(t('cg.show.guess'), 'guess', 'cg-guess'),
         toggle(t('cg.show.labels'), 'labels', 'cg-labels', () => { dirty = true; }), toggle(t('cg.show.flow'), 'flow', 'cg-flow', () => { dirty = true; })),
