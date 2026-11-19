@@ -17,7 +17,7 @@ export function mount(host) {
   const page = el('div', { class: 'page fp-page' });
   host.append(page);
   const S = { g: null, m: null, view: '', sel: null, answer: null, kinds: new Set(KIND_ORDER), technical: false, recentOn: true, panelOpen: true, flow: null, marks: null, dismissed: new Set(), cg: null, noTour: false };
-  let board = null, panelEl, headerEl, flowBar, hoverId = null, destroyed = false, menuEl = null, modalCtl = null, tabsEl = null;
+  let board = null, panelEl, headerEl, flowBar, hoverId = null, destroyed = false, menuEl = null, modalCtl = null, tabsEl = null, pathEl = null;
   const stateKey = () => 'hve-floorplan.dismissed:' + (S.g?.meta.repo || '');
 
   // ------------------------------------------------------------ load
@@ -158,7 +158,7 @@ export function mount(host) {
     const name = S.view ? labelOf(m, S.view, S.technical) : '';
     const brackets = S.answer || !S.view ? [] : [{ label: t('fp.br.used'), ids: data.left }, { label: t('fp.inside', { name }), ids: data.members }, { label: t('fp.br.uses'), ids: data.right }];
     await board.show({ cards, edges, partitions, brackets, state: S, transition, keepCamera, paint: paintArgs() });
-    renderHeader(); renderPanel(); renderFlowBar();
+    renderHeader(); renderPanel(); renderFlowBar(); renderPath();
     page.dataset.view = S.view; page.dataset.answer = S.answer ? '1' : '';
   }
   const paintArgs = () => ({ focus: hoverId || S.sel, marks: S.marks, dim: null });
@@ -179,7 +179,7 @@ export function mount(host) {
   // ------------------------------------------------------------ selection
   function select(id) {
     S.sel = S.sel === id ? null : id;
-    board.paint(paintArgs()); renderPanel(); writeUrl(false);
+      board.paint(paintArgs()); renderPanel(); renderPath(); writeUrl(false);
   }
   const editorUrl = (path, line = 1) => {
     const tpl = EDITORS[S.g.meta.editor] || (String(S.g.meta.editor).includes('{path}') ? S.g.meta.editor : EDITORS.vscode);
@@ -251,7 +251,7 @@ export function mount(host) {
     const a = prev ? memberFor(S.m, S.view, prev.id, new Set(board.cards.keys())) || prev.id : null, b = memberFor(S.m, S.view, step.id, new Set(board.cards.keys())) || step.id;
     S.sel = b; board.paint({ focus: b, marks: new Set([a, b].filter(Boolean)) });
     if (a && b && a !== b) board.signal(a, b);
-    renderPanel(); renderFlowBar();
+    renderPanel(); renderFlowBar(); renderPath();
   }
   const stopFlow = () => { S.flow = null; renderFlowBar(); };
   function renderFlowBar() {
@@ -266,6 +266,42 @@ export function mount(host) {
         el('button', { type: 'button', class: 'btn', 'data-testid': 'fp-flow-next', onclick: () => (f.i === f.steps.length - 1 ? stopFlow() : stepFlow(f.i + 1)) }, f.i === f.steps.length - 1 ? t('fp.flow.done') : '→'),
         el('button', { type: 'button', class: 'btn ghost', onclick: stopFlow }, t('fp.flow.stop'))));
     stageWrap.append(flowBar);
+  }
+
+  // ------------------------------------------------------------ where you are: the path from the codebase down to what is shown
+  function lineage(view) {
+    const m = S.m;
+    if (!view) return [];
+    if (view.startsWith('n:')) return chain(m, view).reverse();
+    if (view.startsWith('f:')) return [...lineage(viewOf(view)), view];
+    const [nid, folder] = view.slice(2).split('|'), out = lineage('n:' + nid);
+    for (let cur = 'n:' + nid, guard = 0; guard < 8; guard++) {
+      const mem = membersOf(m, cur).find((x) => x.startsWith('d:') && (folder === x.split('|')[1] || folder.startsWith(x.split('|')[1] + '/')));
+      if (!mem) break;
+      out.push(mem);
+      if (mem.split('|')[1] === folder) break;
+      cur = mem;
+    }
+    return out;
+  }
+  function pathItems() {
+    const m = S.m, root = { id: '', label: S.g.project.name, word: t('fp.codebase'), title: S.g.meta.repo };
+    if (S.answer) return [root, { label: S.answer.title, word: t('fp.answer'), cur: true }];
+    const ids = lineage(S.view);
+    if (S.sel && S.sel !== ids[ids.length - 1] && membersOf(m, S.view).includes(S.sel)) ids.push(S.sel);
+    const items = [root, ...ids.map((id) => {
+      const d = describe(m, id, t);
+      return { id, label: id.startsWith('r:') ? `${d.method} ${d.urlPath}` : S.technical && d.type !== 'folder' ? d.dev : d.title, word: t('fp.type.' + d.type), title: d.path || d.dev };
+    })];
+    items[items.length - 1].cur = true;
+    return items;
+  }
+  function renderPath() {
+    if (!pathEl) return;
+    const items = pathItems();
+    pathEl.replaceChildren(el('ol', {}, ...items.map((it, i) => el('li', {}, i ? el('span', { class: 'fp-sep', 'aria-hidden': 'true' }, '›') : '',
+      it.cur ? el('span', { class: 'fp-crumb cur', 'aria-current': 'location', title: it.title || it.label, 'data-testid': 'fp-crumb' }, el('small', {}, it.word), it.label)
+        : el('button', { type: 'button', class: 'fp-crumb', title: it.title || it.label, 'data-testid': 'fp-crumb', onclick: () => go(it.id) }, el('small', {}, it.word), it.label)))));
   }
 
   // ------------------------------------------------------------ header, panel, modals, menus (fp-panels.js)
@@ -307,7 +343,8 @@ export function mount(host) {
     panelEl = el('aside', { class: 'fp-panel', 'data-testid': 'fp-side', 'aria-live': 'polite' });
     const body = el('div', { class: 'fp-body' }, stageWrap, panelEl);
     tabsEl = sourceTabs('functions');
-    page.replaceChildren(tabsEl, headerEl, body);
+    pathEl = el('nav', { class: 'fp-crumbs', 'aria-label': t('fp.crumbs'), 'data-testid': 'fp-crumbs' });
+    page.replaceChildren(tabsEl, pathEl, headerEl, body);
     board = createBoard(stageWrap, {
       renderCard, isSelected: (id) => id === S.sel,
       onSelect: (id) => select(id), onOpen: (id) => openItem(id),
@@ -320,7 +357,7 @@ export function mount(host) {
   }
   document.addEventListener('keydown', onKey);
   document.addEventListener('pointerdown', onClickAway);
-  const offLang = onLang(() => { if (S.g) { S.index = null; const nt = sourceTabs('functions'); tabsEl?.replaceWith(nt); tabsEl = nt; renderHeader(); renderPanel(); draw({ keepCamera: true }); } });
+  const offLang = onLang(() => { if (S.g) { S.index = null; const nt = sourceTabs('functions'); tabsEl?.replaceWith(nt); tabsEl = nt; pathEl?.setAttribute('aria-label', t('fp.crumbs')); renderPath(); renderHeader(); renderPanel(); draw({ keepCamera: true }); } });
   const view = { mode: 'floorplan', getState: () => ({ view: S.view, selected: S.sel, answer: !!S.answer, cards: board?.cards?.size || 0, technical: S.technical, flow: S.flow ? S.flow.i : null, health: S.g?.health.summary || null, ready: !!board?.cards }),
     go: (v, o) => go(v, o), select: (id) => select(id), reveal, ask };
   window.eabkView = view;

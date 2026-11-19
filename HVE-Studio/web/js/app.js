@@ -8,6 +8,12 @@ import { dimToggle, dimState, registerDim, hasDimHandler, runDim, headerDimToggl
 import { cameraCommands } from './camera3d.js';
 import { changeLayout, resetLayout } from './layout.js';
 import { initManagedData } from './managed-data.js';
+import { startGuide } from './guide.js';
+
+// 初めての方へ: ヘッダーのボタンから、いま開いている画面の使い方をウィザードで案内する。
+const guideBtn = document.getElementById('guideBtn');
+guideBtn.prepend(icon('guide', { size: 16 }));
+guideBtn.addEventListener('click', () => startGuide(navKeyOf(routeName())));
 
 // NFR-UX-002 AC-015/041: 配置の変更・既定へ戻す。検索語・選択・絞り込みは再描画しないので保たれる。
 document.querySelector('[data-testid="layout-change"]')?.addEventListener('click', changeLayout);

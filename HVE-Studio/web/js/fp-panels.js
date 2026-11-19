@@ -55,7 +55,7 @@ export function mountPanels(ctx, { headerEl, panelEl, stageWrap }) {
         btn('fp-act', [icon('config', 15), t('fp.health'), nOpen ? el('span', { class: 'fp-badge bad' }, String(nOpen)) : ''], openHealth, { 'data-testid': 'fp-health' }),
         btn('fp-act', [icon('worker', 15), t('fp.recent'), nRecent ? el('span', { class: 'fp-badge ok' }, String(nRecent)) : ''], openRecent, { 'data-testid': 'fp-recent' }),
         btn('fp-act', [icon('ui', 15), t('fp.screens')], openScreens, { 'data-testid': 'fp-screens' }),
-        btn('fp-act', [icon('feature', 15), t('fp.tour')], () => g.tour.length && ctx.startFlow({ title: t('fp.tour'), steps: g.tour }, 'tour'), { 'data-testid': 'fp-tour', disabled: g.tour.length ? null : true }),
+        btn('fp-act', [icon('guide', 15), t('fp.tour')], () => g.tour.length && ctx.startFlow({ title: t('fp.tour'), steps: g.tour }, 'tour'), { 'data-testid': 'fp-tour', disabled: g.tour.length ? null : true }),
         btn('fp-act', [icon('route', 15), t('fp.flows')], openFlows, { 'data-testid': 'fp-flows' }),
         btn('fp-iconbtn', icon('config', 16), openFilters, { 'data-testid': 'fp-filters', title: t('fp.filters'), 'aria-label': t('fp.filters') }),
         btn('fp-iconbtn', icon('file', 16), () => ctx.togglePanel(), { 'data-testid': 'fp-panel-toggle', title: t('fp.panel'), 'aria-label': t('fp.panel') })));

@@ -530,6 +530,16 @@ i[data-testid=chart-segment]{min-width:var(--space-6)}
 .src-tab:hover{background:var(--color-bg-hover)}
 .src-tab.on{color:var(--color-fg-default);font-weight:700;border-bottom-color:var(--color-accent)}
 .src-tab:focus-visible{outline:2px solid var(--color-focus);outline-offset:-2px}
+.fp-crumbs{background:var(--color-bg-surface);border-bottom:var(--stroke-thin) solid var(--color-border-default);padding:var(--space-1) var(--space-4);overflow-x:auto}
+.fp-crumbs ol{display:flex;align-items:center;gap:var(--space-1);list-style:none;margin:0;padding:0;white-space:nowrap}
+.fp-crumbs li{display:flex;align-items:center;gap:var(--space-1);min-width:0}
+.fp-sep{color:var(--color-fg-subtle)}
+.fp-crumb{display:inline-flex;align-items:baseline;gap:var(--space-1);max-width:260px;overflow:hidden;text-overflow:ellipsis;background:none;border:0;border-radius:var(--radius-md);padding:var(--space-1) var(--space-2);color:var(--color-fg-link);cursor:pointer;text-decoration:underline;font:inherit}
+.fp-crumb small{color:var(--color-fg-subtle);font-size:var(--font-size-caption);text-decoration:none;display:inline-block}
+.fp-crumb:hover{background:var(--color-bg-hover)}
+.fp-crumb.cur{color:var(--color-fg-default);font-weight:700;text-decoration:none;cursor:default;background:var(--color-bg-selected)}
+.fp-crumb:focus-visible{outline:2px solid var(--color-focus);outline-offset:-2px}
+.cg-page>.fp-crumbs{margin:0 calc(var(--space-6) * -1) var(--space-3)}
 .fp-loading{padding:var(--space-6)}
 .fp-header{position:relative;display:flex;align-items:center;gap:var(--space-4);flex-wrap:wrap;padding:var(--space-2) var(--space-4);border-bottom:var(--stroke-thin) solid var(--color-border-default);background:var(--color-bg-surface)}
 .fp-brand{display:flex;align-items:center;gap:var(--space-2);min-width:0}
@@ -634,3 +644,18 @@ i[data-testid=chart-segment]{min-width:var(--space-6)}
 .fp-menu button{background:none;border:0;text-align:left;padding:var(--space-2) var(--space-3);border-radius:var(--radius-md);cursor:pointer;color:var(--color-fg-default)}
 .fp-menu button:hover{background:var(--color-bg-hover)}
 @media (max-width:900px){.fp-body{grid-template-columns:1fr}.fp-panel{display:none}.fp-actions .fp-act{padding:var(--space-1)}}
+
+/* 初めての方へ: 強調する場所だけを明るく残し、ほかをグレーアウトする案内カード */
+.guide-root{position:fixed;inset:0;z-index:400}
+.guide-shield{position:absolute;inset:0}
+.guide-spot{position:absolute;border-radius:var(--radius-md);box-shadow:0 0 0 9999px rgba(20,22,28,.62);outline:2px solid var(--color-accent);outline-offset:0;pointer-events:none;transition:all var(--duration-normal,.2s) ease}
+.guide-card{position:absolute;box-sizing:border-box;max-width:calc(100vw - 16px);padding:var(--space-4);background:var(--color-bg-surface);color:var(--color-fg-default);border:var(--stroke-thin) solid var(--color-border-strong);border-radius:var(--radius-overlay);box-shadow:var(--elevation-flyout);display:flex;flex-direction:column;gap:var(--space-2)}
+.guide-head{display:flex;align-items:center;gap:var(--space-2)}
+.guide-count{margin-left:auto;color:var(--color-fg-subtle);font-size:var(--font-size-caption)}
+.guide-body{margin:0;line-height:1.6}
+.guide-hint{margin:0;color:var(--color-fg-subtle);font-size:var(--font-size-caption)}
+.guide-actions{display:flex;align-items:center;gap:var(--space-2)}
+.guide-spacer{flex:1}
+.guide-btn{display:inline-flex;align-items:center;gap:var(--space-1)}
+@media (max-width:640px){.top{position:relative}.guide-btn{position:absolute;top:var(--space-2);right:var(--space-2);padding:var(--space-1) var(--space-2)}.guide-btn #guideBtnLabel{display:none}.guide-btn::before{content:"?";font-weight:700}}
+@media (prefers-reduced-motion:reduce){.guide-spot{transition:none}}

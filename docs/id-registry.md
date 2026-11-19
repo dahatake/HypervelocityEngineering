@@ -1106,3 +1106,5 @@
 | AC-511 | AC | 採番済み | 2026-11-20T01:23:48+09:00 | main@fa9ca3a5 | FR floorplan viewer |
 | AC-512 | AC | 採番済み | 2026-11-20T01:23:48+09:00 | main@fa9ca3a5 | FR floorplan viewer |
 | SRC-051 | SRC | 採番済み | 2026-11-20T01:23:50+09:00 | main@fa9ca3a5 | floorplan live demo request |
+| FR-1093 | FR | 採番済み | 2026-11-20T02:07:05+09:00 | main@ae895522 |  |
+| AC-513 | AC | 採番済み | 2026-11-20T02:07:06+09:00 | main@ae895522 |  |

@@ -59,6 +59,7 @@ const ICON_PATHS = {
   ac: 'M4 6l2 2 3-3M4 14l2 2 3-3M12 7h8M12 15h8',
   state: 'M7 5a3 3 0 1 0 0 6a3 3 0 1 0 0-6M17 13a3 3 0 1 0 0 6a3 3 0 1 0 0-6M9.5 11l5 2',
   component: 'M4 4h7v7H4zM13 13h7v7h-7zM13 4h7v4h-7zM4 15h4v5H4z',
+  guide: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z',
 };
 // The icon's accessible name when no label is given: dictionary keys bizicon.<kind>.
 export const BUSINESS_ICON = Object.fromEntries(['dashboard', 'map2d', 'map3d', 'diagrams', 'placement', 'entities', 'integrations', 'source', 'tables', 'maintenance',

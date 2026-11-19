@@ -70,6 +70,25 @@ def test_ac510_overview_inside_brackets_and_history(studio):
     page.context.close()
 
 
+# FR-1092 AC-510: the path at the top says where you are (codebase › part › … › folder › file › selected item), each step goes back, the last one is the current place.
+def test_ac510_path_shows_the_position_in_the_structure(studio):
+    page = _open(studio, "&v=f%3AHVE-Studio%2Fstudio.py")
+    page.wait_for_function("() => window.eabkView.getState().view === 'f:HVE-Studio/studio.py'")
+    crumbs = page.locator('[data-testid="fp-crumbs"] [data-testid="fp-crumb"]')
+    texts = crumbs.all_inner_texts()
+    assert texts[0].startswith("Codebase") and texts[1].startswith("Part") and texts[-1].startswith("File") and len(texts) >= 3
+    assert crumbs.last.get_attribute("aria-current") == "location" and crumbs.first.get_attribute("aria-current") is None
+    page.locator(f'{CARD}[data-type="route"]').first.click()
+    assert page.locator('[data-testid="fp-crumbs"] [aria-current="location"]').inner_text().startswith("Endpoint")
+    crumbs.nth(1).click()
+    page.wait_for_function("() => window.eabkView.getState().view.startsWith('n:')")
+    assert page.locator('[data-testid="fp-crumbs"] [aria-current="location"]').inner_text().split("\n")[0] in ("Part", "Folder")
+    page.locator('[data-testid="fp-crumbs"] [data-testid="fp-crumb"]').first.click()
+    page.wait_for_function("() => window.eabkView.getState().view === ''")
+    page.wait_for_function("() => document.querySelectorAll('[data-testid=fp-crumbs] [data-testid=fp-crumb]').length === 1")
+    page.context.close()
+
+
 # FR-1092 AC-510: files hold endpoints and functions; a shared link opens the place; Backspace, F, / and Esc work; the right-click menu and semantic zoom.
 def test_ac510_file_view_keyboard_menu_and_semantic_zoom(studio):
     page = _open(studio, "&v=f%3AHVE-Studio%2Fstudio.py")
@@ -158,7 +177,7 @@ def test_ac512_ask_the_map_and_japanese(studio):
     page.locator('[data-testid="fp-ask"]').fill("zzzqqq nothing")
     page.locator('[data-testid="fp-ask"]').press("Enter")
     page.wait_for_function("() => window.eabkView.getState().answer === true")
-    assert "Nothing matched" in page.locator('[data-testid="fp-side"]').inner_text()
+    page.locator('[data-testid="fp-side"]', has_text="Nothing matched").wait_for()
     page.context.close()
     ja = _open(studio, lang="ja")
     assert "健康診断" in ja.locator('[data-testid="fp-health"]').inner_text() and "フロー" in ja.locator('[data-testid="fp-flows"]').inner_text()
