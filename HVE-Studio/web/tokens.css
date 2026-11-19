@@ -136,6 +136,12 @@
   --viz-table: #8a6a00;
   --viz-entity: #c4501f;
   --viz-file: #5f7385;
+  --viz-fn: #1f6fd1;
+  --viz-method: #007c75;
+  --viz-class: #b86e00;
+  --viz-module: #6b4fcf;
+  --viz-call: #115ea3;
+  --viz-guess: #8a5200;
   --viz-test: #1c8a56;
   --viz-comp: #6b7686;
   --viz-case: #c4223c;
@@ -223,6 +229,12 @@
   --viz-table: #ffd166;
   --viz-entity: #ff8a5c;
   --viz-file: #8aa1b5;
+  --viz-fn: #5cb0ff;
+  --viz-method: #3fe0d0;
+  --viz-class: #ffb84d;
+  --viz-module: #b79cff;
+  --viz-call: #7cc4ff;
+  --viz-guess: #ffd166;
   --viz-test: #7ee7a8;
   --viz-comp: #e4e9f0;
   --viz-case: #ff5c7a;

@@ -31,6 +31,7 @@ from urllib.parse import urlparse
 sys.dont_write_bytecode = True  # do not leave __pycache__ in the repository being viewed
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+import code_graph  # noqa: E402
 import eabk_model  # noqa: E402
 import repo_scan  # noqa: E402
 import remote_github  # noqa: E402
@@ -70,6 +71,21 @@ class State:
         self.build_lock = threading.Lock()
         self.builds: dict[str, dict] = {}
         self.latest_build: dict | None = None
+        self.code_graphs: dict[str, tuple[str, bytes]] = {}  # FR-1091: root -> (source fingerprint, JSON)
+
+    def codegraph_bytes(self) -> bytes:
+        with self.lock:
+            root = self.root
+        inv = repo_scan.inventory(root)
+        source = eabk_model.fingerprint(root, inv)
+        with self.lock:
+            hit = self.code_graphs.get(str(root))
+        if hit and hit[0] == source:
+            return hit[1]
+        data = json.dumps(code_graph.build(root, inv), ensure_ascii=False).encode("utf-8")
+        with self.lock:
+            self.code_graphs = {str(root): (source, data)}
+        return data
 
     def _remote(self, root: Path, force: bool = False) -> dict:
         """Current GitHub data for root; starts a background fetch when missing, stale or forced. Caller holds lock."""
@@ -498,6 +514,11 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 return self.send_bytes(STATE.model_bytes(), MIME[".json"])
             except (repo_scan.ScanError, OSError, ValueError, sqlite3.Error) as exc:
+                return self.send_json({"error": "analysis-failed", "detail": str(exc)}, HTTPStatus.UNPROCESSABLE_ENTITY)
+        if path == "/api/codegraph":
+            try:
+                return self.send_bytes(STATE.codegraph_bytes(), MIME[".json"])
+            except (repo_scan.ScanError, OSError, ValueError) as exc:
                 return self.send_json({"error": "analysis-failed", "detail": str(exc)}, HTTPStatus.UNPROCESSABLE_ENTITY)
         if path == "/api/model/progress":
             return self.send_json(STATE.build_progress())

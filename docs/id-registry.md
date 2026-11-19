@@ -1086,3 +1086,13 @@
 | AC-497 | AC | 採番済み | 2026-11-18T16:33:43+09:00 | main@9803a66b |  |
 | AC-498 | AC | 採番済み | 2026-11-18T16:33:44+09:00 | main@9803a66b |  |
 | PARAM-065 | PARAM | 採番済み | 2026-11-18T16:33:45+09:00 | main@9803a66b |  |
+| FR-1091 | FR | 採番済み | 2026-11-19T23:57:26+09:00 | main@2451fc2c | HVE Studio code relations |
+| AC-499 | AC | 採番済み | 2026-11-19T23:57:27+09:00 | main@2451fc2c | FR code relations |
+| AC-500 | AC | 採番済み | 2026-11-19T23:57:27+09:00 | main@2451fc2c | FR code relations |
+| AC-501 | AC | 採番済み | 2026-11-19T23:57:27+09:00 | main@2451fc2c | FR code relations |
+| AC-502 | AC | 採番済み | 2026-11-19T23:57:27+09:00 | main@2451fc2c | FR code relations |
+| AC-503 | AC | 採番済み | 2026-11-19T23:57:27+09:00 | main@2451fc2c | FR code relations |
+| AC-504 | AC | 採番済み | 2026-11-19T23:57:27+09:00 | main@2451fc2c | FR code relations |
+| PARAM-066 | PARAM | 採番済み | 2026-11-19T23:57:28+09:00 | main@2451fc2c | code graph limits |
+| PARAM-067 | PARAM | 採番済み | 2026-11-19T23:57:28+09:00 | main@2451fc2c | code graph limits |
+| SRC-050 | SRC | 採番済み | 2026-11-19T23:57:29+09:00 | main@2451fc2c | code relations request |

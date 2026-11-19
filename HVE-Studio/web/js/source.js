@@ -83,6 +83,7 @@ export function mount(host) {
   function render() {
     const files = [...store.nodes.values()].filter((n) => n.type === 'file' && (ui.tests || n.role !== 'test'));
     page.replaceChildren(el('h1', {}, '🗂 ' + t('nav.source')), el('p', { class: 'sub' }, t('src.sub')),
+      el('p', {}, el('a', { class: 'btn', href: '#/codegraph', 'data-testid': 'open-codegraph' }, t('cg.open'))),
       el('div', { class: 'tbar' }, el('input', { type: 'search', placeholder: t('src.filter'), value: ui.q, oninput: (e) => { ui.q = e.target.value; refresh(); } }),
         el('label', { class: 'row mini', style: { cursor: 'pointer' } }, el('input', { type: 'checkbox', checked: ui.tests || null, onchange: (e) => { ui.tests = e.target.checked; render(); } }), t('src.tests')),
         el('span', { class: 'mini' }, t('src.legend'))),

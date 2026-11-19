@@ -1205,8 +1205,12 @@
    "3d6d94c3a9dcee038984936c5212e85fab455794e5de5a7ac7be7315864b4bd3",
    "4800490dd31135e36cdc2ade6912eab440d3c7d11b17c0facdc2d94ff8d91f28",
    "750d5b86a2f3b68940b7845d1ab9b0b24f6eed092a5416686f825d8a1f68cb3b",
+   "95d037918d8208dc41c1bedda138eff626a6f2a2be20b0b266df6c51a988b32b",
    "9bee8a5e1056eda59235dfad3ff7d46c520ecc8f6437925c035a21bc227ca68a",
    "be65bb9feb19ef049898bc77dc9f3a5ab1da3e499e45363df18aa06f1863d81a"
+  ],
+  "HVE-Studio/code_graph.py": [
+   "d75eb4518bc5eb6e2b393a8ebd5e0b14485f0643db7c878f9d31f422d47754fe"
   ],
   "HVE-Studio/eabk_model.py": [
    "02fee12025ad74f99371759d20608da83598e4b26343c433d791ecb624e6947a",
@@ -1238,6 +1242,7 @@
    "a527d5e85ce2c8f1a1b60bb4eac1a9f727931b499d6262a866fa3b0af5d1611d"
   ],
   "HVE-Studio/studio.py": [
+   "0fbcf65a72ac2b2819d1e392c4ff182fa91b5aafe299f7f893f8e8e1d6ca2c87",
    "17c03ed73cb3a65a0a84618f00d3440c6998e094f66a46be546bf8b7cebcce13",
    "18b744ce8aa3752df3003c629c976253ad42d834320766ff12ef9134f6d39b6a",
    "230341e8459375a64108b903263b2dafc32c0b2d586379eddd7e3bd708fb003b",
@@ -1255,7 +1260,8 @@
    "7efab8adc94fa00de507740a05b9640c6f4a7ed8c8f1e21a472036e436d87a2a",
    "95233f3db4787c358d52c972d897262ec96b447db4ef2506b4220ae682c563e2",
    "c87ba4831c64a401038425e100249e365388bc34dae4baba6049cfb103d316ad",
-   "c901a15e2780b57f63741dfc38e61c7b8c1bccff02af4661c18fe76dd1d168ad"
+   "c901a15e2780b57f63741dfc38e61c7b8c1bccff02af4661c18fe76dd1d168ad",
+   "d23cf4339d13f6f297a27774004b4764d45aa97716d18775e7ff9a52f0b93946"
   ],
   "HVE-Studio/web/index.html": [
    "7756103b0dde3533d27ba2721040151da802b7aa8658c984911000d0fe366683",
@@ -1267,9 +1273,13 @@
   "HVE-Studio/web/js/app.js": [
    "3408ba6b35dd4c07f6aa465ea8c55b384fb49788255c9093f1095625f52cabda",
    "65f2508e4ac85e88ddc7631d2e2d69ffcd8789b55f814dd3c02a49280f4b1460",
+   "7c7d3c4feb1b09ea2b2c410f4fd0f40806b6cba402347a21f61ccfeffd70c5c9",
    "a0b2fbce4f9b47478fcebaa3479c17aaa2828328cb800c8503b60ee4cf71783a",
    "b5c058564f0445cf3dbb356bf02639287f11dd62ddcec6de79b9e5eb197c348c",
    "c5d5a2452ab3773a3cebed56293f700a0570685fbb32cfabdf6a3714617f07d0"
+  ],
+  "HVE-Studio/web/js/codegraph.js": [
+   "b5e49e621e62265ef185d0703bee2fc35cd9f144559df5ed26279073d4274e13"
   ],
   "HVE-Studio/web/js/dashboard.js": [
    "78c3a2f1226339d365d82346e0f13a97219cccde9986d3b581ecda54d815a6d7",
@@ -1289,6 +1299,7 @@
    "bc6ee8fd6a6985a54f3b019e0df4c9e6ef26c94d89e5da4686c25bfcb6f5edc7"
   ],
   "HVE-Studio/web/js/i18n.js": [
+   "68345aa6ffb967759ba90832b54cb42b587c4cb6a3ae6deb4e0c13c7da68ff31",
    "6c7074882831fc06ee1e86f6520506c63510c95f2d8ada88db117d20f750a52a",
    "73583066f6db065ae661b79dd640730bbb0371368f1cf4cc03dbf1212b60ae54",
    "a67bb8cee3134c78245b0fa1b56bef5861b17381b3386946ff681dec784c7078",
@@ -1320,7 +1331,8 @@
    "55aa22294dfd692b33cd099f13df4f0b8eacb7cf2dcab07feb2cbbd137d0bd87"
   ],
   "HVE-Studio/web/js/source.js": [
-   "5c2ced0a96bb3ebf2f94aa56c47bb4818783f67b4171d732ab294d705f1b7e3a"
+   "5c2ced0a96bb3ebf2f94aa56c47bb4818783f67b4171d732ab294d705f1b7e3a",
+   "5f798707994efe3b2ff855b10209a173b938e15febface062099cc2aead9325a"
   ],
   "HVE-Studio/web/js/store.js": [
    "261f4db671d6bb0a9eddb580f2b99fdf704f1d753ce703373453cbfd8cfd4923"
@@ -1694,6 +1706,7 @@
    "c5be13b5bf4810e3e1c0b173798f4403daaa78da378546bdab5217ca7abc62d7",
    "c7fdee780f9dd698525f2c32fd25cf58962fe8cb701f37ac352794f9752cd3a0",
    "c93d9dc46e3a89bd658d463edaeaee3608ada5609cffca666fe94735be80b9b3",
+   "d3f49b248fca5a711b1d32fbe28bd64b79619e476b10a81139200d7647ca96c1",
    "d6d0ae71077a335c37d7b7604c003bd3a2e60be0f96070cbd1869a8bcb610e1d",
    "d8ba76549cc4d6d828f358b1f6c5058d4ae6714a4d9cd74f03b8a1d86b0e8849",
    "e7498d6a4127af1dd5b47973cc7c8797e4f88138a9c7bbe2ea31ec60825ea882",
@@ -1851,6 +1864,7 @@
   "EABK-docs/studio/images/tables.png": "users-guide/studio/images/tables.png",
   "EABK-docs/studio/screen-images.json": "users-guide/studio/screen-images.json",
   "HVE-Studio/README.md": "HVE-Studio/README.md",
+  "HVE-Studio/code_graph.py": "HVE-Studio/code_graph.py",
   "HVE-Studio/eabk_model.py": "HVE-Studio/eabk_model.py",
   "HVE-Studio/managed_data.py": "HVE-Studio/managed_data.py",
   "HVE-Studio/remote_github.py": "HVE-Studio/remote_github.py",
@@ -1862,6 +1876,7 @@
   "HVE-Studio/web/app.css": "HVE-Studio/web/app.css",
   "HVE-Studio/web/index.html": "HVE-Studio/web/index.html",
   "HVE-Studio/web/js/app.js": "HVE-Studio/web/js/app.js",
+  "HVE-Studio/web/js/codegraph.js": "HVE-Studio/web/js/codegraph.js",
   "HVE-Studio/web/js/dashboard.js": "HVE-Studio/web/js/dashboard.js",
   "HVE-Studio/web/js/diagrams.js": "HVE-Studio/web/js/diagrams.js",
   "HVE-Studio/web/js/drawer.js": "HVE-Studio/web/js/drawer.js",
