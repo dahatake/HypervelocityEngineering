@@ -9,9 +9,13 @@ EABK Lite consists only of **rules (AGENTS.md) + the data layer (the requirement
 | Part | Audience | Chapter labels | Location |
 |---|---|---|---|
 | Part 1 | **EABK Lite core**: how to write requests, the daily workflow, managed data formats and checks, milestone audits | 1–11 | Directly in this folder |
-| Part 2 | **HVE Studio**: a local-only viewer for browsing the managed data (the data layer) through diagrams, tables, and search | S1–S8 | [studio/](studio/README.en.md) |
+| Part 2 | **HVE Studio**: a local-only viewer for browsing the managed data (the data layer) through diagrams, tables, and search | S1–S9 | [studio/](studio/README.en.md) |
 
 The two parts are connected by the same data layer. Copilot (or a person) writes the data layer within a change, and Studio reads it. To change requirements or the implementation, make the request in Copilot chat, not in Studio.
+
+![The daily flow of EABK Lite: request → one change updates the code and the data layer → verify → push and CI → see it in Studio; rd-auditor audits at milestones](images/fig-flow.en.svg)
+
+> **First time here?** Go [README → Quickstart](../README.en.md#quickstart), then [S9 Visual tour](studio/09-visual-tour.en.md) (figures for every screen). Back to the top: [← Repository README](../README.en.md).
 
 ## Part 1: EABK Lite core
 
@@ -43,6 +47,7 @@ For the index and the prerequisites for starting it, see [studio/README.en.md](s
 | S6 | [For Architects](studio/06-architect.en.md) | You want to check dependencies, boundaries, placement, and missing layers |
 | S7 | [For Software Engineers](studio/07-software-engineer.en.md) | You want to trace from a requirement to implementation files and tests |
 | S8 | [Data reference](studio/08-data-reference.en.md) | You want to know which screen reads what from which file, and how it is computed |
+| S9 | [Visual tour (with figures)](studio/09-visual-tour.en.md) | **First-time users.** You want the screen layout and every screen explained with figures, including the "New here?" wizard, the floorplan and the network view |
 
 ## Reading order by role (for first-time users)
 
@@ -66,7 +71,8 @@ In every case, first read "Introduction", "Installation", and "Quickstart" in [R
 | A check failed or CI failed | [7](07-troubleshooting.en.md). If Studio doesn't work, see [S4](studio/04-troubleshooting.en.md) |
 | Adopt it in an existing app | [10](10-adopting-existing-apps.en.md); for the steps, see [8](08-roadmap.en.md) |
 | Update the toolkit or clean-install over an older version | [9](09-versioning.en.md) |
-| View the data layer in diagrams and tables | [S1](studio/01-first-steps.en.md), [S2](studio/02-screens.en.md) |
+| View the data layer in diagrams and tables | [S9](studio/09-visual-tour.en.md) (start here), [S1](studio/01-first-steps.en.md), [S2](studio/02-screens.en.md) |
+| Understand the "New here?" button, the floorplan or the network view | [S9 sections 2 and 7](studio/09-visual-tour.en.md#2-the-new-here-tour-wizard) |
 
 ## Links to README sections
 
@@ -80,7 +86,7 @@ In every case, first read "Introduction", "Installation", and "Quickstart" in [R
 
 ## Conventions used in this guide
 
-- Chapter numbers are `1`–`11` in Part 1 and `S1`–`S8` in Part 2. Sections follow the chapter number, as in `4.4` and `S8.5.2`. Use these labels when referring to them from other guides.
+- Chapter numbers are `1`–`11` in Part 1 and `S1`–`S9` in Part 2. Sections follow the chapter number, as in `4.4` and `S8.5.2`. Use these labels when referring to them from other guides.
 - In the distribution source repository the folder is `users-guide/`. In a repository where you installed with `tools/install.py`, it is placed in `EABK-docs/` (the `users-guide/` of the target repository is not touched). Links within the guide are relative paths based on the distribution source's layout.
-- Real screenshots are in `studio/images/`, their capture conditions are in [studio/screen-images.json](studio/screen-images.json), and recapturing is done with `studio/capture-screens.py`. Diagrams for EABK core are in `images/`.
+- Real screenshots are in `studio/images/*.png`, their capture conditions are in [studio/screen-images.json](studio/screen-images.json), and recapturing is done with `studio/capture-screens.py`. The explanatory figures are SVG with a Japanese version (`fig-*.svg`) and an English version (`fig-*.en.svg`): `studio/images/` for Studio and `images/` for EABK core. Diagrams for EABK core are in `images/`.
 - When you add or rename a file, update `MANAGED` in `tools/install.py` accordingly (there is no removal list for older versions; use `--clean`) ([9](09-versioning.en.md)).

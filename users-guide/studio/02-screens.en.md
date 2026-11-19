@@ -150,7 +150,12 @@ These are pages opened by URL (`#/structure` and `#/consistency` do not appear i
 The data and calculations each screen reads are in [08-data-reference.en.md](08-data-reference.en.md), and role-specific usage is in [05](05-product-manager.en.md), [06](06-architect.en.md), and [07](07-software-engineer.en.md).
 
 ## Source mapping
-A diagram (treemap) that shows the names of files written in the catalog by area. Area is the number of linked requirements; blue is implementation and green is tests. Select a file to see the requirements it satisfies, the components it uses, and its tests. **It does not read the contents of source code.**
+A diagram (treemap, the "Source map" tab) that shows the names of files written in the catalog by area. Area is the number of linked requirements; blue is implementation and green is tests. Select a file to see the requirements it satisfies, the components it uses, and its tests. **This tab does not read the contents of source code.**
+
+The other tab, **"See how functions relate"**, analyzes the source read-only (the code is never run). The **floorplan** shows parts, files and endpoints as cards in three columns, "uses | inside | used by", and the **network view** shows calls, references and inheritance of functions, methods and classes as a live graph. With figures: [S9 section 7](09-visual-tour.en.md#7-source-map--function-relations-floorplan-network-view).
+
+## The "New here?" tour
+The yellow **"New here?"** button at the top right dims the page and walks you through the current screen, highlighting one area at a time (← → keys to move, Esc to close). It works on all nine screens. With figures: [S9 section 2](09-visual-tour.en.md#2-the-new-here-tour-wizard).
 
 ## Tables
 "Tables" is a screen that lists the original rows of management data by kind. Choose a kind from under 4 group headings: "Requirements" (goals, requirements, acceptance criteria, PARAM, questionnaire), "Design" (entities, shared components, APIs, tables, external integrations, terms, personas), "Evidence" (test cases, files, sources), and "Operations" (decision records, audit findings). An ID written in a cell is a link to its details, and an ID not in the management data is shown as "Unresolved." You can sort by header, filter in the box above, show only rows related to what you selected on the map with "Only rows related to the selection," and export as CSV.

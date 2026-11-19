@@ -4,9 +4,13 @@
 
 The full name is **Hypervelocity Engineering Studio**, formerly EABK Studio. The folder moved from `EABK-Studio/` to `HVE-Studio/`, and the root launchers from `start-eabk-studio.*` to `start-hve-studio.*`. Saved display settings keep working. In a repository updated from an older version, the installer reports the leftover `EABK-Studio/` as orphaned files; `--clean` removes them.
 
-This folder is Part 2 of the [EABK User Guide](../README.en.md) (EABK itself is chapters 1–10 in Part 1; the chapters in this part are S1–S8). HVE Studio is an app that runs only on your own computer and lets you browse the "record of requirements, catalog, and tests" managed by EABK (the data layer) through **diagrams, tables, and search**. Even if you can't read code, you can see "what we decided to build," "how far it has been built," and "where each component, piece of data, and API lives."
+This folder is Part 2 of the [EABK User Guide](../README.en.md) (EABK itself is chapters 1–11 in Part 1; the chapters in this part are S1–S9). HVE Studio is an app that runs only on your own computer and lets you browse the "record of requirements, catalog, and tests" managed by EABK (the data layer) through **diagrams, tables, and search**. Even if you can't read code, you can see "what we decided to build," "how far it has been built," and "where each component, piece of data, and API lives."
 
-![HVE Studio header](images/header.png)
+> **New here? Start with [S9 Visual tour](09-visual-tour.en.md).** It explains the layout and each screen, one at a time, with figures. The yellow **"New here?"** button at the top right of the screen also starts a tour of the current screen.
+>
+> Navigation: [← User guide contents](../README.en.md) · [← Repository README](../../README.en.md)
+
+![HVE Studio screen layout (numbered)](images/fig-shell.en.svg)
 
 ## Read by your role
 
@@ -18,10 +22,11 @@ This folder is Part 2 of the [EABK User Guide](../README.en.md) (EABK itself is 
 
 You can also switch roles at any time with the `Product Manager`, `Architect`, and `Software Engineer` buttons at the top right of the screen.
 
-## Reading order (S1 → S2 → by role → S3 → S8 → S4)
+## Reading order (S9 → S1 → S2 → by role → S3 → S8 → S4)
 
 | Chapter | File | Contents |
 |---|---|---|
+| S9 | [09-visual-tour.en.md](09-visual-tour.en.md) | **For first-time users.** A visual tour with figures (SVG), including the "New here?" wizard, the floorplan and the network view |
 | S1 | [01-first-steps.en.md](01-first-steps.en.md) | How to launch, your first 10 minutes |
 | S2 | [02-screens.en.md](02-screens.en.md) | What each screen tells you (with real screenshots) |
 | S5–S7 | Role-specific guides (table above) | 15-minute tutorial, recommended links, what you can decide |

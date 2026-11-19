@@ -47,6 +47,7 @@ Role-specific walkthroughs are in [05-product-manager.en.md](05-product-manager.
 
 ## Your first 10 minutes
 
+First press the yellow **"New here?"** button at the top right and go through the tour to the end (with figures: [S9 Visual tour](09-visual-tour.en.md)).
 The global **Display data** banner always shows whether the generated file exists, its path and synchronization state. **Create / sync** reports actual stages and processed counts. After viewing a reference-only repository, **Delete** removes only that generated file; browsing continues from originals. Opening or browsing alone creates nothing.
 
 The same actions are available from the CLI without starting a server:

@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 640" width="1100" height="640" role="img" aria-labelledby="t d" font-family="Segoe UI, Meiryo, Yu Gothic UI, sans-serif">
+<title id="t">ソースコード構造（フロアプラン）</title>
+<desc id="d">部品・ファイル・エンドポイントをカードにし、使うものと使われるものを 3 列で示す</desc>
+<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#667"/></marker></defs>
+<rect width="1100" height="640" fill="#fafafa"/>
+<rect x="8" y="8" width="1084" height="624" rx="10" fill="#f3f3f3" stroke="#b8b8b8" stroke-width="1.5" />
+<rect x="8" y="8" width="1084" height="44" rx="10" fill="#ffffff" stroke="#d8d8d8" stroke-width="1" />
+<text x="24" y="36" font-size="17" fill="#0f5fa8" font-weight="bold" text-anchor="start">HVE Studio</text>
+<rect x="150" y="18" width="250" height="24" rx="12" fill="#f3f3f3" stroke="#c8c8c8" stroke-width="1" />
+<text x="164" y="35" font-size="11" fill="#777" font-weight="normal" text-anchor="start">探す（/ キー）要求・部品・試験…</text>
+<text x="430" y="35" font-size="11" fill="#555" font-weight="normal" text-anchor="start">C:\GitHub\MyApp</text>
+<rect x="1008" y="18" width="52" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<text x="1034" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">JA | EN</text>
+<rect x="865.2" y="18" width="126.80000000000001" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<text x="928.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Software Engineer</text>
+<rect x="783.6" y="18" width="75.6" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<text x="821.4" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Architect</text>
+<rect x="663.6" y="18" width="114.0" height="24" rx="12" fill="#e8f1fb" stroke="#c8c8c8" stroke-width="1" />
+<text x="720.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Product Manager</text>
+<text x="76.5" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">ダッシュボード</text>
+<text x="172.0" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">実装状態</text>
+<text x="241.5" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">マップ</text>
+<text x="298.0" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">図式</text>
+<text x="374.0" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">エンティティ</text>
+<text x="463.0" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">外部連携</text>
+<rect x="502" y="56" width="126" height="30" rx="6" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<rect x="508" y="83" width="114" height="3" rx="1" fill="#0f5fa8" stroke="#0f5fa8" stroke-width="1" />
+<text x="565.0" y="76" font-size="12" fill="#0f5fa8" font-weight="bold" text-anchor="middle">ソースコード構造</text>
+<text x="647.5" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">表</text>
+<text x="710.5" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">整合性保守</text>
+<rect x="960" y="58" width="112" height="26" rx="13" fill="#fff4ce" stroke="#d8a800" stroke-width="1.5" />
+<text x="1016.0" y="76" font-size="12" fill="#5c4400" font-weight="bold" text-anchor="middle">? 初めての方へ</text>
+<text x="24" y="108" font-size="11" fill="#555" font-weight="normal" text-anchor="start">カタログに載るファイルのパスと、要求・部品・試験との対応を見ます。</text>
+<line x1="8" y1="114" x2="1092" y2="114" stroke="#d8d8d8" stroke-width="1"/>
+<rect x="24" y="124" width="330" height="28" rx="6" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<rect x="24" y="124" width="170" height="28" rx="6" fill="#e8f1fb" stroke="#0f5fa8" stroke-width="1" />
+<text x="109" y="143" font-size="12" fill="#0f5fa8" font-weight="bold" text-anchor="middle">関数同士の関係性を見る</text>
+<text x="274" y="143" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">ソースマップ</text>
+<text x="380" y="143" font-size="12" fill="#555" font-weight="normal" text-anchor="start">現在地: コードベース ＞ orders</text>
+<text x="190" y="186" font-size="12" fill="#666" font-weight="bold" text-anchor="middle">使っているもの</text>
+<text x="550" y="186" font-size="12" fill="#666" font-weight="bold" text-anchor="middle">orders の中</text>
+<text x="910" y="186" font-size="12" fill="#666" font-weight="bold" text-anchor="middle">使われているもの</text>
+<rect x="40" y="210" width="280" height="60" rx="8" fill="#fff" stroke="#0f5fa8" stroke-width="1.8" />
+<rect x="40" y="210" width="6" height="60" rx="3" fill="#0f5fa8" stroke="#0f5fa8" stroke-width="1" />
+<text x="58" y="236" font-size="13" fill="#222" font-weight="bold" text-anchor="start">Web UI</text>
+<text x="58" y="256" font-size="11" fill="#666" font-weight="normal" text-anchor="start">ui</text>
+<rect x="40" y="300" width="280" height="60" rx="8" fill="#fff" stroke="#7b3fc4" stroke-width="1.8" />
+<rect x="40" y="300" width="6" height="60" rx="3" fill="#7b3fc4" stroke="#7b3fc4" stroke-width="1" />
+<text x="58" y="326" font-size="13" fill="#222" font-weight="bold" text-anchor="start">Auth</text>
+<text x="58" y="346" font-size="11" fill="#666" font-weight="normal" text-anchor="start">service</text>
+<rect x="400" y="200" width="280" height="60" rx="8" fill="#fff" stroke="#616161" stroke-width="1.8" />
+<rect x="400" y="200" width="6" height="60" rx="3" fill="#616161" stroke="#616161" stroke-width="1" />
+<text x="418" y="226" font-size="13" fill="#222" font-weight="bold" text-anchor="start">cancel.py</text>
+<text x="418" y="246" font-size="11" fill="#666" font-weight="normal" text-anchor="start">file</text>
+<rect x="400" y="280" width="280" height="60" rx="8" fill="#fff" stroke="#616161" stroke-width="1.8" />
+<rect x="400" y="280" width="6" height="60" rx="3" fill="#616161" stroke="#616161" stroke-width="1" />
+<text x="418" y="306" font-size="13" fill="#222" font-weight="bold" text-anchor="start">models.py</text>
+<text x="418" y="326" font-size="11" fill="#666" font-weight="normal" text-anchor="start">file</text>
+<rect x="400" y="360" width="280" height="60" rx="8" fill="#fff" stroke="#c0309b" stroke-width="1.8" />
+<rect x="400" y="360" width="6" height="60" rx="3" fill="#c0309b" stroke="#c0309b" stroke-width="1" />
+<text x="418" y="386" font-size="13" fill="#222" font-weight="bold" text-anchor="start">POST /orders/cancel</text>
+<text x="418" y="406" font-size="11" fill="#666" font-weight="normal" text-anchor="start">route</text>
+<rect x="760" y="210" width="280" height="60" rx="8" fill="#fff" stroke="#7b3fc4" stroke-width="1.8" />
+<rect x="760" y="210" width="6" height="60" rx="3" fill="#7b3fc4" stroke="#7b3fc4" stroke-width="1" />
+<text x="778" y="236" font-size="13" fill="#222" font-weight="bold" text-anchor="start">Payments</text>
+<text x="778" y="256" font-size="11" fill="#666" font-weight="normal" text-anchor="start">service</text>
+<rect x="760" y="300" width="280" height="60" rx="8" fill="#fff" stroke="#107c10" stroke-width="1.8" />
+<rect x="760" y="300" width="6" height="60" rx="3" fill="#107c10" stroke="#107c10" stroke-width="1" />
+<text x="778" y="326" font-size="13" fill="#222" font-weight="bold" text-anchor="start">Mailer</text>
+<text x="778" y="346" font-size="11" fill="#666" font-weight="normal" text-anchor="start">worker</text>
+<rect x="384" y="190" width="312" height="258" rx="10" fill="none" stroke="#999" stroke-width="1.5" stroke-dasharray="6 4"/>
+<path d="M320 240 H360 V230 H400" stroke="#8a94a0" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
+<path d="M320 330 H360 V310 H400" stroke="#8a94a0" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
+<path d="M680 230 H720 V240 H760" stroke="#8a94a0" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
+<path d="M680 390 H720 V330 H760" stroke="#8a94a0" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
+<rect x="24" y="470" width="1052" height="40" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
+<text x="40" y="495" font-size="12" fill="#333" font-weight="normal" text-anchor="start">健康診断: 秘密の値 0 ｜ 大きなファイル 1 ｜ 使われないファイル 2　　直近の作業: 3 枚　　画面: 4　　フロー: 2　　質問欄: 地図の線をたどって答える</text>
+<circle cx="24" cy="124" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="24" y="128.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">1</text>
+<circle cx="130" cy="181" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="130" y="185.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">2</text>
+<circle cx="478" cy="185" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="478" y="189.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">3</text>
+<circle cx="40" cy="470" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="40" y="474.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">4</text>
+<rect x="24" y="532" width="666" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
+<text x="32" y="547" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">① 2 つのタブ: 関数同士の関係性（フロアプラン／ネットワーク表示）とソースマップ（ツリーマップ）</text>
+<rect x="24" y="560" width="523" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
+<text x="32" y="575" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">② 左＝このカードが使っているもの、右＝このカードを使っているもの。線は直交線</text>
+<rect x="24" y="588" width="575" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
+<text x="32" y="603" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">③ ダブルクリックで中へ、Backspace で戻る。破線の枠が「いま開いている部品」</text>
+<rect x="24" y="616" width="523" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
+<text x="32" y="631" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">④ 健康診断・直近の作業・画面・フロー・質問欄（コードは実行せず読み取りだけ）</text>
+</svg>

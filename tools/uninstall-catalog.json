@@ -1018,7 +1018,8 @@
    "5525d1b44830a3be2a0f01607133fd9864e499af3cb0ad77c83d1f9234c531b2",
    "6997360a15207200bf941827125b667c3dbb65e5ccb24c1fe41df8576267ba93",
    "793cb3dbdf8a7d0ee73f762036646869b20cf1d48f9d573c6fd230a0e1167816",
-   "bb4ddad65444ac5682b162a31b1f5bdf02353808cec1d5a5fceadfa6f797e0e9"
+   "bb4ddad65444ac5682b162a31b1f5bdf02353808cec1d5a5fceadfa6f797e0e9",
+   "c877cf62bfa731649e9f61d03f41ab7bf4f1b5d6fe95c5808f4837c07a746cc2"
   ],
   "EABK-docs/README.md": [
    "003ccfa1c728fcd91480b11bd29327bc369661d28d4471b358f664aa59583230",
@@ -1042,6 +1043,7 @@
    "c0d5da0a3f82b439330de8bda69429b92853e969345f7d384cd7e1c60fa5ac06",
    "df72dadbe47ade90fa5edacd21a28df979057127e3d6dd51f71939682f3305c7",
    "e88a5bfbc6bd6ad33316766e0084f494ce2a61b568f194082a16900af44a1d5d",
+   "ecde30225983b6ab040a58936a14cb05f9d75109bd81db044b95ff33fd21e4e7",
    "fcf776d108d867d6035f907954e6585b5319d6925e50b340f8fea9a72274157a",
    "ff3d42d4f99952417734e63f068b9facd583e364030a4147497c64d3af244cdf"
   ],
@@ -1051,20 +1053,50 @@
   "EABK-docs/images/dashboard.png": [
    "07e412533a0911080e0a022a8d793c9e16d19970659c126129ac18b23587e3ab"
   ],
+  "EABK-docs/images/fig-flow.en.svg": [
+   "7d3a3e2a31df864f946fee950ec5ec0beb767b85cd887c30bef9fd3af82ff160"
+  ],
+  "EABK-docs/images/fig-flow.svg": [
+   "451ba2849479f055647b945972ec9332015ec7da22081f3894041be7cc31e70d"
+  ],
+  "EABK-docs/images/fig-quickstart.en.svg": [
+   "9a5267af2b06aefc98953f73d0bcd1285876159f5cb5e7c9e85ff35ef8aed477"
+  ],
+  "EABK-docs/images/fig-quickstart.svg": [
+   "17990c70484eefcedb4f2aebb5ae1b4866a8fcf40f07d7b5cf35dfb0362f8c92"
+  ],
+  "EABK-docs/studio/01-first-steps.en.md": [
+   "19dfa38bb9793afe6d61314bcd9253d0c648dfbafbdb8e4190af03a4751adfc6",
+   "22f546bcc2bf3e6c609842d832e89b8956a275199a4928523b3709701e95755d",
+   "7ae776ad803f3ddbc9ea1337473543af260cb2300d5e520137051c4af8df9781",
+   "8cb2f8b3b43d6878c094994ffa6c9c4cc25a68a307e271e8caf63b7fdc523fe8",
+   "95d21d72168ffae4a0aefb23b63c5afe69cb382ec7f1a2f392a35e0f9335a60f",
+   "a2b77c7a603f48c09ca1586a7995f89aa72c4b4f25356e57e9ec49b65e2103b2",
+   "ee9efb0b14feec8134dfee6225cd1b0b65a8fe7ff309163854d62ee5558c189f"
+  ],
   "EABK-docs/studio/01-first-steps.md": [
    "263300d8a21b5b893a0b1c16def9c1d443625baaf8e4840d2174774cdf95ce9b",
    "4160ee1a945ec36b666e5556cdfbf909c1d2ba55bb661417b54d3807ba291406",
    "6357d2220384ad49af1d64d43cfed7369cde263f124203c4164ada6ac468f035",
    "7478142e8d565602b8bb8608daf344c32351e8671092eda6a346ad4c174fe8ac",
    "acf33f1c174d8ac8e5bb3a38133be1f7b6c9d5c145f3244c352887ba7d2257f1",
+   "ad9a0886461e65ebb64f55524cc873bd99ec5bca88db8c1b308de155adf19da5",
    "c54e091fca7766057a90ee38d856493659e8090dfc352d0d999dc2555ceee5e0",
    "ff61e842a1aa6aecc2fe0a64b3412534c4c691efcdf5f576f68555a442e10eb4"
+  ],
+  "EABK-docs/studio/02-screens.en.md": [
+   "169d5ac8cb57cdd77d0f2078338c78fc68a0c888a0a5996d964142ec6c7dac0d",
+   "43440aa258caa2304dd8f2f52e62dc77cc845f6db14e9168067aef171d86fa0c",
+   "ad5fbe386ce84b5e0be55886907bb490d24c9a66a389d43ea96621eb7fd1dc71",
+   "d85114e9ca358294a9b1cee7cd2d932a693426fd8bed5ebaeee6a31a445834cb",
+   "dfe94ba746ef2f45954d149eb80b51f477dd6ce03ce100423c41bff61384e6d7"
   ],
   "EABK-docs/studio/02-screens.md": [
    "1f5521fe419e4b92b9ef0dd99c1473f409694fc38fe0c6184f7ddaf32d507425",
    "25b4049915c8d977cfbdd1918d6aa8d226e2b2f5c6065f67b660812aa698ebfe",
    "5787e329eb22fc462d8a614ad7b2fd033bceeb9ee19fa5848a1bf21f2f481227",
    "599e0484e288f3090b2ef057aae8fa945cfcba92fec5538a5f8a458c541aabe2",
+   "727b4d8e263982582d4f133c89daa751e102f12f2799025060b82f75288283e7",
    "9d8e5826b6dfa342adf32f4bfbbb74a4bc8a16cf8d705bad437b4ed331332d57",
    "a2d6ea09f0276a5c9ef6b8bd65adc15bf6e9e750ac20a2efeaa83f456e9cff86",
    "b23e96b6073189942ee4de048077a587ff8bcde7988acc1ff6a0efb4055eaa83",
@@ -1072,10 +1104,20 @@
    "e87ab15ed2bfa76418aa14fc1adbbdd3388bb1632797187033b35fe550022ba5",
    "fb96dfbfd47ac17706e7e1505152d354a7fddc499055936e77ed55c56355cb46"
   ],
+  "EABK-docs/studio/03-tasks.en.md": [
+   "46eab390473b43a1d670a2a88e66a39a326894fa9780b7b96b3ffe96a3b3adc2"
+  ],
   "EABK-docs/studio/03-tasks.md": [
    "01fb19b9441e65ab132e88e0672b733debfc4f6191fd18b592728e803b451c7e",
    "7afb5e2591e7a00f687ac84dc036b4d5246e9efe4668765ff320fabb35daa70d",
    "906646b3c3b8e5c05eb7b950554a0882ef577075490a0b251b7adbda3ac24036"
+  ],
+  "EABK-docs/studio/04-troubleshooting.en.md": [
+   "3345c174f4fb4af6bf34d289617885120b24e7659fc3e53994c6b40ef44468fd",
+   "50802596851ba4893d28ca10c9e8b9fc746fcfbd2def19f28f384217598be494",
+   "54e387f21db8d0fbe7a3b36489f09ea2b1a85306cf27f7484ac064b94728d0e1",
+   "758924e5c722e34ac773368bb4280c02c130dcc2952786b1daf0ba8a7ee271b0",
+   "b7f198efc268f44525b363ecf2f42d880ad2fba7b4ffa9ff1df36dd6c4a65cea"
   ],
   "EABK-docs/studio/04-troubleshooting.md": [
    "43dc2af5eaa0dfaed35299b25848c224a489e2b712d28d963df3a0475c2b8d5a",
@@ -1085,11 +1127,22 @@
    "fc81b1dcee9940482f5353b6e236aa46ab2f1f03831ef08aea53df0307c8ab28",
    "fd9c572e1488c12691a41970aaa57bdd16ce04d9e75b83ddaee476e806ba162e"
   ],
+  "EABK-docs/studio/05-product-manager.en.md": [
+   "273db5ddb19d78fe5a192c835accc0efa27704a5cc3485ec4da1598efad73386",
+   "355a6039b34ecb122f8a289e0b29789b7108d7a3febed6a5d32287b23cb78b5d",
+   "95f21da2d1a9bd271f88ee189378c6c2c31fb0e8d0d66216e45b6df80b1af396"
+  ],
   "EABK-docs/studio/05-product-manager.md": [
    "2f9b1541dea2486b5359b8e5eeabb8d5b74a3ef4ae7c441aeed19c6e6b4c36fa",
    "463a6f8d52cab6e2ccd54bfe73406a9a6535512d38d83e3bc858c86caad4ee24",
    "d1c19d75c75e6f157a958be7ba6189d59ece724e782285e7870b144772961297",
    "d65b972d62fd3f73242cc5d455b19f2ffdc09f6c18555eb9f3c1de3dc4bae9ca"
+  ],
+  "EABK-docs/studio/06-architect.en.md": [
+   "10e5e659abab944a1e37d14333180f63931400ce63a295bec358205ade03ad69",
+   "8a65d92a1e29e20efcfd5ed75bd1e6bcebfb44db6e1a54d517fa9f03fae66f5d",
+   "8f7de3d4914babe9dbb12ce4208d13f227c6d5f83e5c163e72ca3a5a3eb5e1ae",
+   "90af3b61869e706f445973de68f17948d6a1cf76c6fca19cb28a30824ee93bc0"
   ],
   "EABK-docs/studio/06-architect.md": [
    "1c67c905f9287c6645204daf783ad5fc8447c471ba1d99ddc06ecb4af1145594",
@@ -1099,12 +1152,25 @@
    "b7385ab1369dd3fd46afc4f2991839b4acaea87a69dd62b9bef0b6f3ca3d58d2",
    "df3ff5ebd6359d8763449900916b422723c5c69504099abe47896ef6f290902e"
   ],
+  "EABK-docs/studio/07-software-engineer.en.md": [
+   "103a710fd0ce228a9b6939b0de929a420db6490b9de4a98249f6a1ceea22e042",
+   "4a1d9dd3ab33700a8490ba69c30a5ec0a2896cdb98fc3e0dae55fa0a0c76ab78",
+   "6f4c0a0768124be6c892e846763c9019af3b44dc36e62fec5a08cb9fd5b305a2"
+  ],
   "EABK-docs/studio/07-software-engineer.md": [
    "47f232a15fc9df96efa63fb7fb78a17a1766d0ee0db1fa43aa202b48910496a0",
    "97d964bc635bcc77004245c4f8af4f344e506d952e80e4ea701bbdedca1dd7e7",
    "ef43ed70048a42ed2dda74f85ea25f96f4c6e8de3525ccdf9d00544e9237c572",
    "f8433c25a033efed264310540ae4055b7d31881ea3ef1eb7201118e1f9f7c942",
    "ff5b20419014834aa4e5fb85b340350dcafe7e82f15f2526f132a80faf355850"
+  ],
+  "EABK-docs/studio/08-data-reference.en.md": [
+   "1fd86cc660b7d5bde5be2459985f9daf5c35951b85ee7644f25ea934518b5892",
+   "7976e5c781469eee66ceb2991d3429a4197613bb92eda88713e18b4afb20e6e7",
+   "7b9e6a803a88bc7386024c2caed42479bc76b708b2a32ec8310c8a70c0a32716",
+   "9f180d882557ce83aa0c0a88e3f7508dc1eb098e79cfed937e7af84dcf0027a0",
+   "b370bf608e7bf2fb1093f1f00f402628a56928c7ca10b27244394639cbdbb7da",
+   "e33ca12b99fd75f9500f01ff906b8bf5835f350cbd88bf64656f05ddd0f755de"
   ],
   "EABK-docs/studio/08-data-reference.md": [
    "1b4ed2f6880ad407db1dd0f405f8fabb28796d00d7944708c8f34eeb61f2061e",
@@ -1117,7 +1183,20 @@
    "c990a8f0b8c0cdac76b35e85379076adf7e452ccd3b50259b28aa706c38366a3",
    "dfe59f9910a41f39e1a6f44e0da3ef45179c42b8a30685eb88991625492d8d14"
   ],
+  "EABK-docs/studio/09-visual-tour.en.md": [
+   "a822088abad00d52b61459b5f9c6dc3d5fffbb486545ceeadb2fb27b24e068b6"
+  ],
+  "EABK-docs/studio/09-visual-tour.md": [
+   "2129ed67d78316e99b2058b8878b713738b3afa5c957d2c1481e7f663b8557e9"
+  ],
+  "EABK-docs/studio/README.en.md": [
+   "068fe97822b01431996425b8de664950deb32a34d2c1bd470959e6c39b12d547",
+   "4b1df3e4dc59bf894bba65d7772050e7e0cc4b89821a1d39cae67aa26b85580c",
+   "7747bd6fd7c0a7b28bd59515a29542c1e481f16fb45b1b73b7a6e02cf438f86f",
+   "fc5c27065c0303218a2b0b150935cba9c08c0652c2c237e1068f2d282a732eea"
+  ],
   "EABK-docs/studio/README.md": [
+   "3886a695768c100acf2df2be6c08337c885b4b4dc7915e58dea8f23b347a1200",
    "b08fb33dce61d2317ac3b44aac30091ea8aeac90f7f4de16560dbfe5fa3849da",
    "cf7b3e4e456ccc2730692eafcbfba85f41c8a03e6a37f5efe5b9b6f00f2a3cb7",
    "e349d7dacfb720c9f57c13060aa0e8cae6c3f955b5d219c504ff81a86ced3c0c",
@@ -1148,6 +1227,54 @@
    "22ce385dafdf65f08c0fb0056cb1dc62f692573dfe8bcc09802de5deda6507f4",
    "4e3975de917b06846d7b364b683b7d996c4401ac6958e9bc22cd28707c1c3cff",
    "9794fe6d05d1e7cebbf6db7ac13ef14da4d51755f77286d4e8b8729d91c4acd5"
+  ],
+  "EABK-docs/studio/images/fig-codegraph.en.svg": [
+   "448527dae5fa73d20750c879de9b5ca69a69002e65a0d3417f8bc197d018cc50"
+  ],
+  "EABK-docs/studio/images/fig-codegraph.svg": [
+   "98543a6612896dc21a4425e3cba592512598663e587c1130fc3101cfceaab164"
+  ],
+  "EABK-docs/studio/images/fig-dashboard.en.svg": [
+   "3eb650a003812d8c8c64a90567c758a256ce35e15e19bd78d62a35821df745ac"
+  ],
+  "EABK-docs/studio/images/fig-dashboard.svg": [
+   "236584931ea1f3ea2b425387d7ad8a443bdce511384220a059aa2ddf6924d115"
+  ],
+  "EABK-docs/studio/images/fig-floorplan.en.svg": [
+   "ff2792caa445d7c766d33408549327b3d61b12afe5a259cf9c233069e561f88a"
+  ],
+  "EABK-docs/studio/images/fig-floorplan.svg": [
+   "4e05d59746eef4d51541fcb7a10b0a7c4babc15915bf01912f8b1737f316fe21"
+  ],
+  "EABK-docs/studio/images/fig-guide.en.svg": [
+   "bbcf3e19d370db7153fecede63df64e6ad692b129321c070ba77a95a7d674cfc"
+  ],
+  "EABK-docs/studio/images/fig-guide.svg": [
+   "2aa1471b8d7395c0b944a35724e1aba3b988eb196434e6a951eb284279f929e8"
+  ],
+  "EABK-docs/studio/images/fig-implstatus.en.svg": [
+   "58559e1abbc2072a49b118f0b659ef7011c12adfc6acb4853f5aa0c4dfb1ef52"
+  ],
+  "EABK-docs/studio/images/fig-implstatus.svg": [
+   "f4748795ecf3dbdcff566859bb2f6d099f5531b951844937000482b07660d94f"
+  ],
+  "EABK-docs/studio/images/fig-maintenance.en.svg": [
+   "415310b150b22ba79002a8d8fdb338ce4677e436059bcb4026de1032af0fb9fc"
+  ],
+  "EABK-docs/studio/images/fig-maintenance.svg": [
+   "2673abc309f1bd179c2966ee6d6f479f40b7ab1768a164a4da07351290fda367"
+  ],
+  "EABK-docs/studio/images/fig-map.en.svg": [
+   "468b1069b1c8d5fea89431842ceed7bc70af09494362c0badeba0fce8ae0dcdb"
+  ],
+  "EABK-docs/studio/images/fig-map.svg": [
+   "ba73e77621657480fed90e1b911c74733b5166c550c105afc80891723a3acfbf"
+  ],
+  "EABK-docs/studio/images/fig-shell.en.svg": [
+   "c83d1dcf4f1595c8ba0c80a26a32c219af2a3a1092b6204242733c5f515ebdd3"
+  ],
+  "EABK-docs/studio/images/fig-shell.svg": [
+   "81802501bfccb9d17a4c4863cccd2f177a39227538f03ffd02af87cc344d59ec"
   ],
   "EABK-docs/studio/images/header.png": [
    "9993ae1fa2f12c87b2bd40a6234f9d4e3412dad58c2d61c52b32b1061e610010",
@@ -1736,6 +1863,7 @@
    "2dc6920b5476538d6b3a0d5eb9b3b40c69f9af42cafc145530aecb34cef395d5",
    "30dd6178b84f6b9db0aac2b9a88c278b9c5789517c7f0f8afc1e63c030e7c228",
    "32e09a31ae404d2832d8b7fd682f4f3539cf861cde077c00600747e70f4c3e3b",
+   "3dd268fdfa7ebb08dffdef4ca5601d928493edaf901c7ef2c41e1af24f297f8b",
    "4c761addbf47e4e12a41e45a03168ea4cc7b51f7a1fa6fc3ad174d6a06e4f3e6",
    "4fd7ac30a5ef5c8963237a312eb024767bb2dd39d2efbdcc47f041d569de16be",
    "54b54c1bdf71f06aeec69e81a232bce1c9bce3cf86a27eb0b697a1a3f3a9a8bf",
@@ -1903,20 +2031,51 @@
   "EABK-docs/README.md": "users-guide/README.md",
   "EABK-docs/images/architecture-diagram.png": "users-guide/images/architecture-diagram.png",
   "EABK-docs/images/dashboard.png": "users-guide/images/dashboard.png",
+  "EABK-docs/images/fig-flow.en.svg": "users-guide/images/fig-flow.en.svg",
+  "EABK-docs/images/fig-flow.svg": "users-guide/images/fig-flow.svg",
+  "EABK-docs/images/fig-quickstart.en.svg": "users-guide/images/fig-quickstart.en.svg",
+  "EABK-docs/images/fig-quickstart.svg": "users-guide/images/fig-quickstart.svg",
+  "EABK-docs/studio/01-first-steps.en.md": "users-guide/studio/01-first-steps.en.md",
   "EABK-docs/studio/01-first-steps.md": "users-guide/studio/01-first-steps.md",
+  "EABK-docs/studio/02-screens.en.md": "users-guide/studio/02-screens.en.md",
   "EABK-docs/studio/02-screens.md": "users-guide/studio/02-screens.md",
+  "EABK-docs/studio/03-tasks.en.md": "users-guide/studio/03-tasks.en.md",
   "EABK-docs/studio/03-tasks.md": "users-guide/studio/03-tasks.md",
+  "EABK-docs/studio/04-troubleshooting.en.md": "users-guide/studio/04-troubleshooting.en.md",
   "EABK-docs/studio/04-troubleshooting.md": "users-guide/studio/04-troubleshooting.md",
+  "EABK-docs/studio/05-product-manager.en.md": "users-guide/studio/05-product-manager.en.md",
   "EABK-docs/studio/05-product-manager.md": "users-guide/studio/05-product-manager.md",
+  "EABK-docs/studio/06-architect.en.md": "users-guide/studio/06-architect.en.md",
   "EABK-docs/studio/06-architect.md": "users-guide/studio/06-architect.md",
+  "EABK-docs/studio/07-software-engineer.en.md": "users-guide/studio/07-software-engineer.en.md",
   "EABK-docs/studio/07-software-engineer.md": "users-guide/studio/07-software-engineer.md",
+  "EABK-docs/studio/08-data-reference.en.md": "users-guide/studio/08-data-reference.en.md",
   "EABK-docs/studio/08-data-reference.md": "users-guide/studio/08-data-reference.md",
+  "EABK-docs/studio/09-visual-tour.en.md": "users-guide/studio/09-visual-tour.en.md",
+  "EABK-docs/studio/09-visual-tour.md": "users-guide/studio/09-visual-tour.md",
+  "EABK-docs/studio/README.en.md": "users-guide/studio/README.en.md",
   "EABK-docs/studio/README.md": "users-guide/studio/README.md",
   "EABK-docs/studio/capture-screens.py": "users-guide/studio/capture-screens.py",
   "EABK-docs/studio/images/cases.png": "users-guide/studio/images/cases.png",
   "EABK-docs/studio/images/consistency.png": "users-guide/studio/images/consistency.png",
   "EABK-docs/studio/images/dashboard.png": "users-guide/studio/images/dashboard.png",
   "EABK-docs/studio/images/diagrams.png": "users-guide/studio/images/diagrams.png",
+  "EABK-docs/studio/images/fig-codegraph.en.svg": "users-guide/studio/images/fig-codegraph.en.svg",
+  "EABK-docs/studio/images/fig-codegraph.svg": "users-guide/studio/images/fig-codegraph.svg",
+  "EABK-docs/studio/images/fig-dashboard.en.svg": "users-guide/studio/images/fig-dashboard.en.svg",
+  "EABK-docs/studio/images/fig-dashboard.svg": "users-guide/studio/images/fig-dashboard.svg",
+  "EABK-docs/studio/images/fig-floorplan.en.svg": "users-guide/studio/images/fig-floorplan.en.svg",
+  "EABK-docs/studio/images/fig-floorplan.svg": "users-guide/studio/images/fig-floorplan.svg",
+  "EABK-docs/studio/images/fig-guide.en.svg": "users-guide/studio/images/fig-guide.en.svg",
+  "EABK-docs/studio/images/fig-guide.svg": "users-guide/studio/images/fig-guide.svg",
+  "EABK-docs/studio/images/fig-implstatus.en.svg": "users-guide/studio/images/fig-implstatus.en.svg",
+  "EABK-docs/studio/images/fig-implstatus.svg": "users-guide/studio/images/fig-implstatus.svg",
+  "EABK-docs/studio/images/fig-maintenance.en.svg": "users-guide/studio/images/fig-maintenance.en.svg",
+  "EABK-docs/studio/images/fig-maintenance.svg": "users-guide/studio/images/fig-maintenance.svg",
+  "EABK-docs/studio/images/fig-map.en.svg": "users-guide/studio/images/fig-map.en.svg",
+  "EABK-docs/studio/images/fig-map.svg": "users-guide/studio/images/fig-map.svg",
+  "EABK-docs/studio/images/fig-shell.en.svg": "users-guide/studio/images/fig-shell.en.svg",
+  "EABK-docs/studio/images/fig-shell.svg": "users-guide/studio/images/fig-shell.svg",
   "EABK-docs/studio/images/header.png": "users-guide/studio/images/header.png",
   "EABK-docs/studio/images/maintenance.png": "users-guide/studio/images/maintenance.png",
   "EABK-docs/studio/images/map2d.png": "users-guide/studio/images/map2d.png",

@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 640" width="1100" height="640" role="img" aria-labelledby="t d" font-family="Segoe UI, Meiryo, Yu Gothic UI, sans-serif">
+<title id="t">Map (relationship graph)</title>
+<desc id="d">Dots and lines linking goals, requirements, parts, files and tests</desc>
+<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#667"/></marker></defs>
+<rect width="1100" height="640" fill="#fafafa"/>
+<rect x="8" y="8" width="1084" height="624" rx="10" fill="#f3f3f3" stroke="#b8b8b8" stroke-width="1.5" />
+<rect x="8" y="8" width="1084" height="44" rx="10" fill="#ffffff" stroke="#d8d8d8" stroke-width="1" />
+<text x="24" y="36" font-size="17" fill="#0f5fa8" font-weight="bold" text-anchor="start">HVE Studio</text>
+<rect x="150" y="18" width="250" height="24" rx="12" fill="#f3f3f3" stroke="#c8c8c8" stroke-width="1" />
+<text x="164" y="35" font-size="11" fill="#777" font-weight="normal" text-anchor="start">Search (/ key) requirements, parts, tests…</text>
+<text x="430" y="35" font-size="11" fill="#555" font-weight="normal" text-anchor="start">C:\GitHub\MyApp</text>
+<rect x="1008" y="18" width="52" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<text x="1034" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">JA | EN</text>
+<rect x="865.2" y="18" width="126.80000000000001" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<text x="928.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Software Engineer</text>
+<rect x="783.6" y="18" width="75.6" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<text x="821.4" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Architect</text>
+<rect x="663.6" y="18" width="114.0" height="24" rx="12" fill="#e8f1fb" stroke="#c8c8c8" stroke-width="1" />
+<text x="720.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Product Manager</text>
+<text x="61.599999999999994" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Dashboard</text>
+<text x="157.0" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Impl. status</text>
+<rect x="210.79999999999998" y="56" width="42.4" height="30" rx="6" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<rect x="216.79999999999998" y="83" width="30.4" height="3" rx="1" fill="#0f5fa8" stroke="#0f5fa8" stroke-width="1" />
+<text x="231.99999999999997" y="76" font-size="12" fill="#0f5fa8" font-weight="bold" text-anchor="middle">Map</text>
+<text x="293.4" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Diagrams</text>
+<text x="371.8" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Entities</text>
+<text x="463.8" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Integrations</text>
+<text x="562.6" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Source Map</text>
+<text x="641.0" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Tables</text>
+<text x="722.8" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Maintenance</text>
+<rect x="975" y="58" width="97" height="26" rx="13" fill="#fff4ce" stroke="#d8a800" stroke-width="1.5" />
+<text x="1023.5" y="76" font-size="12" fill="#5c4400" font-weight="bold" text-anchor="middle">? New here?</text>
+<text x="24" y="108" font-size="11" fill="#555" font-weight="normal" text-anchor="start">Follow goals → requirements → parts → files → tests.</text>
+<line x1="8" y1="114" x2="1092" y2="114" stroke="#d8d8d8" stroke-width="1"/>
+<text x="90" y="146" font-size="12" fill="#666" font-weight="bold" text-anchor="middle">Goal</text>
+<text x="270" y="146" font-size="12" fill="#666" font-weight="bold" text-anchor="middle">Requirement</text>
+<text x="470" y="146" font-size="12" fill="#666" font-weight="bold" text-anchor="middle">Part / API / Table</text>
+<text x="670" y="146" font-size="12" fill="#666" font-weight="bold" text-anchor="middle">File</text>
+<text x="850" y="146" font-size="12" fill="#666" font-weight="bold" text-anchor="middle">Test</text>
+<line x1="130" y1="200" x2="230" y2="180" stroke="#d83b01" stroke-width="2.5"/>
+<line x1="130" y1="200" x2="230" y2="270" stroke="#cfd4d9" stroke-width="1.5"/>
+<line x1="130" y1="380" x2="230" y2="380" stroke="#cfd4d9" stroke-width="1.5"/>
+<line x1="310" y1="180" x2="430" y2="200" stroke="#d83b01" stroke-width="2.5"/>
+<line x1="310" y1="180" x2="430" y2="300" stroke="#d83b01" stroke-width="2.5"/>
+<line x1="310" y1="270" x2="430" y2="300" stroke="#cfd4d9" stroke-width="1.5"/>
+<line x1="310" y1="380" x2="430" y2="400" stroke="#cfd4d9" stroke-width="1.5"/>
+<line x1="510" y1="200" x2="630" y2="200" stroke="#d83b01" stroke-width="2.5"/>
+<line x1="510" y1="300" x2="630" y2="300" stroke="#d83b01" stroke-width="2.5"/>
+<line x1="510" y1="400" x2="630" y2="400" stroke="#cfd4d9" stroke-width="1.5"/>
+<line x1="710" y1="200" x2="810" y2="200" stroke="#d83b01" stroke-width="2.5"/>
+<line x1="710" y1="300" x2="810" y2="300" stroke="#d83b01" stroke-width="2.5"/>
+<line x1="710" y1="400" x2="810" y2="400" stroke="#cfd4d9" stroke-width="1.5"/>
+<rect x="48" y="184" width="84" height="32" rx="16" fill="#fff" stroke="#0f5fa8" stroke-width="1.5" />
+<text x="90" y="204" font-size="11" fill="#0f5fa8" font-weight="bold" text-anchor="middle">G-001</text>
+<rect x="48" y="364" width="84" height="32" rx="16" fill="#fff" stroke="#0f5fa8" stroke-width="1.5" />
+<text x="90" y="384" font-size="11" fill="#0f5fa8" font-weight="bold" text-anchor="middle">G-002</text>
+<rect x="228" y="164" width="84" height="32" rx="16" fill="#fff" stroke="#d83b01" stroke-width="3" />
+<text x="270" y="184" font-size="11" fill="#7b3fc4" font-weight="bold" text-anchor="middle">FR-012</text>
+<rect x="228" y="254" width="84" height="32" rx="16" fill="#fff" stroke="#7b3fc4" stroke-width="1.5" />
+<text x="270" y="274" font-size="11" fill="#7b3fc4" font-weight="bold" text-anchor="middle">FR-015</text>
+<rect x="228" y="364" width="84" height="32" rx="16" fill="#fff" stroke="#7b3fc4" stroke-width="1.5" />
+<text x="270" y="384" font-size="11" fill="#7b3fc4" font-weight="bold" text-anchor="middle">FR-020</text>
+<rect x="428" y="184" width="84" height="32" rx="16" fill="#fff" stroke="#c0309b" stroke-width="1.5" />
+<text x="470" y="204" font-size="11" fill="#c0309b" font-weight="bold" text-anchor="middle">orders API</text>
+<rect x="428" y="284" width="84" height="32" rx="16" fill="#fff" stroke="#c0309b" stroke-width="1.5" />
+<text x="470" y="304" font-size="11" fill="#c0309b" font-weight="bold" text-anchor="middle">Order table</text>
+<rect x="428" y="384" width="84" height="32" rx="16" fill="#fff" stroke="#c0309b" stroke-width="1.5" />
+<text x="470" y="404" font-size="11" fill="#c0309b" font-weight="bold" text-anchor="middle">Mailer</text>
+<rect x="628" y="184" width="84" height="32" rx="16" fill="#fff" stroke="#616161" stroke-width="1.5" />
+<text x="670" y="204" font-size="11" fill="#616161" font-weight="bold" text-anchor="middle">cancel.py</text>
+<rect x="628" y="284" width="84" height="32" rx="16" fill="#fff" stroke="#616161" stroke-width="1.5" />
+<text x="670" y="304" font-size="11" fill="#616161" font-weight="bold" text-anchor="middle">models.py</text>
+<rect x="628" y="384" width="84" height="32" rx="16" fill="#fff" stroke="#616161" stroke-width="1.5" />
+<text x="670" y="404" font-size="11" fill="#616161" font-weight="bold" text-anchor="middle">notify.py</text>
+<rect x="808" y="184" width="84" height="32" rx="16" fill="#fff" stroke="#107c10" stroke-width="1.5" />
+<text x="850" y="204" font-size="11" fill="#107c10" font-weight="bold" text-anchor="middle">test_cancel</text>
+<rect x="808" y="284" width="84" height="32" rx="16" fill="#fff" stroke="#107c10" stroke-width="1.5" />
+<text x="850" y="304" font-size="11" fill="#107c10" font-weight="bold" text-anchor="middle">test_models</text>
+<rect x="808" y="384" width="84" height="32" rx="16" fill="#fff" stroke="#107c10" stroke-width="1.5" />
+<text x="850" y="404" font-size="11" fill="#107c10" font-weight="bold" text-anchor="middle">test_notify</text>
+<rect x="910" y="126" width="170" height="380" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
+<text x="922" y="150" font-size="13" fill="#7b3fc4" font-weight="bold" text-anchor="start">FR-012</text>
+<text x="922" y="176" font-size="11" fill="#333" font-weight="normal" text-anchor="start">Orders can be cancelled</text>
+<text x="922" y="200" font-size="11" fill="#333" font-weight="normal" text-anchor="start">Decision: approved</text>
+<text x="922" y="224" font-size="11" fill="#333" font-weight="normal" text-anchor="start">Priority: MUST</text>
+<text x="922" y="248" font-size="11" fill="#333" font-weight="normal" text-anchor="start">Acceptance: 3</text>
+<text x="922" y="272" font-size="11" fill="#333" font-weight="normal" text-anchor="start">Tests: pass</text>
+<circle cx="52" cy="140" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="52" y="144.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">1</text>
+<circle cx="312" cy="170" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="312" y="174.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">2</text>
+<circle cx="995" cy="126" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="995" y="130.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">3</text>
+<rect x="24" y="536" width="451.59999999999997" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
+<text x="32" y="551" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">1 Left to right: goal → requirement → part/API/table → file → test</text>
+<rect x="24" y="564" width="412.0" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
+<text x="32" y="579" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">2 Select a dot: only what connects to it lights up in orange</text>
+<rect x="24" y="592" width="524.2" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
+<text x="32" y="607" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">3 Details appear on the right. Switch 2D / 3D / Graph with the display switch</text>
+</svg>

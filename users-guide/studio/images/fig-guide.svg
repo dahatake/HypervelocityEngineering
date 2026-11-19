@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 640" width="1100" height="640" role="img" aria-labelledby="t d" font-family="Segoe UI, Meiryo, Yu Gothic UI, sans-serif">
+<title id="t">「初めての方へ」の案内</title>
+<desc id="d">ページを暗くして 1 か所ずつ強調し、カードで説明する案内</desc>
+<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#667"/></marker></defs>
+<rect width="1100" height="640" fill="#fafafa"/>
+<rect x="8" y="8" width="1084" height="624" rx="10" fill="#f3f3f3" stroke="#b8b8b8" stroke-width="1.5" />
+<rect x="8" y="8" width="1084" height="44" rx="10" fill="#ffffff" stroke="#d8d8d8" stroke-width="1" />
+<text x="24" y="36" font-size="17" fill="#0f5fa8" font-weight="bold" text-anchor="start">HVE Studio</text>
+<rect x="150" y="18" width="250" height="24" rx="12" fill="#f3f3f3" stroke="#c8c8c8" stroke-width="1" />
+<text x="164" y="35" font-size="11" fill="#777" font-weight="normal" text-anchor="start">探す（/ キー）要求・部品・試験…</text>
+<text x="430" y="35" font-size="11" fill="#555" font-weight="normal" text-anchor="start">C:\GitHub\MyApp</text>
+<rect x="1008" y="18" width="52" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<text x="1034" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">JA | EN</text>
+<rect x="865.2" y="18" width="126.80000000000001" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<text x="928.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Software Engineer</text>
+<rect x="783.6" y="18" width="75.6" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<text x="821.4" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Architect</text>
+<rect x="663.6" y="18" width="114.0" height="24" rx="12" fill="#e8f1fb" stroke="#c8c8c8" stroke-width="1" />
+<text x="720.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Product Manager</text>
+<rect x="20" y="56" width="113" height="30" rx="6" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<rect x="26" y="83" width="101" height="3" rx="1" fill="#0f5fa8" stroke="#0f5fa8" stroke-width="1" />
+<text x="76.5" y="76" font-size="12" fill="#0f5fa8" font-weight="bold" text-anchor="middle">ダッシュボード</text>
+<text x="172.0" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">実装状態</text>
+<text x="241.5" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">マップ</text>
+<text x="298.0" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">図式</text>
+<text x="374.0" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">エンティティ</text>
+<text x="463.0" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">外部連携</text>
+<text x="565.0" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">ソースコード構造</text>
+<text x="647.5" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">表</text>
+<text x="710.5" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">整合性保守</text>
+<rect x="960" y="58" width="112" height="26" rx="13" fill="#fff4ce" stroke="#d8a800" stroke-width="1.5" />
+<text x="1016.0" y="76" font-size="12" fill="#5c4400" font-weight="bold" text-anchor="middle">? 初めての方へ</text>
+<text x="24" y="108" font-size="11" fill="#555" font-weight="normal" text-anchor="start">目的ごとの進捗・指標・履歴・未解決の件数の集計を見ます。</text>
+<line x1="8" y1="114" x2="1092" y2="114" stroke="#d8d8d8" stroke-width="1"/>
+<rect x="24" y="128" width="160" height="64" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
+<text x="38" y="161" font-size="24" fill="#222" font-weight="bold" text-anchor="start">163</text>
+<text x="38" y="182" font-size="11" fill="#555" font-weight="normal" text-anchor="start">要求</text>
+<rect x="200" y="128" width="160" height="64" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
+<text x="214" y="161" font-size="24" fill="#222" font-weight="bold" text-anchor="start">65%</text>
+<text x="214" y="182" font-size="11" fill="#555" font-weight="normal" text-anchor="start">承認済み %</text>
+<rect x="24" y="208" width="520" height="260" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
+<circle cx="130" cy="340" r="60" fill="none" stroke="#107c10" stroke-width="24" stroke-dasharray="245.0 131.9" stroke-dashoffset="-0.0" transform="rotate(-90 130 340)"/>
+<circle cx="130" cy="340" r="60" fill="none" stroke="#666" stroke-width="24" stroke-dasharray="131.9 245.0" stroke-dashoffset="-245.0" transform="rotate(-90 130 340)"/>
+<path fill-rule="evenodd" fill="#000" fill-opacity="0.55" d="M8 8H1092V632H8Z M14 54H760V90H14Z"/>
+<rect x="14" y="54" width="746" height="36" rx="6" fill="none" stroke="#ffd33d" stroke-width="3" />
+<rect x="780" y="138" width="300" height="214" rx="10" fill="#fff" stroke="#444" stroke-width="1.5" />
+<text x="796" y="166" font-size="18" fill="#0f5fa8" font-weight="bold" text-anchor="start">?</text>
+<text x="820" y="166" font-size="14" fill="#222" font-weight="bold" text-anchor="start">画面の切り替え</text>
+<text x="1060" y="166" font-size="11" fill="#555" font-weight="normal" text-anchor="end">1 / 5</text>
+<text x="796" y="196" font-size="12" fill="#333" font-weight="normal" text-anchor="start">ここから見たい情報の画面を選びます。</text>
+<text x="796" y="216" font-size="12" fill="#333" font-weight="normal" text-anchor="start">いま開いている画面は強調表示されます。</text>
+<text x="796" y="250" font-size="10.5" fill="#666" font-weight="normal" text-anchor="start">← → キーで移動、Esc で閉じます</text>
+<rect x="796" y="290" width="70" height="28" rx="6" fill="#fff" stroke="#999" stroke-width="1" />
+<text x="831" y="309" font-size="12" fill="#333" font-weight="normal" text-anchor="middle">閉じる</text>
+<rect x="992" y="290" width="72" height="28" rx="6" fill="#0f5fa8" stroke="#0f5fa8" stroke-width="1" />
+<text x="1028" y="309" font-size="12" fill="#fff" font-weight="bold" text-anchor="middle">次へ</text>
+<circle cx="770" cy="62" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="770" y="66.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">1</text>
+<circle cx="790" cy="138" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="790" y="142.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">2</text>
+<circle cx="1074" cy="286" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="1074" y="290.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">3</text>
+<text x="24" y="500" font-size="13" fill="#fff" font-weight="bold" text-anchor="start">5 つの手順（画面ごとに 2 つ目・3 つ目の説明が変わる）</text>
+<rect x="24" y="512" width="139" height="26" rx="13" fill="#fff" stroke="#ffd33d" stroke-width="1" />
+<text x="93.5" y="529" font-size="12" fill="#333" font-weight="normal" text-anchor="middle">1 画面の切り替え</text>
+<rect x="171" y="512" width="152" height="26" rx="13" fill="#fff" stroke="#ffd33d" stroke-width="1" />
+<text x="247.0" y="529" font-size="12" fill="#333" font-weight="normal" text-anchor="middle">2 この画面の見かた</text>
+<rect x="331" y="512" width="113" height="26" rx="13" fill="#fff" stroke="#ffd33d" stroke-width="1" />
+<text x="387.5" y="529" font-size="12" fill="#333" font-weight="normal" text-anchor="middle">3 掘り下げ方</text>
+<rect x="452" y="512" width="139" height="26" rx="13" fill="#fff" stroke="#ffd33d" stroke-width="1" />
+<text x="521.5" y="529" font-size="12" fill="#333" font-weight="normal" text-anchor="middle">4 検索とコマンド</text>
+<rect x="599" y="512" width="113" height="26" rx="13" fill="#fff" stroke="#ffd33d" stroke-width="1" />
+<text x="655.5" y="529" font-size="12" fill="#333" font-weight="normal" text-anchor="middle">5 表示の設定</text>
+<rect x="24" y="560" width="328" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
+<text x="32" y="575" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">① 明るく枠で囲まれた所が、いま説明している場所</text>
+<rect x="24" y="588" width="588" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
+<text x="32" y="603" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">② カード: 説明文・「戻る」「次へ」「閉じる」。← → キーと Esc でも操作できる</text>
+<rect x="24" y="616" width="523" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
+<text x="32" y="631" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">③ いつでも右上の「初めての方へ」から開き直せる（9 つの画面すべてで利用可）</text>
+</svg>

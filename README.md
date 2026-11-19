@@ -11,6 +11,19 @@ GitHub Copilot（VS Code・Copilot CLI・GitHub Copilot app・cloud agent）で�
 - データ層は **HVE Studio**（ローカルの読み取り専用ビューアー）で図・表・検索で見られます。
 - すでにソースコード・設計書があるアプリ（brownfield）にも使えます。まず `python scripts/adopt.py scan` で棚卸しします（[既存のアプリを導入する](users-guide/10-adopting-existing-apps.md)）。
 
+![EABK Lite の毎日の流れ](users-guide/images/fig-flow.svg)
+
+📖 **初めて使う方へ**: [Quickstart](#quickstart) → [ユーザーガイドの目次](users-guide/README.md) → [S9 画面ツアー（図解）](users-guide/studio/09-visual-tour.md) の順に読むと、全体と全画面を図で理解できます。ユーザーガイドの目次と Studio の索引、S9 の先頭にある「← リポジトリの README」から、この README に戻れます。
+
+### 目指すもの: Microsoft Innovation Hub の Engagement を、大量に・高い品質で
+
+背景: Microsoft Innovation Hub が実行する Engagement は、現状 1 件ごとの手間が大きすぎます。たとえば次の課題があります。
+
+- **アカウントチームとの情報共有が不足**し、顧客に Copilot の製品説明しかできていないことがある。競合との違いや、AI と Copilot の真の価値が顧客に伝わっていない。
+- Hub のチームが持つ**シナリオとナラティブ**は、「Hub らじお」として Viva Engage の動画で公開しているが、視聴するユーザーが少ない。
+
+そこで、シナリオ・ナラティブ・要求・決定事項を、**人にも AI にも読める管理データ**として 1 か所で一貫して保ち、同じ手順を何度でも再現できる形にすることを目指しています。この toolkit（EABK Lite と HVE Studio）は、その土台として、「何を決めたか」「どこまで進んだか」「抜けや矛盾はないか」を機械的な検査と図で確かめる部分を担います。Hub 向けの Engagement 専用機能は、現時点でこの toolkit には含まれません。
+
 ### なぜ Lite か
 
 0.5.x までは、conductor が作業役を worktree で並行させる長時間の run で開発を進めていました。実際の利用を検証すると、トークン量と経過時間がふだんの依頼より大きく増え、役割ごとの書き込み制限が作業を止める例もありました。一方で、要求定義書とテストの対応は、規則がリポジトリになければ人や PC が変わると保たれず、決定的な検査と節目の監査は本物のずれと矛盾を見つけていました。そこで Lite は、オーケストレーションをやめ、**リポジトリに入る規則・データ層・決定的な検査（手元と CI）・節目の手動監査**だけを残します。規則と検査はリポジトリと CI にあるので、複数の人・複数の PC でも、個人のプロンプトやメモリに依らず同じように効きます。
@@ -28,6 +41,7 @@ GitHub Copilot（VS Code・Copilot CLI・GitHub Copilot app・cloud agent）で�
 ## 目次
 
 - [なぜ Lite か](#なぜ-lite-か)
+- [目指すもの: Microsoft Innovation Hub の Engagement を、大量に・高い品質で](#目指すもの-microsoft-innovation-hub-の-engagement-を大量に高い品質で)
 - [はじめに（読者別の読み方）](#はじめに読者別の読み方)
 - [概要](#概要)
 - [インストール](#インストール)
@@ -332,6 +346,8 @@ GitHub Copilot には、agents・skills・hooks をまとめて配布する標�
 2. `scripts/ebak.config.json` の `verify.commands` にビルドとテストのコマンドを登録します。
 3. あとは、次の「推奨の進め方」で開発します。
 
+![はじめの 3 ステップ](users-guide/images/fig-quickstart.svg)
+
 ### 推奨の進め方
 
 1. **ふだんどおり Copilot に依頼します**。VS Code・Copilot CLI・GitHub Copilot app・cloud agent のどれでも、既定のエージェントのままでかまいません（例: 「延滞が 3 日を超えたら本人と上長に通知する機能を追加して」）。
@@ -396,6 +412,9 @@ PowerShell では `-Clean`、`install.sh` では `--clean` です。
 - **原本の閲覧・解析は読み取り専用**です。管理データを優先し、ソースの明示的な要求参照・import・TODO などで補完します。`127.0.0.1` だけで待ち受け、原本への書込みは確認済みの「整合性保守」だけです。タスク編集はリポジトリ外の Studio 専用保存先に分離します。
 - Python 3.9 以上の標準ライブラリだけで動きます（追加のインストールなし）。データ層のファイルを更新すると、数秒で画面が読み直されます。
 - 要求・カタログ・試験の状態を、人が理解し、判断するための窓です。要求や実装の変更は、Copilot に依頼します。
+- 右上の黄色い **「初めての方へ」** ボタンで、いま開いている画面の使い方を順番に案内します。ソースコード構造では、部品・ファイルをカードで見る **フロアプラン** と、関数どうしの呼び出しを動く図で見る **ネットワーク表示** も使えます。
+
+![HVE Studio の画面構成（番号つき）](users-guide/studio/images/fig-shell.svg)
 
 ![HVE Studio のダッシュボード](users-guide/studio/images/dashboard.png)
 
@@ -404,6 +423,7 @@ PowerShell では `-Clean`、`install.sh` では `--clean` です。
 | Product Manager | ダッシュボードで進捗・承認・未回答の質問を確認し、次に投資する目的を決める | [S5. Product Manager 向け](users-guide/studio/05-product-manager.md) |
 | Architect | 2D/3D マップ・図式・配置・構造で、依存・境界・置き場所と層の欠けを確かめる | [S6. Architect 向け](users-guide/studio/06-architect.md) |
 | Software Engineer | 表・ソース対応・詳細パネルで、要求から実装ファイルとテストまでをたどる | [S7. Software Engineer 向け](users-guide/studio/07-software-engineer.md) |
+| 全員 | **初めての方は、各画面の見かたを図で説明する S9 から** | [S9. 画面ツアー（図解）](users-guide/studio/09-visual-tour.md) |
 | 全員 | どの画面が、どのファイルの何を読み、どう計算するか | [S8. データリファレンス](users-guide/studio/08-data-reference.md) |
 
 索引は [users-guide/studio/](users-guide/studio/README.md) です。
@@ -454,6 +474,7 @@ python HVE-Studio/studio.py --repo <任意の git リポジトリ>
 | 9 | [バージョンアップの手順](users-guide/09-versioning.md) | 版を上げる（配布元）、導入済みのリポジトリを更新する（利用者）。旧版からのクリーンインストール |
 | 10 | [既存のアプリを導入する](users-guide/10-adopting-existing-apps.md) | 既存のコード・設計書から、棚卸し → 逆生成の要求（承認待ち）→ 現状の挙動の固定でデータ層を整える |
 | 11 | [外部連携カタログ](users-guide/11-integration-catalog.md) | 外部アプリ・データとの連携を `docs/integrations.md`（任意）に記録する。追加・変更・廃止・検査の手順 |
+| 参考 | [画面ツアー（図解）](users-guide/studio/09-visual-tour.md) | 初めて Studio を開く。全画面を図で理解したい |
 | 参考 | [HVE Studio のガイド](users-guide/studio/README.md) | データ層を図・表で見たい。役割別の手順と、各画面が読むデータを知りたい |
 
 ## 用語

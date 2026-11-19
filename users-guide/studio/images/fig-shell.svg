@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 640" width="1100" height="640" role="img" aria-labelledby="t d" font-family="Segoe UI, Meiryo, Yu Gothic UI, sans-serif">
+<title id="t">HVE Studio 画面の全体像</title>
+<desc id="d">ヘッダー・画面タブ・検索・ロール切替・言語・初めての方へボタンの位置を示す図</desc>
+<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#667"/></marker></defs>
+<rect width="1100" height="640" fill="#fafafa"/>
+<rect x="8" y="8" width="1084" height="624" rx="10" fill="#f3f3f3" stroke="#b8b8b8" stroke-width="1.5" />
+<rect x="8" y="8" width="1084" height="44" rx="10" fill="#ffffff" stroke="#d8d8d8" stroke-width="1" />
+<text x="24" y="36" font-size="17" fill="#0f5fa8" font-weight="bold" text-anchor="start">HVE Studio</text>
+<rect x="150" y="18" width="250" height="24" rx="12" fill="#f3f3f3" stroke="#c8c8c8" stroke-width="1" />
+<text x="164" y="35" font-size="11" fill="#777" font-weight="normal" text-anchor="start">探す（/ キー）要求・部品・試験…</text>
+<text x="430" y="35" font-size="11" fill="#555" font-weight="normal" text-anchor="start">C:\GitHub\MyApp</text>
+<rect x="1008" y="18" width="52" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<text x="1034" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">JA | EN</text>
+<rect x="865.2" y="18" width="126.80000000000001" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<text x="928.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Software Engineer</text>
+<rect x="783.6" y="18" width="75.6" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<text x="821.4" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Architect</text>
+<rect x="663.6" y="18" width="114.0" height="24" rx="12" fill="#e8f1fb" stroke="#c8c8c8" stroke-width="1" />
+<text x="720.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Product Manager</text>
+<rect x="20" y="56" width="113" height="30" rx="6" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<rect x="26" y="83" width="101" height="3" rx="1" fill="#0f5fa8" stroke="#0f5fa8" stroke-width="1" />
+<text x="76.5" y="76" font-size="12" fill="#0f5fa8" font-weight="bold" text-anchor="middle">ダッシュボード</text>
+<text x="172.0" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">実装状態</text>
+<text x="241.5" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">マップ</text>
+<text x="298.0" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">図式</text>
+<text x="374.0" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">エンティティ</text>
+<text x="463.0" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">外部連携</text>
+<text x="565.0" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">ソースコード構造</text>
+<text x="647.5" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">表</text>
+<text x="710.5" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">整合性保守</text>
+<rect x="960" y="58" width="112" height="26" rx="13" fill="#fff4ce" stroke="#d8a800" stroke-width="1.5" />
+<text x="1016.0" y="76" font-size="12" fill="#5c4400" font-weight="bold" text-anchor="middle">? 初めての方へ</text>
+<text x="24" y="108" font-size="11" fill="#555" font-weight="normal" text-anchor="start">目的ごとの進捗・指標・履歴・未解決の件数の集計を見ます。</text>
+<line x1="8" y1="114" x2="1092" y2="114" stroke="#d8d8d8" stroke-width="1"/>
+<rect x="24" y="128" width="160" height="64" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
+<text x="38" y="161" font-size="24" fill="#222" font-weight="bold" text-anchor="start">163</text>
+<text x="38" y="182" font-size="11" fill="#555" font-weight="normal" text-anchor="start">要求</text>
+<rect x="200" y="128" width="160" height="64" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
+<text x="214" y="161" font-size="24" fill="#222" font-weight="bold" text-anchor="start">65%</text>
+<text x="214" y="182" font-size="11" fill="#555" font-weight="normal" text-anchor="start">承認済み %</text>
+<rect x="376" y="128" width="160" height="64" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
+<text x="390" y="161" font-size="24" fill="#222" font-weight="bold" text-anchor="start">52%</text>
+<text x="390" y="182" font-size="11" fill="#555" font-weight="normal" text-anchor="start">試験合格 %</text>
+<rect x="24" y="208" width="520" height="280" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
+<text x="40" y="234" font-size="13" fill="#444" font-weight="bold" text-anchor="start">画面の本体（選んだタブの内容）</text>
+<circle cx="130" cy="350" r="60" fill="none" stroke="#107c10" stroke-width="24" stroke-dasharray="245.0 131.9" stroke-dashoffset="-0.0" transform="rotate(-90 130 350)"/>
+<circle cx="130" cy="350" r="60" fill="none" stroke="#666" stroke-width="24" stroke-dasharray="113.1 263.9" stroke-dashoffset="-245.0" transform="rotate(-90 130 350)"/>
+<circle cx="130" cy="350" r="60" fill="none" stroke="#8a5a00" stroke-width="24" stroke-dasharray="18.8 358.1" stroke-dashoffset="-358.1" transform="rotate(-90 130 350)"/>
+<rect x="570" y="128" width="500" height="360" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
+<text x="586" y="154" font-size="13" fill="#444" font-weight="bold" text-anchor="start">右の詳細パネル（点・行を選ぶと開く）</text>
+<rect x="586" y="172" width="468" height="26" rx="4" fill="#f6f8fa" stroke="#e0e0e0" stroke-width="1" />
+<text x="598" y="190" font-size="12" fill="#222" font-weight="normal" text-anchor="start">FR-012  注文を取り消せる</text>
+<rect x="586" y="206" width="468" height="26" rx="4" fill="#f6f8fa" stroke="#e0e0e0" stroke-width="1" />
+<text x="598" y="224" font-size="12" fill="#222" font-weight="normal" text-anchor="start">受入基準  AC-031</text>
+<rect x="586" y="240" width="468" height="26" rx="4" fill="#f6f8fa" stroke="#e0e0e0" stroke-width="1" />
+<text x="598" y="258" font-size="12" fill="#222" font-weight="normal" text-anchor="start">実装: src/orders/cancel.py</text>
+<rect x="586" y="274" width="468" height="26" rx="4" fill="#f6f8fa" stroke="#e0e0e0" stroke-width="1" />
+<text x="598" y="292" font-size="12" fill="#222" font-weight="normal" text-anchor="start">試験: tests/test_cancel.py  pass</text>
+<circle cx="20" cy="17" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="20" y="21.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">1</text>
+<circle cx="280" cy="52" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="280" y="56.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">2</text>
+<circle cx="470" cy="52" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="470" y="56.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">3</text>
+<circle cx="760" cy="52" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="760" y="56.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">4</text>
+<circle cx="1010" cy="52" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="1010" y="56.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">5</text>
+<circle cx="1010" cy="98" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="1010" y="102.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">6</text>
+<circle cx="560" cy="104" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="560" y="108.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">7</text>
+<circle cx="560" cy="300" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="560" y="304.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">8</text>
+<circle cx="1060" cy="300" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="1060" y="304.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">9</text>
+<text x="24" y="514" font-size="13" fill="#333" font-weight="bold" text-anchor="start">番号の意味</text>
+<circle cx="32" cy="536" r="8" fill="#d83b01" stroke="none" stroke-width="1"/>
+<text x="32" y="540" font-size="10" fill="#fff" font-weight="bold" text-anchor="middle">1</text>
+<text x="48" y="540" font-size="12" fill="#333" font-weight="normal" text-anchor="start">ブランドと、Studio の名前</text>
+<circle cx="32" cy="556" r="8" fill="#d83b01" stroke="none" stroke-width="1"/>
+<text x="32" y="560" font-size="10" fill="#fff" font-weight="bold" text-anchor="middle">2</text>
+<text x="48" y="560" font-size="12" fill="#333" font-weight="normal" text-anchor="start">検索（/ キー）: 要求・部品・試験を横断して探す</text>
+<circle cx="32" cy="576" r="8" fill="#d83b01" stroke="none" stroke-width="1"/>
+<text x="32" y="580" font-size="10" fill="#fff" font-weight="bold" text-anchor="middle">3</text>
+<text x="48" y="580" font-size="12" fill="#333" font-weight="normal" text-anchor="start">対象リポジトリのパス（右上で切り替え）</text>
+<circle cx="32" cy="596" r="8" fill="#d83b01" stroke="none" stroke-width="1"/>
+<text x="32" y="600" font-size="10" fill="#fff" font-weight="bold" text-anchor="middle">4</text>
+<text x="48" y="600" font-size="12" fill="#333" font-weight="normal" text-anchor="start">ロール: PM / Architect / SWE で最初の画面が変わる</text>
+<circle cx="32" cy="616" r="8" fill="#d83b01" stroke="none" stroke-width="1"/>
+<text x="32" y="620" font-size="10" fill="#fff" font-weight="bold" text-anchor="middle">5</text>
+<text x="48" y="620" font-size="12" fill="#333" font-weight="normal" text-anchor="start">JA | EN: 画面の言葉を切り替え</text>
+<circle cx="572" cy="536" r="8" fill="#d83b01" stroke="none" stroke-width="1"/>
+<text x="572" y="540" font-size="10" fill="#fff" font-weight="bold" text-anchor="middle">6</text>
+<text x="588" y="540" font-size="12" fill="#333" font-weight="normal" text-anchor="start">「初めての方へ」: いまの画面を順に案内</text>
+<circle cx="572" cy="556" r="8" fill="#d83b01" stroke="none" stroke-width="1"/>
+<text x="572" y="560" font-size="10" fill="#fff" font-weight="bold" text-anchor="middle">7</text>
+<text x="588" y="560" font-size="12" fill="#333" font-weight="normal" text-anchor="start">画面の説明（選んだタブの目的を 1 行で）</text>
+<circle cx="572" cy="576" r="8" fill="#d83b01" stroke="none" stroke-width="1"/>
+<text x="572" y="580" font-size="10" fill="#fff" font-weight="bold" text-anchor="middle">8</text>
+<text x="588" y="580" font-size="12" fill="#333" font-weight="normal" text-anchor="start">画面の本体</text>
+<circle cx="572" cy="596" r="8" fill="#d83b01" stroke="none" stroke-width="1"/>
+<text x="572" y="600" font-size="10" fill="#fff" font-weight="bold" text-anchor="middle">9</text>
+<text x="588" y="600" font-size="12" fill="#333" font-weight="normal" text-anchor="start">詳細パネル: 選んだものの中身と関連</text>
+</svg>

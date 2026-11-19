@@ -11,6 +11,19 @@ A toolkit that adds rules and checks to a repository developed with GitHub Copil
 - The data layer can be browsed as diagrams, tables, and search in **HVE Studio** (a local, read-only viewer).
 - It also works for applications that already have source code and design documents (brownfield). Start with an inventory: `python scripts/adopt.py scan` ([Adopting an existing app](users-guide/10-adopting-existing-apps.en.md)).
 
+![The daily flow of EABK Lite](users-guide/images/fig-flow.en.svg)
+
+📖 **New here?** Read [Quickstart](#quickstart) → [User guide contents](users-guide/README.en.md) → [S9 Visual tour](users-guide/studio/09-visual-tour.en.md) to understand the whole picture and every screen with figures. The user guide index, the Studio index and S9 link back to this README with "← Repository README".
+
+### Goal: high-quality Engagements from Microsoft Innovation Hub, at scale
+
+Background: each Engagement that the Microsoft Innovation Hub runs currently takes too much effort. For example:
+
+- **Information sharing with account teams is thin**, so customers sometimes get only a Copilot product explanation. How we differ from competitors, and the real value of AI and Copilot, do not reach the customer.
+- The Hub team's **scenarios and narratives** are published as videos on Viva Engage ("Hub Radio"), but few users watch them.
+
+The aim is to keep scenarios, narratives, requirements and decisions in one place as **managed data that both people and AI can read**, so the same procedure can be repeated any number of times. This toolkit (EABK Lite and HVE Studio) is the foundation for that: it checks "what was decided", "how far it has progressed" and "are there gaps or contradictions" with deterministic checks and diagrams. Engagement-specific features for the Hub are not part of this toolkit at present.
+
 ### Why Lite
 
 Up to 0.5.x, development ran as long "runs" in which conductor had worker agents work in parallel in worktrees. Checking real use showed that token volume and elapsed time grew well beyond ordinary requests, and that the per-role write restrictions sometimes stopped the work. On the other hand, the mapping between the requirements definition and the tests was not maintained when people or PCs changed unless the rules lived in the repository, while the deterministic checks and the milestone audits did find real drift and contradictions. So Lite drops the orchestration and keeps only **rules in the repository, the data layer, deterministic checks (local and CI), and manual milestone audits**. Because the rules and checks live in the repository and CI, they apply the same way for many people and many PCs, without relying on personal prompts or memory.
@@ -28,6 +41,7 @@ If you are updating from an older version (such as 0.5.x), read [Updating from a
 ## Table of contents
 
 - [Why Lite](#why-lite)
+- [Goal: high-quality Engagements from Microsoft Innovation Hub, at scale](#goal-high-quality-engagements-from-microsoft-innovation-hub-at-scale)
 - [Getting started (reading guide by reader)](#getting-started-reading-guide-by-reader)
 - [Overview](#overview)
 - [Installation](#installation)
@@ -332,6 +346,8 @@ So the customizations (`AGENTS.md`, `.github/`) and `scripts/` are placed direct
 2. Register build and test commands in `verify.commands` of `scripts/ebak.config.json`.
 3. Then develop with the "Recommended workflow" below.
 
+![The first three steps](users-guide/images/fig-quickstart.en.svg)
+
 ### Recommended workflow
 
 1. **Ask Copilot as usual.** VS Code, Copilot CLI, the GitHub Copilot app, or the cloud agent, with the default agent (e.g. "add a feature that notifies the borrower and their manager when a loan is more than 3 days overdue").
@@ -396,14 +412,16 @@ For details, see [Version upgrades](users-guide/09-versioning.en.md) and [CHANGE
 - **Browsing and analysis do not change originals**. Management records remain authoritative, supplemented with explicit source references, imports and TODOs. Studio listens only on `127.0.0.1`. Only confirmed maintenance changes the catalog; task edits use Studio-owned storage outside the repository.
 - It runs on the Python 3.9+ standard library alone (no extra installs). When data-layer files change, the screen reloads within seconds.
 - It is a window for people to understand and judge the state of requirements, the catalog, and tests. To change requirements or the implementation, ask Copilot.
+- The yellow **"New here?"** button at the top right walks you through the current screen. On Source Map you can also use the **floorplan** (parts and files as cards) and the **network view** (function calls as a live graph).
 
-![HVE Studio dashboard](users-guide/studio/images/dashboard.png)
+![HVE Studio screen layout (numbered)](users-guide/studio/images/fig-shell.en.svg)
 
 | Role | How to use it | Guide |
 |---|---|---|
 | Product Manager | Check progress, approvals, and unanswered questions on the dashboard, and decide which goal to invest in next | [S5. For Product Managers](users-guide/studio/05-product-manager.en.md) |
 | Architect | Check dependencies, boundaries, placement, and missing layers with the 2D/3D map, diagrams, placement, and structure views | [S6. For Architects](users-guide/studio/06-architect.en.md) |
 | Software Engineer | Trace from requirements to implementation files and tests with tables, source mapping, and the detail panel | [S7. For Software Engineers](users-guide/studio/07-software-engineer.en.md) |
+| Everyone | **First time? Start with S9, which explains each screen with figures** | [S9. Visual tour](users-guide/studio/09-visual-tour.en.md) |
 | Everyone | Which screen reads what from which file, and how it computes it | [S8. Data reference](users-guide/studio/08-data-reference.en.md) |
 
 The index is [users-guide/studio/](users-guide/studio/README.en.md).
@@ -454,6 +472,7 @@ Details are in [users-guide/](users-guide/README.en.md).
 | 9 | [Version upgrades](users-guide/09-versioning.en.md) | Releasing a version (distributor), updating an installed repository (user), clean install from an older version |
 | 10 | [Adopting an existing app](users-guide/10-adopting-existing-apps.en.md) | Build the data layer from existing code and design documents: inventory → reverse-engineered requirements (pending approval) → pinning current behavior |
 | 11 | [Integration catalog](users-guide/11-integration-catalog.en.md) | Record integrations with external apps / data in `docs/integrations.md` (optional): adding, changing, retiring, and checking |
+| Reference | [Visual tour](users-guide/studio/09-visual-tour.en.md) | You open Studio for the first time and want every screen explained with figures |
 | Reference | [HVE Studio guide](users-guide/studio/README.en.md) | You want to view the data layer as diagrams and tables, with per-role procedures and the data each screen reads |
 
 ## Glossary

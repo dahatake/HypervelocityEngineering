@@ -9,9 +9,13 @@ EABK Lite は、**規則（AGENTS.md）＋データ層（要求定義書・カ�
 | 部 | 対象 | 章の記号 | 場所 |
 |---|---|---|---|
 | 第 1 部 | **EABK Lite 本体**: 依頼の書き方、ふだんの進め方、管理データの書式と検査、節目の監査 | 1〜11 | このフォルダー直下 |
-| 第 2 部 | **HVE Studio**: 管理データ（データ層）を図・表・検索で見て回る、ローカル専用の閲覧アプリ | S1〜S8 | [studio/](studio/README.md) |
+| 第 2 部 | **HVE Studio**: 管理データ（データ層）を図・表・検索で見て回る、ローカル専用の閲覧アプリ | S1〜S9 | [studio/](studio/README.md) |
 
 2 つの部は、同じデータ層でつながっています。変更の中で Copilot（または人）がデータ層を書き、Studio が読みます。要求や実装を変えるときは、Studio ではなく Copilot のチャットで依頼します。
+
+![EABK Lite の毎日の流れ。依頼 → 1 回の変更でコードとデータ層を更新 → verify → push と CI → Studio で見る。節目は rd-auditor が監査する](images/fig-flow.svg)
+
+> **初めての方へ**: [README の Quickstart](../README.md#quickstart) → [S9 画面ツアー（図解）](studio/09-visual-tour.md)（全画面を図で説明）の順に読むのがおすすめです。トップへ戻る: [← リポジトリの README](../README.md)
 
 ## 第 1 部: EABK Lite 本体
 
@@ -43,6 +47,7 @@ EABK Lite は、**規則（AGENTS.md）＋データ層（要求定義書・カ�
 | S6 | [Architect 向け](studio/06-architect.md) | 依存・境界・置き場所・層の欠けを確かめたい |
 | S7 | [Software Engineer 向け](studio/07-software-engineer.md) | 要求から実装ファイルとテストまでをたどりたい |
 | S8 | [データリファレンス](studio/08-data-reference.md) | どの画面が、どのファイルの何を読み、どう計算するかを知りたい |
+| S9 | [画面ツアー（図解）](studio/09-visual-tour.md) | **初めての方へ。** 画面の構成と全画面を、図つきで知りたい。「初めての方へ」ウィザード・フロアプラン・ネットワーク表示も説明 |
 
 ## 役割別の読み方（初めて使う方へ）
 
@@ -66,7 +71,8 @@ EABK Lite は、**規則（AGENTS.md）＋データ層（要求定義書・カ�
 | 検査が失敗した・CI が落ちた | [7](07-troubleshooting.md)。Studio が動かないなら [S4](studio/04-troubleshooting.md) |
 | 既存のアプリに導入する | [10](10-adopting-existing-apps.md)、段取りは [8](08-roadmap.md) |
 | toolkit を更新する・旧版からクリーンインストールする | [9](09-versioning.md) |
-| データ層を図・表で見る | [S1](studio/01-first-steps.md)、[S2](studio/02-screens.md) |
+| データ層を図・表で見る | [S9](studio/09-visual-tour.md)（最初に）、[S1](studio/01-first-steps.md)、[S2](studio/02-screens.md) |
+| 「初めての方へ」ボタン・フロアプラン・ネットワーク表示を知る | [S9 の第 2 節・第 7 節](studio/09-visual-tour.md#2-初めての方への案内ウィザード) |
 
 ## README の各節へのリンク
 
@@ -80,7 +86,7 @@ EABK Lite は、**規則（AGENTS.md）＋データ層（要求定義書・カ�
 
 ## このガイドの書き方の約束
 
-- 章番号は、第 1 部が `1`〜`11`、第 2 部が `S1`〜`S8` です。節は `4.4`・`S8.5.2` のように章番号に続けます。他のガイドから参照するときも、この記号を使います。
+- 章番号は、第 1 部が `1`〜`11`、第 2 部が `S1`〜`S9` です。節は `4.4`・`S8.5.2` のように章番号に続けます。他のガイドから参照するときも、この記号を使います。
 - 配布元のリポジトリでは `users-guide/` です。`tools/install.py` で導入したリポジトリでは `EABK-docs/` に入ります（導入先の `users-guide/` は触りません）。ガイド内のリンクは、配布元の位置を基準にした相対パスです。
-- 実画面の画像は `studio/images/`、採取条件は [studio/screen-images.json](studio/screen-images.json)、再採取は `studio/capture-screens.py` です。EABK 本体の図は `images/` にあります。
+- 実画面の写真は `studio/images/*.png`、採取条件は [studio/screen-images.json](studio/screen-images.json)、再採取は `studio/capture-screens.py` です。説明用の図は SVG で、日本語版（`fig-*.svg`）と英語版（`fig-*.en.svg`）があります（Studio の図は `studio/images/`、EABK 本体の図は `images/`）。
 - ファイルを追加・改名したら、`tools/install.py` の `MANAGED` を合わせて直します（旧版の削除リストは持ちません。旧版からは `--clean`）（[9](09-versioning.md)）。

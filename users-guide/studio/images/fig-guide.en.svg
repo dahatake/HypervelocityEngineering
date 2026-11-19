@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 640" width="1100" height="640" role="img" aria-labelledby="t d" font-family="Segoe UI, Meiryo, Yu Gothic UI, sans-serif">
+<title id="t">The "New here?" tour</title>
+<desc id="d">A tour that dims the page, highlights one area at a time and explains it in a card</desc>
+<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#667"/></marker></defs>
+<rect width="1100" height="640" fill="#fafafa"/>
+<rect x="8" y="8" width="1084" height="624" rx="10" fill="#f3f3f3" stroke="#b8b8b8" stroke-width="1.5" />
+<rect x="8" y="8" width="1084" height="44" rx="10" fill="#ffffff" stroke="#d8d8d8" stroke-width="1" />
+<text x="24" y="36" font-size="17" fill="#0f5fa8" font-weight="bold" text-anchor="start">HVE Studio</text>
+<rect x="150" y="18" width="250" height="24" rx="12" fill="#f3f3f3" stroke="#c8c8c8" stroke-width="1" />
+<text x="164" y="35" font-size="11" fill="#777" font-weight="normal" text-anchor="start">Search (/ key) requirements, parts, tests…</text>
+<text x="430" y="35" font-size="11" fill="#555" font-weight="normal" text-anchor="start">C:\GitHub\MyApp</text>
+<rect x="1008" y="18" width="52" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<text x="1034" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">JA | EN</text>
+<rect x="865.2" y="18" width="126.80000000000001" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<text x="928.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Software Engineer</text>
+<rect x="783.6" y="18" width="75.6" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<text x="821.4" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Architect</text>
+<rect x="663.6" y="18" width="114.0" height="24" rx="12" fill="#e8f1fb" stroke="#c8c8c8" stroke-width="1" />
+<text x="720.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Product Manager</text>
+<rect x="20" y="56" width="83.19999999999999" height="30" rx="6" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<rect x="26" y="83" width="71.19999999999999" height="3" rx="1" fill="#0f5fa8" stroke="#0f5fa8" stroke-width="1" />
+<text x="61.599999999999994" y="76" font-size="12" fill="#0f5fa8" font-weight="bold" text-anchor="middle">Dashboard</text>
+<text x="157.0" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Impl. status</text>
+<text x="231.99999999999997" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Map</text>
+<text x="293.4" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Diagrams</text>
+<text x="371.8" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Entities</text>
+<text x="463.8" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Integrations</text>
+<text x="562.6" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Source Map</text>
+<text x="641.0" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Tables</text>
+<text x="722.8" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Maintenance</text>
+<rect x="975" y="58" width="97" height="26" rx="13" fill="#fff4ce" stroke="#d8a800" stroke-width="1.5" />
+<text x="1023.5" y="76" font-size="12" fill="#5c4400" font-weight="bold" text-anchor="middle">? New here?</text>
+<text x="24" y="108" font-size="11" fill="#555" font-weight="normal" text-anchor="start">See per-goal progress, indicators, history and counts of open items.</text>
+<line x1="8" y1="114" x2="1092" y2="114" stroke="#d8d8d8" stroke-width="1"/>
+<rect x="24" y="128" width="160" height="64" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
+<text x="38" y="161" font-size="24" fill="#222" font-weight="bold" text-anchor="start">163</text>
+<text x="38" y="182" font-size="11" fill="#555" font-weight="normal" text-anchor="start">Requirements</text>
+<rect x="200" y="128" width="160" height="64" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
+<text x="214" y="161" font-size="24" fill="#222" font-weight="bold" text-anchor="start">65%</text>
+<text x="214" y="182" font-size="11" fill="#555" font-weight="normal" text-anchor="start">Approved %</text>
+<rect x="24" y="208" width="520" height="260" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
+<circle cx="130" cy="340" r="60" fill="none" stroke="#107c10" stroke-width="24" stroke-dasharray="245.0 131.9" stroke-dashoffset="-0.0" transform="rotate(-90 130 340)"/>
+<circle cx="130" cy="340" r="60" fill="none" stroke="#666" stroke-width="24" stroke-dasharray="131.9 245.0" stroke-dashoffset="-245.0" transform="rotate(-90 130 340)"/>
+<path fill-rule="evenodd" fill="#000" fill-opacity="0.55" d="M8 8H1092V632H8Z M14 54H760V90H14Z"/>
+<rect x="14" y="54" width="746" height="36" rx="6" fill="none" stroke="#ffd33d" stroke-width="3" />
+<rect x="780" y="138" width="300" height="214" rx="10" fill="#fff" stroke="#444" stroke-width="1.5" />
+<text x="796" y="166" font-size="18" fill="#0f5fa8" font-weight="bold" text-anchor="start">?</text>
+<text x="820" y="166" font-size="14" fill="#222" font-weight="bold" text-anchor="start">Switching screens</text>
+<text x="1060" y="166" font-size="11" fill="#555" font-weight="normal" text-anchor="end">1 / 5</text>
+<text x="796" y="196" font-size="12" fill="#333" font-weight="normal" text-anchor="start">Pick the screen for the information</text>
+<text x="796" y="216" font-size="12" fill="#333" font-weight="normal" text-anchor="start">you want. The open screen is highlighted.</text>
+<text x="796" y="250" font-size="10.5" fill="#666" font-weight="normal" text-anchor="start">Use the arrow keys to move, Esc to close</text>
+<rect x="796" y="290" width="70" height="28" rx="6" fill="#fff" stroke="#999" stroke-width="1" />
+<text x="831" y="309" font-size="12" fill="#333" font-weight="normal" text-anchor="middle">Close</text>
+<rect x="992" y="290" width="72" height="28" rx="6" fill="#0f5fa8" stroke="#0f5fa8" stroke-width="1" />
+<text x="1028" y="309" font-size="12" fill="#fff" font-weight="bold" text-anchor="middle">Next</text>
+<circle cx="770" cy="62" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="770" y="66.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">1</text>
+<circle cx="790" cy="138" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="790" y="142.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">2</text>
+<circle cx="1074" cy="286" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="1074" y="290.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">3</text>
+<text x="24" y="500" font-size="13" fill="#fff" font-weight="bold" text-anchor="start">Five steps (steps 2 and 3 change with each screen)</text>
+<rect x="24" y="512" width="151.2" height="26" rx="13" fill="#fff" stroke="#ffd33d" stroke-width="1" />
+<text x="99.6" y="529" font-size="12" fill="#333" font-weight="normal" text-anchor="middle">1 Switching screens</text>
+<rect x="183.2" y="512" width="192.0" height="26" rx="13" fill="#fff" stroke="#ffd33d" stroke-width="1" />
+<text x="279.2" y="529" font-size="12" fill="#333" font-weight="normal" text-anchor="middle">2 How to read this screen</text>
+<rect x="383.2" y="512" width="151.2" height="26" rx="13" fill="#fff" stroke="#ffd33d" stroke-width="1" />
+<text x="458.79999999999995" y="529" font-size="12" fill="#333" font-weight="normal" text-anchor="middle">3 How to drill down</text>
+<rect x="542.4" y="512" width="164.79999999999998" height="26" rx="13" fill="#fff" stroke="#ffd33d" stroke-width="1" />
+<text x="624.8" y="529" font-size="12" fill="#333" font-weight="normal" text-anchor="middle">4 Search and commands</text>
+<rect x="715.1999999999999" y="512" width="144.39999999999998" height="26" rx="13" fill="#fff" stroke="#ffd33d" stroke-width="1" />
+<text x="787.3999999999999" y="529" font-size="12" fill="#333" font-weight="normal" text-anchor="middle">5 Display settings</text>
+<rect x="24" y="560" width="372.4" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
+<text x="32" y="575" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">1 The bright, outlined area is what is being explained</text>
+<rect x="24" y="588" width="471.4" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
+<text x="32" y="603" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">2 The card: text and Back / Next / Close. Arrow keys and Esc work too</text>
+<rect x="24" y="616" width="563.8" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
+<text x="32" y="631" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">3 Reopen it any time from "New here?" at the top right (available on all 9 screens)</text>
+</svg>

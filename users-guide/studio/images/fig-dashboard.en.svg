@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 640" width="1100" height="640" role="img" aria-labelledby="t d" font-family="Segoe UI, Meiryo, Yu Gothic UI, sans-serif">
+<title id="t">Dashboard</title>
+<desc id="d">Dashboard with requirement counts, approval and test-pass rates, and per-goal progress</desc>
+<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#667"/></marker></defs>
+<rect width="1100" height="640" fill="#fafafa"/>
+<rect x="8" y="8" width="1084" height="624" rx="10" fill="#f3f3f3" stroke="#b8b8b8" stroke-width="1.5" />
+<rect x="8" y="8" width="1084" height="44" rx="10" fill="#ffffff" stroke="#d8d8d8" stroke-width="1" />
+<text x="24" y="36" font-size="17" fill="#0f5fa8" font-weight="bold" text-anchor="start">HVE Studio</text>
+<rect x="150" y="18" width="250" height="24" rx="12" fill="#f3f3f3" stroke="#c8c8c8" stroke-width="1" />
+<text x="164" y="35" font-size="11" fill="#777" font-weight="normal" text-anchor="start">Search (/ key) requirements, parts, tests…</text>
+<text x="430" y="35" font-size="11" fill="#555" font-weight="normal" text-anchor="start">C:\GitHub\MyApp</text>
+<rect x="1008" y="18" width="52" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<text x="1034" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">JA | EN</text>
+<rect x="865.2" y="18" width="126.80000000000001" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<text x="928.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Software Engineer</text>
+<rect x="783.6" y="18" width="75.6" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<text x="821.4" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Architect</text>
+<rect x="663.6" y="18" width="114.0" height="24" rx="12" fill="#e8f1fb" stroke="#c8c8c8" stroke-width="1" />
+<text x="720.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Product Manager</text>
+<rect x="20" y="56" width="83.19999999999999" height="30" rx="6" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<rect x="26" y="83" width="71.19999999999999" height="3" rx="1" fill="#0f5fa8" stroke="#0f5fa8" stroke-width="1" />
+<text x="61.599999999999994" y="76" font-size="12" fill="#0f5fa8" font-weight="bold" text-anchor="middle">Dashboard</text>
+<text x="157.0" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Impl. status</text>
+<text x="231.99999999999997" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Map</text>
+<text x="293.4" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Diagrams</text>
+<text x="371.8" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Entities</text>
+<text x="463.8" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Integrations</text>
+<text x="562.6" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Source Map</text>
+<text x="641.0" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Tables</text>
+<text x="722.8" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Maintenance</text>
+<rect x="975" y="58" width="97" height="26" rx="13" fill="#fff4ce" stroke="#d8a800" stroke-width="1.5" />
+<text x="1023.5" y="76" font-size="12" fill="#5c4400" font-weight="bold" text-anchor="middle">? New here?</text>
+<text x="24" y="108" font-size="11" fill="#555" font-weight="normal" text-anchor="start">See per-goal progress, indicators, history and counts of open items.</text>
+<line x1="8" y1="114" x2="1092" y2="114" stroke="#d8d8d8" stroke-width="1"/>
+<rect x="24" y="126" width="138" height="64" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
+<text x="38" y="159" font-size="24" fill="#222" font-weight="bold" text-anchor="start">163</text>
+<text x="38" y="180" font-size="11" fill="#555" font-weight="normal" text-anchor="start">Requirements</text>
+<rect x="172" y="126" width="138" height="64" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
+<text x="186" y="159" font-size="24" fill="#222" font-weight="bold" text-anchor="start">65%</text>
+<text x="186" y="180" font-size="11" fill="#555" font-weight="normal" text-anchor="start">Approved %</text>
+<rect x="320" y="126" width="138" height="64" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
+<text x="334" y="159" font-size="24" fill="#222" font-weight="bold" text-anchor="start">60.1%</text>
+<text x="334" y="180" font-size="11" fill="#555" font-weight="normal" text-anchor="start">Implemented %</text>
+<rect x="468" y="126" width="138" height="64" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
+<text x="482" y="159" font-size="24" fill="#222" font-weight="bold" text-anchor="start">396</text>
+<text x="482" y="180" font-size="11" fill="#555" font-weight="normal" text-anchor="start">Acceptance criteria</text>
+<rect x="616" y="126" width="138" height="64" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
+<text x="630" y="159" font-size="24" fill="#222" font-weight="bold" text-anchor="start">52%</text>
+<text x="630" y="180" font-size="11" fill="#555" font-weight="normal" text-anchor="start">Tests passed %</text>
+<rect x="764" y="126" width="138" height="64" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
+<text x="778" y="159" font-size="24" fill="#107c10" font-weight="bold" text-anchor="start">0</text>
+<text x="778" y="180" font-size="11" fill="#555" font-weight="normal" text-anchor="start">Open questions</text>
+<rect x="912" y="126" width="138" height="64" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
+<text x="926" y="159" font-size="24" fill="#107c10" font-weight="bold" text-anchor="start">0</text>
+<text x="926" y="180" font-size="11" fill="#555" font-weight="normal" text-anchor="start">BLOCKED reqs</text>
+<rect x="24" y="206" width="330" height="290" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
+<text x="40" y="232" font-size="14" fill="#222" font-weight="bold" text-anchor="start">Decision state</text>
+<circle cx="130" cy="352" r="66" fill="none" stroke="#107c10" stroke-width="24" stroke-dasharray="269.5 145.1" stroke-dashoffset="-0.0" transform="rotate(-90 130 352)"/>
+<circle cx="130" cy="352" r="66" fill="none" stroke="#666" stroke-width="24" stroke-dasharray="132.7 282.0" stroke-dashoffset="-269.5" transform="rotate(-90 130 352)"/>
+<circle cx="130" cy="352" r="66" fill="none" stroke="#8a5a00" stroke-width="24" stroke-dasharray="12.4 402.2" stroke-dashoffset="-402.2" transform="rotate(-90 130 352)"/>
+<text x="130" y="358" font-size="22" fill="#222" font-weight="bold" text-anchor="middle">163</text>
+<circle cx="236" cy="316" r="6" fill="#107c10" stroke="none" stroke-width="1"/>
+<text x="248" y="320" font-size="12" fill="#222" font-weight="normal" text-anchor="start">Approved 106</text>
+<circle cx="236" cy="342" r="6" fill="#666" stroke="none" stroke-width="1"/>
+<text x="248" y="346" font-size="12" fill="#222" font-weight="normal" text-anchor="start">Retired 52</text>
+<circle cx="236" cy="368" r="6" fill="#8a5a00" stroke="none" stroke-width="1"/>
+<text x="248" y="372" font-size="12" fill="#222" font-weight="normal" text-anchor="start">AI proposed 5</text>
+<rect x="370" y="206" width="330" height="290" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
+<text x="386" y="232" font-size="14" fill="#222" font-weight="bold" text-anchor="start">Priority</text>
+<circle cx="476" cy="352" r="66" fill="none" stroke="#0f5fa8" stroke-width="24" stroke-dasharray="53.9 360.8" stroke-dashoffset="-0.0" transform="rotate(-90 476 352)"/>
+<circle cx="476" cy="352" r="66" fill="none" stroke="#7b3fc4" stroke-width="24" stroke-dasharray="207.3 207.3" stroke-dashoffset="-53.9" transform="rotate(-90 476 352)"/>
+<circle cx="476" cy="352" r="66" fill="none" stroke="#c0309b" stroke-width="24" stroke-dasharray="153.4 261.3" stroke-dashoffset="-261.3" transform="rotate(-90 476 352)"/>
+<text x="476" y="358" font-size="22" fill="#222" font-weight="bold" text-anchor="middle">163</text>
+<circle cx="582" cy="316" r="6" fill="#0f5fa8" stroke="none" stroke-width="1"/>
+<text x="594" y="320" font-size="12" fill="#222" font-weight="normal" text-anchor="start">MAY 22</text>
+<circle cx="582" cy="342" r="6" fill="#7b3fc4" stroke="none" stroke-width="1"/>
+<text x="594" y="346" font-size="12" fill="#222" font-weight="normal" text-anchor="start">MUST 81</text>
+<circle cx="582" cy="368" r="6" fill="#c0309b" stroke="none" stroke-width="1"/>
+<text x="594" y="372" font-size="12" fill="#222" font-weight="normal" text-anchor="start">SHOULD 60</text>
+<rect x="716" y="206" width="360" height="290" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
+<text x="732" y="232" font-size="14" fill="#222" font-weight="bold" text-anchor="start">Implementation progress by goal</text>
+<text x="732" y="262" font-size="12" fill="#0f5fa8" font-weight="bold" text-anchor="start">G-001</text>
+<text x="1050" y="262" font-size="12" fill="#222" font-weight="bold" text-anchor="end">49/57</text>
+<rect x="732" y="270" width="318" height="9" rx="4" fill="#e8e8e8" stroke="none" stroke-width="1" />
+<rect x="732" y="270" width="273.48" height="9" rx="4" fill="#0f5fa8" stroke="none" stroke-width="1" />
+<text x="732" y="306" font-size="12" fill="#0f5fa8" font-weight="bold" text-anchor="start">G-002</text>
+<text x="1050" y="306" font-size="12" fill="#222" font-weight="bold" text-anchor="end">16/23</text>
+<rect x="732" y="314" width="318" height="9" rx="4" fill="#e8e8e8" stroke="none" stroke-width="1" />
+<rect x="732" y="314" width="222.6" height="9" rx="4" fill="#0f5fa8" stroke="none" stroke-width="1" />
+<text x="732" y="350" font-size="12" fill="#0f5fa8" font-weight="bold" text-anchor="start">G-003</text>
+<text x="1050" y="350" font-size="12" fill="#222" font-weight="bold" text-anchor="end">7/29</text>
+<rect x="732" y="358" width="318" height="9" rx="4" fill="#e8e8e8" stroke="none" stroke-width="1" />
+<rect x="732" y="358" width="76.32" height="9" rx="4" fill="#0f5fa8" stroke="none" stroke-width="1" />
+<text x="732" y="394" font-size="12" fill="#0f5fa8" font-weight="bold" text-anchor="start">G-004</text>
+<text x="1050" y="394" font-size="12" fill="#222" font-weight="bold" text-anchor="end">0/4</text>
+<rect x="732" y="402" width="318" height="9" rx="4" fill="#e8e8e8" stroke="none" stroke-width="1" />
+<text x="732" y="438" font-size="12" fill="#0f5fa8" font-weight="bold" text-anchor="start">G-005</text>
+<text x="1050" y="438" font-size="12" fill="#222" font-weight="bold" text-anchor="end">16/22</text>
+<rect x="732" y="446" width="318" height="9" rx="4" fill="#e8e8e8" stroke="none" stroke-width="1" />
+<rect x="732" y="446" width="232.14" height="9" rx="4" fill="#0f5fa8" stroke="none" stroke-width="1" />
+<circle cx="24" cy="126" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="24" y="130.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">1</text>
+<circle cx="40" cy="206" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="40" y="210.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">2</text>
+<circle cx="716" cy="206" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
+<text x="716" y="210.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">3</text>
+<rect x="24" y="520" width="412.0" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
+<text x="32" y="535" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">1 Select a card to jump to the matching list of requirements</text>
+<rect x="24" y="548" width="398.79999999999995" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
+<text x="32" y="563" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">2 Donuts: the overall breakdown (decision state, priority)</text>
+<rect x="24" y="576" width="398.79999999999995" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
+<text x="32" y="591" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">3 Per-goal (G-ID) progress bars: spot which goal is behind</text>
+</svg>

@@ -5,6 +5,14 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+### ユーザーガイドの刷新（図解・初めての方向け）
+
+- **S9「画面ツアー（図解）」を追加**（`users-guide/studio/09-visual-tour.md`・`.en.md`）。画面の構成と 9 つの画面を、番号つきの図で 1 画面ずつ説明します。直近に追加された **「初めての方へ」ウィザード**・**フロアプラン**・**ネットワーク表示**（コード関係）の説明を含みます。
+- **説明用の図を SVG で追加**（日本語 `fig-*.svg`・英語 `fig-*.en.svg`、計 20 点）。Studio の図は `users-guide/studio/images/`、毎日の流れと Quickstart の図は `users-guide/images/`。
+- **README と users-guide を相互にたどれるようにしました**。README から S9・目次へ、ユーザーガイドの目次・Studio の索引・S9 から README へのリンクを追加。章は S1〜S9、第 1 部は 1〜11 に更新。
+- README に「目指すもの: Microsoft Innovation Hub の Engagement を、大量に・高い品質で」を追加。
+- 配布: Studio の英語版の文書（`users-guide/studio/*.en.md`）も `MANAGED` に加え、導入先の `EABK-docs/` で英語版へのリンクが切れないようにしました。
+
 ### HVE Studio への改称（FR-011）
 
 - EABK Studio の表示名を **HVE Studio**、正式名称を **Hypervelocity Engineering Studio** に変更しました。画面のブランド・JA/EN の文書タイトル・CLI・起動ラベル・配布時の案内・ユーザーガイドを合わせています。
