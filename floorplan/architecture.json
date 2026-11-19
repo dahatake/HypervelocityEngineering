@@ -1,0 +1,73 @@
+{
+  "$schema": "floorplan/architecture@1",
+  "project": {
+    "name": "Hypervelocity Engineering",
+    "summary": "A toolkit that keeps requirements, the catalog and the tests of an app in step, and HVE Studio, the local web app that lets you see all of it and the code behind it.",
+    "entrypoints": ["HVE-Studio/studio.py", "scripts/verify.py", "tools/install.py"]
+  },
+  "audience": "everyone",
+  "include": ["code"],
+  "ignore": ["work/**", "HVE-Studio/web/vendor/**"],
+  "nodes": [
+    { "id": "studio", "label": "HVE Studio screens", "kind": "ui", "summary": "The web pages in the browser: dashboards, maps, diagrams, tables and the code floorplan.", "paths": ["HVE-Studio/web", "HVE-Studio/start.ps1", "HVE-Studio/start.sh", "start-hve-studio.cmd"] },
+    { "id": "studio.frame", "parent": "studio", "label": "Frame and shared pieces", "kind": "library", "summary": "The top bar, language and theme switches, search and the small widgets every screen shares.",
+      "paths": ["HVE-Studio/web/index.html", "HVE-Studio/web/js/{app,store,ui,layout,theme,i18n,dim,xref,drawer,viz,insights}.js"] },
+    { "id": "studio.maps", "parent": "studio", "label": "Maps and diagrams", "kind": "feature", "summary": "Requirement maps and diagrams in 2D, 3D and graph form.",
+      "paths": ["HVE-Studio/web/js/{map2d,map3d,mapgraph,graph,diagrams,dgm3d,camera3d,shapes3d,sz2d,sz3d,semzoom,placement,maptiers,hier,tierlist,entities}.js"] },
+    { "id": "studio.progress", "parent": "studio", "label": "Progress and tables", "kind": "feature", "summary": "Dashboards, implementation status, tables, the source mapping and the task list.",
+      "paths": ["HVE-Studio/web/js/{dashboard,implstatus,tables,source,integrations,workspace,managed-data}.js"] },
+    { "id": "studio.code", "parent": "studio", "label": "Code maps", "kind": "feature", "summary": "The code floorplan and the network of function calls.", "paths": ["HVE-Studio/web/js/{codegraph,floorplan}.js", "HVE-Studio/web/js/fp-*.js"] },
+    { "id": "studio.look", "parent": "studio", "label": "Look and feel", "kind": "config", "summary": "Colours, spacing and type for light and dark themes.", "paths": ["HVE-Studio/web/*.css"] },
+
+    { "id": "server", "label": "Studio server", "kind": "service", "summary": "A small local server that reads a repository and answers the screens. It only listens on this computer and never changes your files unless you confirm.",
+      "paths": ["HVE-Studio/studio.py", "HVE-Studio/remote_github.py", "HVE-Studio/task_state.py"] },
+    { "id": "server.model", "parent": "server", "label": "Reads the requirements", "kind": "data", "summary": "Reads the requirement documents, catalog and test ledger and builds one model of them.", "paths": ["HVE-Studio/eabk_model.py", "HVE-Studio/repo_scan.py", "HVE-Studio/managed_data.py"] },
+    { "id": "server.code", "parent": "server", "label": "Reads the code", "kind": "feature", "summary": "Finds the functions, endpoints and imports in the source, and checks it for common mistakes.",
+      "paths": ["HVE-Studio/code_graph.py", "HVE-Studio/floorplan_*.py"] },
+
+    { "id": "toolkit", "label": "Build kit scripts", "kind": "script", "summary": "The commands that number requirements, check that documents, tests and catalog agree, and repair them.", "paths": ["scripts", "users-guide/studio"] },
+    { "id": "installer", "label": "Installer", "kind": "infra", "summary": "Copies the toolkit into another repository, updates it and removes it again.", "paths": ["tools"] },
+    { "id": "story", "label": "Project story page", "kind": "ui", "summary": "A single web page that tells how the project came to be.", "paths": ["HVE-History"] },
+    { "id": "app", "label": "Spreadsheet sample", "kind": "library", "summary": "A small sample program at the top of the repository.", "paths": ["app.py"] },
+
+    { "id": "tests", "label": "Tests", "kind": "test", "summary": "Everything that checks the rest.", "paths": ["tests", "HVE-Studio/tests"] },
+    { "id": "tests.studio", "parent": "tests", "label": "Studio tests", "kind": "test", "summary": "Checks the Studio server and every screen in a real browser.", "paths": ["HVE-Studio/tests"] },
+    { "id": "tests.toolkit", "parent": "tests", "label": "Toolkit tests", "kind": "test", "summary": "Checks the scripts and the installer.", "paths": ["tests/toolkit"] },
+    { "id": "tests.system", "parent": "tests", "label": "System tests", "kind": "test", "summary": "End-to-end checks of whole behaviours.", "paths": ["tests/system", "tests/integration"] },
+
+    { "id": "github", "label": "GitHub", "kind": "external", "summary": "Where issues and pull requests live; Studio reads them when you ask.", "hosts": ["api.github.com"] },
+    { "id": "playwright", "label": "Playwright browser", "kind": "external", "summary": "A real browser the tests drive.", "packages": ["playwright", "pypi:playwright"] },
+    { "id": "git", "label": "Git history", "kind": "external", "summary": "The repository itself: which files exist and what changed.", "packages": [] }
+  ],
+  "edges": [
+    { "from": "server.model", "to": "git", "kind": "call", "label": "lists files and history", "description": "Runs read-only git commands to see the files and the history." },
+    { "from": "server.code", "to": "git", "kind": "call", "label": "lists files" },
+    { "from": "installer", "to": "studio", "kind": "config", "label": "copies the screens" },
+    { "from": "installer", "to": "server", "kind": "config", "label": "copies the server" },
+    { "from": "toolkit", "to": "server.model", "kind": "config", "label": "shares the document rules" }
+  ],
+  "annotations": [
+    { "path": "HVE-Studio/eabk_model.py", "note": "The largest file: reads every kind of document and builds the model all screens use.", "tags": ["hotspot"] },
+    { "path": "HVE-Studio/web/js/i18n.js", "note": "Every visible word, in Japanese and English. Add words here, never in the screens.", "tags": ["hotspot"] }
+  ],
+  "flows": [
+    { "id": "open-map", "title": "Opening the code floorplan", "steps": [
+      { "node": "studio.code", "note": "You open the floorplan from the Source screen." },
+      { "node": "server", "note": "The page asks the server for the map." },
+      { "node": "server.code", "note": "The server reads the source: files, endpoints, imports, screens and a health check." },
+      { "node": "git", "note": "Git tells which files exist and what changed recently." }
+    ] },
+    { "id": "see-requirements", "title": "Seeing the requirements", "steps": [
+      { "node": "studio.progress", "note": "The dashboard asks for the model of the repository." },
+      { "node": "server", "note": "The server answers on this computer only." },
+      { "node": "server.model", "note": "Reads requirement documents, the catalog and the test ledger." }
+    ] }
+  ],
+  "tour": [
+    { "node": "studio", "title": "What you see", "note": "The screens in your browser: dashboards, maps, tables and this floorplan." },
+    { "node": "server", "title": "What answers", "note": "A small server on your own computer reads the repository and answers the screens." },
+    { "node": "toolkit", "title": "What keeps things honest", "note": "Scripts that number requirements and check documents, tests and catalog agree." },
+    { "node": "installer", "title": "How it spreads", "note": "The installer copies the toolkit into any other repository." },
+    { "node": "tests", "title": "How it is checked", "note": "Tests in a real browser and over whole behaviours." }
+  ]
+}

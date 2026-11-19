@@ -350,7 +350,8 @@ def _line_of(starts: list[int], pos: int) -> int:
 
 def _js_target(files: set[str], rel: str, spec: str) -> str | None:
     base = Path(os.path.normpath(str(Path(rel).parent / spec))).as_posix()
-    for cand in [base] + [base + e for e in (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")] + [base + "/index" + e for e in (".ts", ".tsx", ".js", ".jsx")]:
+    swapped = [base[:-len(e)] + n for e, n in ((".js", ".ts"), (".js", ".tsx"), (".jsx", ".tsx"), (".mjs", ".mts")) if base.endswith(e)]
+    for cand in [base] + swapped + [base + e for e in (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")] + [base + "/index" + e for e in (".ts", ".tsx", ".js", ".jsx")]:
         if cand in files and cand != rel:
             return cand
     return None
@@ -455,6 +456,12 @@ def _js_extract(rel: str, text: str, files: set[str], out: dict) -> None:
         default = re.match(r"([A-Za-z_$][\w$]*)\s*(?:,|$)", clause)
         if default:
             imports[default.group(1)] = ("sym", target, "default")
+    for m in re.finditer(r"""\bimport\(\s*['"](\.[^'"]+)['"]\s*\)""", text):
+        if masked[m.start():m.start() + 7] != "import(":   # inside a comment or string
+            continue
+        target = _js_target(files, rel, m.group(1))
+        if target:
+            out["imports"][rel].append(target)
     for m in JS_REQUIRE.finditer(text):
         target = _js_target(files, rel, m.group(2))
         if not target:

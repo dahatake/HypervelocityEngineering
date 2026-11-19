@@ -33,6 +33,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import code_graph  # noqa: E402
 import eabk_model  # noqa: E402
+import floorplan_scan  # noqa: E402
 import repo_scan  # noqa: E402
 import remote_github  # noqa: E402
 import managed_data  # noqa: E402
@@ -72,6 +73,7 @@ class State:
         self.builds: dict[str, dict] = {}
         self.latest_build: dict | None = None
         self.code_graphs: dict[str, tuple[str, bytes]] = {}  # FR-1091: root -> (source fingerprint, JSON)
+        self.floorplans: dict[str, tuple[str, bytes]] = {}   # FR-1092: root -> (stamp, JSON)
 
     def codegraph_bytes(self) -> bytes:
         with self.lock:
@@ -85,6 +87,22 @@ class State:
         data = json.dumps(code_graph.build(root, inv), ensure_ascii=False).encode("utf-8")
         with self.lock:
             self.code_graphs = {str(root): (source, data)}
+        return data
+
+    def floorplan_bytes(self) -> bytes:
+        with self.lock:
+            root = self.root
+        inv = repo_scan.inventory(root)
+        source = eabk_model.fingerprint(root, inv)
+        arch = root / "floorplan" / "architecture.json"
+        stamp = source + "#" + (str(arch.stat().st_mtime_ns) if arch.is_file() else "")
+        with self.lock:
+            hit = self.floorplans.get(str(root))
+        if hit and hit[0] == stamp:
+            return hit[1]
+        data = json.dumps(floorplan_scan.build(root, inv), ensure_ascii=False).encode("utf-8")
+        with self.lock:
+            self.floorplans = {str(root): (stamp, data)}
         return data
 
     def _remote(self, root: Path, force: bool = False) -> dict:
@@ -514,6 +532,11 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 return self.send_bytes(STATE.model_bytes(), MIME[".json"])
             except (repo_scan.ScanError, OSError, ValueError, sqlite3.Error) as exc:
+                return self.send_json({"error": "analysis-failed", "detail": str(exc)}, HTTPStatus.UNPROCESSABLE_ENTITY)
+        if path == "/api/floorplan":
+            try:
+                return self.send_bytes(STATE.floorplan_bytes(), MIME[".json"])
+            except (repo_scan.ScanError, OSError, ValueError) as exc:
                 return self.send_json({"error": "analysis-failed", "detail": str(exc)}, HTTPStatus.UNPROCESSABLE_ENTITY)
         if path == "/api/codegraph":
             try:

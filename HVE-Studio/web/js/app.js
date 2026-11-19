@@ -145,6 +145,8 @@ window.addEventListener('focus', checkModel);
 
 async function route() {
   const name = routeName();
+  // a screen that follows the address itself (the floorplan keeps its place in #/floorplan?v=&s=) is told, not rebuilt
+  if (current?.onHash && current.routeName === name && ROUTES[name] && !legacyRedirect(name)) { current.onHash(); renderNav(); return; }
   if (legacyRedirect(name)) return;
   document.documentElement.dataset.route = name;
   document.documentElement.classList.toggle('snapshot', isSnapshotLink());
@@ -169,8 +171,9 @@ async function route() {
     view.replaceChildren(host);
     host.querySelector(':scope > [role=status].sr-only')?.remove();
     current = mod.mount(host);
+    if (current) current.routeName = name;
     if (ROUTES[name].dim) mountMapDim(host, name, current);
-    decorate(name, host);
+    if (name !== 'floorplan') decorate(name, host);
     applyDeepLink();
     if (isSnapshotLink()) {
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));

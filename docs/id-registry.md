@@ -1098,3 +1098,11 @@
 | SRC-050 | SRC | 採番済み | 2026-11-19T23:57:29+09:00 | main@2451fc2c | code relations request |
 | AC-505 | AC | 採番済み | 2026-11-20T00:43:23+09:00 | main@cb2cd499 | FR-1091 floorplan |
 | AC-506 | AC | 採番済み | 2026-11-20T00:43:23+09:00 | main@cb2cd499 | FR-1091 floorplan |
+| FR-1092 | FR | 採番済み | 2026-11-20T01:23:47+09:00 | main@fa9ca3a5 | HVE Studio floorplan like Floorplan Brewline |
+| AC-507 | AC | 採番済み | 2026-11-20T01:23:48+09:00 | main@fa9ca3a5 | FR floorplan viewer |
+| AC-508 | AC | 採番済み | 2026-11-20T01:23:48+09:00 | main@fa9ca3a5 | FR floorplan viewer |
+| AC-509 | AC | 採番済み | 2026-11-20T01:23:48+09:00 | main@fa9ca3a5 | FR floorplan viewer |
+| AC-510 | AC | 採番済み | 2026-11-20T01:23:48+09:00 | main@fa9ca3a5 | FR floorplan viewer |
+| AC-511 | AC | 採番済み | 2026-11-20T01:23:48+09:00 | main@fa9ca3a5 | FR floorplan viewer |
+| AC-512 | AC | 採番済み | 2026-11-20T01:23:48+09:00 | main@fa9ca3a5 | FR floorplan viewer |
+| SRC-051 | SRC | 採番済み | 2026-11-20T01:23:50+09:00 | main@fa9ca3a5 | floorplan live demo request |
