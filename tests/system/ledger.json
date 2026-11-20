@@ -13,11 +13,11 @@
     "AC-003": "sha256:cc645b49ac0ed529",
     "AC-005": "sha256:c0c502ef4909cd05",
     "AC-006": "sha256:82d44e3a89ec4b70",
-    "AC-008": "sha256:361dae2866606a9a",
+    "AC-008": "sha256:4bb8cfc4d125920f",
     "AC-010": "sha256:a808d63b7048cb45",
     "AC-053": "sha256:2a06d0615c40dd08",
     "AC-037": "sha256:9812fbfc61197a34",
-    "AC-044": "sha256:4261ddc0095208fa",
+    "AC-044": "sha256:ada5a80fdf49e33f",
     "AC-045": "sha256:797391cd7043133f",
     "AC-046": "sha256:ec8fcb9abcb2cef1",
     "AC-047": "sha256:4317d9cf7363a64b",
@@ -27,7 +27,7 @@
     "AC-051": "sha256:5901f924fec6d109",
     "AC-052": "sha256:6d1731d953da7274",
     "AC-023": "sha256:1be2a7da6dae5725",
-    "AC-024": "sha256:a085fea8c0ff8858",
+    "AC-024": "sha256:0798ef0f8e659da1",
     "AC-026": "sha256:033c7123cb893dce",
     "AC-028": "sha256:f2fb5e2374ba8ab5",
     "AC-033": "sha256:b4254552158c81b2",
@@ -65,7 +65,7 @@
     "AC-207": "sha256:40b359dd25f34c5b",
     "AC-214": "sha256:8b150fccfc64b3d8",
     "AC-220": "sha256:af2e38bad9142bf4",
-    "AC-226": "sha256:3fb36c9b336fcf6f",
+    "AC-226": "sha256:e22eca476e4ec894",
     "AC-227": "sha256:9246b2f136587171",
     "AC-015": "sha256:62a3d0689a35f224",
     "AC-041": "sha256:07d179d0bab7a339",
@@ -142,7 +142,11 @@
     "AC-443": "sha256:56844dcc502cae93",
     "AC-444": "sha256:7a0a7b59545d11ae",
     "AC-457": "sha256:bcd423b094734a96",
-    "AC-459": "sha256:815f681895907199"
+    "AC-459": "sha256:815f681895907199",
+    "AC-514": "sha256:6b8cc873e1583307",
+    "AC-520": "sha256:c96adfda6e208541",
+    "AC-528": "sha256:f3c9f21242b871e7",
+    "AC-536": "sha256:8400de38ac01acc7"
   },
   "cases": [
     {
@@ -318,7 +322,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_persona_defaults_and_switching_preserve_selected_id_filter_and_time",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "30ae6c99",
       "last_run_at": "2026-11-06T06:17:50+09:00",
       "evidence": "work/runs/202611060524/logs/system-test/E2E-006-202611060610.log",
@@ -340,6 +344,12 @@
           "by": "test-designer",
           "change": "title: 'Persona defaults and state preservation' -> 'Persona defaults and selected ID, filter, and time preservation'",
           "reason": "AC本文の未検証句と異常系を補い、期待値を要求定義書だけから強化"
+        },
+        {
+          "at": "2026-11-20T09:19:06+09:00",
+          "by": "script",
+          "change": "blocked",
+          "reason": "FR-008・AC-008 を廃止（依頼 2026-11-20「役割は削除」）。役割の選択は FR-1094 の実装時に撤去し、ステップの既定の画面は AC-514 のケースで検証する"
         }
       ]
     },
@@ -671,7 +681,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_every_page_has_page_specific_analysis_for_all_three_personas",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "30ae6c99",
       "last_run_at": "2026-11-06T06:17:50+09:00",
       "evidence": "work/runs/202611060524/logs/system-test/E2E-016-202611060610.log",
@@ -681,6 +691,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-20T09:19:07+09:00",
+          "by": "script",
+          "change": "blocked",
+          "reason": "FR-1002・AC-044 を廃止（依頼 2026-11-20「役割は削除」）。画面上部の説明は FR-1094 AC-516 で検証する"
         }
       ]
     },
@@ -4956,6 +4972,118 @@
         {
           "at": "2026-11-06T05:29:17+09:00",
           "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-235",
+      "requirement_ids": [
+        "FR-1094"
+      ],
+      "ac_ids": [
+        "AC-514"
+      ],
+      "title": "PM work steps at the top: 6 numbered steps, default screen per step, all 9 nav items reachable, keyboard/command search, no role selector",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_pm_steps_system.py -k ac514 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-11-20T09:19:29+09:00",
+          "by": "script",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-236",
+      "requirement_ids": [
+        "FR-1096"
+      ],
+      "ac_ids": [
+        "AC-520"
+      ],
+      "title": "AI settings show only the minimal fields for each provider x auth combination",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_ai_settings_system.py -k ac520 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-11-20T09:19:30+09:00",
+          "by": "script",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-237",
+      "requirement_ids": [
+        "NFR-SEC-024"
+      ],
+      "ac_ids": [
+        "AC-528"
+      ],
+      "title": "With AI unset or off, zero requests to AI providers, ARM, or Copilot across all steps; non-AI features work without credentials",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_ai_settings_system.py -k ac528 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-11-20T09:19:31+09:00",
+          "by": "script",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-20T09:20:08+09:00",
+          "by": "script",
+          "change": "blocked",
+          "reason": "NFR-SEC-024 は承認待ち（11.2 の承認依頼）。承認後に not_run へ戻して実装・検証する"
+        },
+        {
+          "at": "2026-11-20T09:44:03+09:00",
+          "by": "script",
+          "change": "status -> not_run",
+          "reason": "NFR-SEC-024 を承認（承認依頼 2026-11-20）。blocked を解除し、AC-528 の検証を実装・実行の対象に戻す"
+        }
+      ]
+    },
+    {
+      "id": "E2E-238",
+      "requirement_ids": [
+        "FR-1099"
+      ],
+      "ac_ids": [
+        "AC-536"
+      ],
+      "title": "Multi-repo selection: add/remove via folder dialog, per-repo status, limit, duplicate rejection, partial failure, persistence",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_multi_repo_system.py -k ac536 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-11-20T09:31:07+09:00",
+          "by": "script",
           "change": "追加",
           "reason": "受入基準からケースを作成"
         }
