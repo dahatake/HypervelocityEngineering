@@ -61,7 +61,6 @@
     <svg viewBox="0 0 64 64" width="30" height="30"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#39d0ff"/><stop offset="1" stop-color="#b36bff"/></linearGradient></defs><rect width="64" height="64" rx="16" fill="url(#lg)"/><path d="M32 12 50 22v20L32 52 14 42V22z" fill="none" stroke="#fff" stroke-width="4" stroke-linejoin="round"/><circle cx="32" cy="32" r="5" fill="#fff"/></svg>
     <span><b>HVE</b> Studio</span>
   </a>
-  <nav id="nav" class="tabs"></nav>
   <button id="guideBtn" type="button" class="chip guide-btn" data-testid="guide-open" data-i18n-title="guide.btn.tip" aria-haspopup="dialog"><span id="guideBtnLabel" data-i18n="guide.btn"></span></button>
   <div id="headerDim" class="hdr-dim-host"></div>
   <div class="search" role="search" data-i18n-aria="search.aria">
@@ -70,9 +69,12 @@
     <kbd>/</kbd>
     <div id="results" class="results" hidden></div>
   </div>
-  <button id="repoBtn" type="button" class="chip repo" data-testid="repo-pick" data-i18n-title="repo.change"></button>
+  <div class="repo-group" role="group" data-i18n-aria="repos.group">
+    <button id="repoBtn" type="button" class="chip repo" data-testid="repo-pick" data-i18n-title="repo.change"></button>
+    <button id="repoAddBtn" type="button" class="chip" data-testid="repo-add" data-i18n-title="repos.add" data-i18n-aria="repos.add"></button>
+    <button id="repoListBtn" type="button" class="chip" data-testid="repo-list-open" data-i18n-title="repos.title" data-i18n-aria="repos.title"></button>
+  </div>
   <time id="modelTime" class="mini" tabindex="0" data-i18n-aria="model.time"></time>
-  <div id="personaBar" class="row" data-i18n-aria="persona.group"></div>
   <div id="lang" class="theme-toggle lang-toggle" role="group" data-i18n-aria="lang.group" data-i18n-title="lang.group">
     <button type="button" data-lang="ja" aria-pressed="false" lang="ja">JA</button>
     <button type="button" data-lang="en" aria-pressed="false" lang="en">EN</button>
@@ -88,6 +90,19 @@
   </div>
   <div id="themeLive" class="sr-only" aria-live="polite"></div>
 </header>
+<nav id="steps" class="stepbar" data-testid="steps" data-i18n-aria="step.group" inert></nav>
+<section id="stepBand" class="stepband" data-testid="step-band" data-i18n-aria="step.band" inert>
+  <nav id="nav" class="tabs" data-i18n-aria="step.items"></nav>
+  <div class="stepband-text">
+    <p id="stepJudge" data-testid="step-judge"></p>
+    <p id="navDesc" class="navdesc" role="note"></p>
+    <p id="stepNext" data-testid="step-next"></p>
+  </div>
+  <div class="stepband-ai">
+    <button id="aiAskBtn" type="button" class="btn" data-testid="ai-ask"><span data-i18n="ai.ask"></span></button>
+    <button id="aiSetBtn" type="button" class="btn ghost" data-testid="ai-settings-btn" data-i18n-title="ai.settings" data-i18n-aria="ai.settings"></button>
+  </div>
+</section>
 <section id="generatedData" class="generated-data" aria-labelledby="generatedDataTitle" inert></section>
 <div id="buildBanner" class="build-banner" data-testid="build-banner" role="status" hidden>
   <span class="spin build-spin" aria-hidden="true"></span>
@@ -95,7 +110,6 @@
   <progress id="buildBar" max="1" value="0" aria-label="解析の進捗" data-i18n-aria="build.progress"></progress>
   <span id="buildElapsed" class="mini"></span>
 </div>
-<p id="navDesc" class="navdesc" role="note" inert></p>
 <main id="view" tabindex="-1" inert></main>
 <aside id="drawer" class="drawer" hidden inert></aside>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden inert></div>

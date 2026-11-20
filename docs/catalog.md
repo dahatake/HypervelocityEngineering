@@ -125,16 +125,16 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1091 | コード関係（関数・クラス単位の呼び出し関係）の動的な表示 | 承認済み（依頼 2026-11-19） | `HVE-Studio/code_graph.py`、`HVE-Studio/studio.py`、`HVE-Studio/web/js/codegraph.js`、`HVE-Studio/web/js/srctabs.js`、`HVE-Studio/web/js/app.js`、`HVE-Studio/web/js/source.js`、`HVE-Studio/web/js/i18n.js`、`HVE-Studio/web/app.css`、`HVE-Studio/web/tokens.css` | `HVE-Studio/tests/test_code_graph.py`、`HVE-Studio/tests/test_codegraph_ui.py` | 管理データモデル、HTTP サーバー、デザイン基盤 |
 | FR-1093 | 「初めての方へ」: 画面ごとの使い方ウィザード | 承認済み（依頼 2026-11-20） | `HVE-Studio/web/js/guide.js`、`HVE-Studio/web/js/app.js`、`HVE-Studio/web/js/fp-panels.js`、`HVE-Studio/web/js/ui.js`、`HVE-Studio/web/js/i18n.js`、`HVE-Studio/web/index.html`、`HVE-Studio/web/app.css` | `HVE-Studio/tests/test_guide_ui.py` | デザイン基盤 |
 | FR-1092 | フロアプラン（部品・ファイル・エンドポイントの地図） | 承認済み（依頼 2026-11-20） | `HVE-Studio/floorplan_scan.py`、`HVE-Studio/floorplan_routes.py`、`HVE-Studio/floorplan_health.py`、`HVE-Studio/code_graph.py`、`HVE-Studio/studio.py`、`HVE-Studio/web/js/floorplan.js`、`HVE-Studio/web/js/fp-data.js`、`HVE-Studio/web/js/fp-board.js`、`HVE-Studio/web/js/fp-panels.js`、`HVE-Studio/web/js/app.js`、`HVE-Studio/web/js/source.js`、`HVE-Studio/web/js/i18n.js`、`HVE-Studio/web/app.css`、`HVE-Studio/web/vendor/elk.bundled.js`、`HVE-Studio/web/vendor/elk.LICENSE`、`floorplan/architecture.json`、`tools/install.py` | `HVE-Studio/tests/test_floorplan_scan.py`、`HVE-Studio/tests/test_floorplan_ui.py`、`HVE-Studio/tests/test_codegraph_ui.py` | 管理データモデル、HTTP サーバー、デザイン基盤 |
-| FR-1094 | Product Manager の作業ステップ | 承認済み | 未実装 | 未実装 | - |
-| FR-1095 | リリース判断の状態 | 承認済み | 未実装 | 未実装 | - |
-| FR-1096 | 生成 AI の接続設定 | 承認済み | 未実装 | 未実装 | - |
-| FR-1097 | Entra ID でのリソースの一覧と選択 | 承認済み | 未実装 | 未実装 | - |
-| FR-1098 | ステップに沿った AI の助言 | 承認済み | 未実装 | 未実装 | - |
-| NFR-SEC-024 | 生成 AI の通信・秘密情報・送信の同意 | 承認済み | 未実装 | 未実装 | - |
-| NFR-UX-019 | 生成 AI の体験（Guidelines for Human-AI Interaction） | 承認済み | 未実装 | 未実装 | - |
-| NFR-UX-020 | Microsoft Design の原則への準拠 | 承認済み | 未実装 | 未実装 | - |
-| FR-1099 | 複数のリポジトリで構成されるアプリケーションの選択 | 承認済み | 未実装 | 未実装 | - |
-| FR-1100 | リポジトリ間の関係の調査と可視化 | 承認済み | 未実装 | 未実装 | - |
+| FR-1094 | Product Manager の作業ステップ | 承認済み（依頼 2026-11-20） | `HVE-Studio/web/js/steps.js`、`HVE-Studio/web/js/app.js`、`HVE-Studio/web/js/insights.js`、`HVE-Studio/web/js/i18n.js`、`HVE-Studio/web/index.html`、`HVE-Studio/web/app.css`、`HVE-Studio/studio.py` | `tests/system/e2e/test_studio_pm_steps_system.py`、`HVE-Studio/tests/test_steps_ai_ui.py`、`HVE-Studio/tests/test_nav_dims_ui.py` | デザイン基盤、UI 部品、言語辞書 |
+| FR-1095 | リリース判断の状態 | 承認済み（依頼 2026-11-20） | `HVE-Studio/release.py`、`HVE-Studio/studio.py`、`HVE-Studio/web/js/release.js`、`HVE-Studio/web/js/steps.js`、`HVE-Studio/web/js/i18n.js`、`HVE-Studio/web/app.css` | `HVE-Studio/tests/test_release.py`、`HVE-Studio/tests/test_steps_ai_ui.py` | 管理データモデル、HTTP サーバー、UI 部品 |
+| FR-1096 | 生成 AI の接続設定 | 承認済み（依頼 2026-11-20） | `HVE-Studio/ai.py`、`HVE-Studio/secret_store.py`、`HVE-Studio/studio.py`、`HVE-Studio/web/js/aiassist.js`、`HVE-Studio/web/js/i18n.js`、`HVE-Studio/web/index.html`、`HVE-Studio/web/app.css` | `tests/system/e2e/test_studio_ai_settings_system.py`、`HVE-Studio/tests/test_ai.py`、`HVE-Studio/tests/test_steps_ai_ui.py` | HTTP サーバー、UI 部品 |
+| FR-1097 | Entra ID でのリソースの一覧と選択 | 承認済み（依頼 2026-11-20） | `HVE-Studio/ai.py`、`HVE-Studio/studio.py`、`HVE-Studio/web/js/aiassist.js` | `HVE-Studio/tests/test_steps_ai_ui.py` | HTTP サーバー、UI 部品 |
+| FR-1098 | ステップに沿った AI の助言 | 承認済み（依頼 2026-11-20） | `HVE-Studio/ai.py`、`HVE-Studio/studio.py`、`HVE-Studio/web/js/aiassist.js`、`HVE-Studio/web/js/i18n.js` | `HVE-Studio/tests/test_ai.py`、`HVE-Studio/tests/test_steps_ai_ui.py` | 管理データモデル、HTTP サーバー、UI 部品 |
+| NFR-SEC-024 | 生成 AI の通信・秘密情報・送信の同意 | 承認済み（依頼 2026-11-20） | `HVE-Studio/ai.py`、`HVE-Studio/secret_store.py`、`HVE-Studio/studio.py`、`HVE-Studio/web/js/aiassist.js` | `tests/system/e2e/test_studio_ai_settings_system.py`、`HVE-Studio/tests/test_ai.py` | HTTP サーバー |
+| NFR-UX-019 | 生成 AI の体験（Guidelines for Human-AI Interaction） | 承認済み（依頼 2026-11-20） | `HVE-Studio/web/js/aiassist.js`、`HVE-Studio/web/js/i18n.js`、`HVE-Studio/web/app.css` | `HVE-Studio/tests/test_steps_ai_ui.py` | UI 部品、言語辞書 |
+| NFR-UX-020 | Microsoft Design の原則への準拠 | 承認済み（依頼 2026-11-20） | `HVE-Studio/web/app.css`、`HVE-Studio/web/js/ui.js`、`HVE-Studio/README.md`、`users-guide/studio/02-screens.md` | `HVE-Studio/tests/test_steps_ai_ui.py`、`tests/system/e2e/test_studio_fluent_appearance_system.py` | デザイン基盤 |
+| FR-1099 | 複数のリポジトリで構成されるアプリケーションの選択 | 承認済み（依頼 2026-11-20） | `HVE-Studio/multi_repo.py`、`HVE-Studio/studio.py`、`HVE-Studio/web/js/repos.js`、`HVE-Studio/web/js/app.js`、`HVE-Studio/web/index.html`、`HVE-Studio/web/js/i18n.js` | `tests/system/e2e/test_studio_multi_repo_system.py`、`HVE-Studio/tests/test_xrepo.py`、`HVE-Studio/tests/test_release.py` | 管理データモデル、HTTP サーバー |
+| FR-1100 | リポジトリ間の関係の調査と可視化 | 承認済み（依頼 2026-11-20） | `HVE-Studio/xrepo.py`、`HVE-Studio/studio.py`、`HVE-Studio/web/js/repos.js`、`HVE-Studio/web/js/srctabs.js`、`HVE-Studio/web/js/i18n.js`、`HVE-Studio/web/app.css` | `HVE-Studio/tests/test_xrepo.py` | HTTP サーバー、UI 部品 |
 
 
 ## API・イベント
@@ -186,7 +186,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-005 | 配置と表現の切替 | 承認済み（依頼 2026-10-09） | `HVE-Studio/web/js/placement.js` | `tests/system/e2e/test_studio_system.py` | ストア、デザイン基盤 |
 | FR-006 | 表と検索 | 承認済み（依頼 2026-10-09） | `HVE-Studio/web/js/tables.js` | `tests/system/e2e/test_studio_system.py` | UI 部品、ストア、デザイン基盤 |
 | FR-007 | ソース対応 | 承認済み（依頼 2026-10-09） | `HVE-Studio/web/js/source.js` | `tests/system/e2e/test_studio_system.py` | ストア |
-| FR-008 | ペルソナ既定表現 | 廃止 | `HVE-Studio/web/js/app.js`, `HVE-Studio/web/js/dashboard.js` | `tests/system/e2e/test_studio_system.py` | ストア、デザイン基盤 |
+| FR-008 | ペルソナ既定表現 | 廃止 | 未実装 | 未実装 | - |
 | FR-009 | 履歴・理想状態・整合性 | 承認済み（依頼 2026-10-09） | `HVE-Studio/eabk_model.py`, `HVE-Studio/web/js/dashboard.js` | `HVE-Studio/tests/test_studio.py`, `tests/system/e2e/test_studio_system.py` | 管理データモデル |
 | FR-010 | リポジトリの既定と切替 | 承認済み（依頼 2026-10-09） | `HVE-Studio/studio.py`, `HVE-Studio/web/js/app.js`, `HVE-Studio/web/js/ui.js`, `HVE-Studio/web/js/i18n.js`, `HVE-Studio/web/index.html` | `HVE-Studio/tests/test_studio.py`, `HVE-Studio/tests/test_repo_switch_recovery_wiring.py`, `tests/system/e2e/test_studio_repo_pick_system.py` | HTTP サーバー |
 | FR-011 | JA/EN とリンク | 承認済み（依頼 2026-10-09） | `HVE-Studio/web/js/i18n.js`、`HVE-Studio/web/js/app.js`、`HVE-Studio/web/index.html`、`HVE-Studio/web/js/insights.js`、`HVE-Studio/web/js/hier.js`、`HVE-Studio/web/js/maptiers.js`、`HVE-Studio/studio.py` | `tests/system/e2e/test_studio_system.py`、`tests/system/e2e/test_studio_lang_toggle_system.py`、`HVE-Studio/tests/test_i18n_coverage.py`、`HVE-Studio/tests/i18n_scan.py`、`HVE-Studio/tests/test_studio.py` | 言語辞書、UI 部品、デザイン基盤 |
@@ -209,7 +209,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | NFR-OPS-002 | 自動再読込の継続 | 承認済み（依頼 2026-10-09） | `HVE-Studio/web/js/app.js` | 未実装 | フィンガープリント |
 | NFR-OPS-003 | 不足・失敗からの復旧 | 承認済み（依頼 2026-10-09） | `HVE-Studio/studio.py`, `HVE-Studio/web/js/app.js`, `HVE-Studio/web/js/ui.js` | `HVE-Studio/tests/test_studio.py`, `HVE-Studio/tests/test_repo_switch_recovery_wiring.py` | HTTP サーバー、UI 部品 |
 | NFR-OPS-004 | 管理データとの互換性 | 承認済み（依頼 2026-10-09） | `scripts/ebak.config.json`, `HVE-Studio/eabk_model.py` | `HVE-Studio/tests/test_studio.py` | 管理データモデル |
-| FR-1002 | 全画面のペルソナ別分析説明 | 廃止 | `HVE-Studio/web/js/insights.js` | `HVE-Studio/tests/test_studio.py` | ストア、UI 部品、デザイン基盤 |
+| FR-1002 | 全画面のペルソナ別分析説明 | 廃止 | 未実装 | 未実装 | - |
 | FR-1003 | 全データ層の現状対理想と構造妥当性 | 承認済み（包括承認 2026-10-09・approval_policy） | `HVE-Studio/eabk_model.py`, `HVE-Studio/web/js/insights.js` | `HVE-Studio/tests/test_studio.py` | 管理データモデル、ストア、UI 部品、デザイン基盤 |
 | FR-1004 | 安全で明示的な整合性保守 | 承認済み（包括承認 2026-10-09・approval_policy） | 未実装 | 未実装 | - |
 | FR-1005 | アプリ構成とデータ位置づけ | 承認済み（包括承認 2026-10-09・approval_policy） | `HVE-Studio/eabk_model.py`, `HVE-Studio/web/js/insights.js` | `HVE-Studio/tests/test_studio.py` | 管理データモデル、ストア、UI 部品、デザイン基盤 |

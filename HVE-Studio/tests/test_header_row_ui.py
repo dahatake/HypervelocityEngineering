@@ -16,9 +16,9 @@ from test_links_wrap_status_ui import studio, _open, sync_api  # noqa: E402,F401
 WIDTHS = [1280, 1024, 800, 600, 320]  # PARAM-048
 
 CTRL = {
-    "nav": "header.top #nav a",
+    "nav": "#nav a",   # FR-1094: the current step's items (3 on the map's step), in the step band under the header
+    "steps": '#steps [data-testid="step"]',
     "dim": '[data-testid="header-dim-toggle"] button',
-    "persona": "header.top #personaBar button",
     "lang": "header.top #lang button",
     "theme": 'header.top [data-testid="theme-toggle"] button',
 }
@@ -69,7 +69,7 @@ def test_ac393_shortened_labels_keep_full_name_and_no_function_is_dropped(studio
     assert {c["dim"] for c in ref["dim"]} == {"2d", "3d", "graph"}
     assert wide.locator('header.top [data-dim="rpg"]').count() == 0
     wide.context.close()
-    assert len(ref["nav"]) == 9 and len(ref["persona"]) == 3 and len(ref["dim"]) == 3 and len(ref["lang"]) == 2 and ref["theme"]
+    assert len(ref["nav"]) == 3 and len(ref["steps"]) == 6 and len(ref["dim"]) == 3 and len(ref["lang"]) == 2 and ref["theme"]
     for width in (1024, 800, 600, 320):
         page = _open(studio, "map2d", width=width, lang=lang)
         assert page.locator('header.top [data-dim="rpg"]').count() == 0

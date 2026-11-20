@@ -26,24 +26,26 @@ import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 sys.dont_write_bytecode = True  # do not leave __pycache__ in the repository being viewed
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+import ai  # noqa: E402
 import code_graph  # noqa: E402
 import eabk_model  # noqa: E402
 import floorplan_scan  # noqa: E402
 import repo_scan  # noqa: E402
 import remote_github  # noqa: E402
 import managed_data  # noqa: E402
+import multi_repo  # noqa: E402
+import release  # noqa: E402
+import xrepo  # noqa: E402
 from task_state import TaskStore  # noqa: E402
 
 WEB = HERE / "web"
 # The toolkit source keeps the guide in users-guide/; installed repositories get it as EABK-docs/.
 GUIDE = next((d + "/studio/01-first-steps.md" for d in ("EABK-docs", "users-guide") if (HERE.parent / d / "studio" / "01-first-steps.md").exists()), "EABK-docs/studio/01-first-steps.md")
-# --role: first screen for each reader (same targets as the persona buttons in the header).
-ROLE_ROUTES = {"pm": "#/dashboard", "architect": "#/map2d", "swe": "#/tables"}
 MIME = {
     ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
     ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon",
@@ -74,6 +76,99 @@ class State:
         self.latest_build: dict | None = None
         self.code_graphs: dict[str, tuple[str, bytes]] = {}  # FR-1091: root -> (source fingerprint, JSON)
         self.floorplans: dict[str, tuple[str, bytes]] = {}   # FR-1092: root -> (stamp, JSON)
+        self.extra: list[Path] = []  # FR-1099: the other repositories of the application (the group is [root, *extra])
+        self.xrepo: tuple[str, bytes] | None = None  # FR-1100: (group stamp, JSON)
+        self.repo_errors: dict[str, str] = {}  # FR-1099 AC-536: why a repository of the group could not be loaded
+        self.ai_keys = ai.Keys()  # FR-1096: session keys in memory, the rest in the OS vault
+        self.ai_consent: set[str] = set()  # NFR-SEC-024 AC-530: repositories the user agreed to send (this session only)
+
+    def group(self) -> list[Path]:
+        with self.lock:
+            return [self.root, *self.extra]
+
+    def repos_status(self) -> list[dict]:
+        roots = self.group()
+        names = multi_repo.repo_names([str(r) for r in roots])
+        out = []
+        with self.build_lock:
+            for root, name in zip(roots, names):
+                job = self.builds.get(str(root))
+                if job is None:
+                    status, error, mode = "pending", None, None
+                elif not job["done"].is_set():
+                    status, error, mode = "loading", None, None
+                elif job["error"] is not None:
+                    status, error, mode = "error", str(job["error"]), None
+                else:
+                    meta = job["model"]["meta"]
+                    status = "error" if meta.get("error") else "loaded"
+                    error, mode = (str(meta.get("error")) if meta.get("error") else None), meta.get("mode")
+                if str(root) in self.repo_errors:
+                    status, error = "error", self.repo_errors[str(root)]
+                out.append({"name": name, "path": str(root), "status": status, "error": error, "mode": mode,
+                            "primary": root == roots[0]})
+        return out
+
+    def add_repo(self, raw: str) -> list[dict]:
+        p = Path(raw).expanduser()
+        if not raw or not p.is_dir():
+            raise ValueError("not-a-directory")
+        root = eabk_model.find_root(p)
+        viewable = eabk_model.can_view(root)
+        with self.lock:
+            group = [self.root, *self.extra]
+            if any(os.path.normcase(str(root.resolve())) == os.path.normcase(str(g.resolve())) for g in group):
+                raise ValueError("duplicate")
+            if len(group) >= multi_repo.LIMIT:
+                raise ValueError("limit")
+            if not viewable:
+                raise ValueError("no-data-layer")
+            self.extra.append(root)
+            self.cache.clear()
+        self.build_for(root)
+        return self.repos_status()
+
+    def remove_repo(self, raw: str) -> list[dict]:
+        target = os.path.normcase(str(Path(raw).expanduser().resolve())) if raw else ""
+        with self.lock:
+            group = [self.root, *self.extra]
+            keep = [g for g in group if os.path.normcase(str(g.resolve())) != target]
+            if len(keep) == len(group):
+                raise ValueError("not-in-group")
+            if not keep:
+                raise ValueError("last-repository")
+            primary_changed = keep[0] != self.root
+            self.extra = keep[1:]
+            self.cache.clear()
+        if primary_changed:
+            self.set_root(keep[0])
+        return self.repos_status()
+
+    def xrepo_bytes(self) -> bytes:
+        roots = self.group()
+        names = multi_repo.repo_names([str(r) for r in roots])
+        pairs = [(n, r) for n, r in zip(names, roots) if r.is_dir()]  # a repository that disappeared is reported by repos_status()
+        stamp = "|".join(str(r) + "#" + eabk_model.fingerprint(r) for _, r in pairs)
+        with self.lock:
+            if self.xrepo and self.xrepo[0] == stamp:
+                return self.xrepo[1]
+        data = json.dumps(xrepo.build([{"name": n, "path": str(r)} for n, r in pairs]),
+                          ensure_ascii=False).encode("utf-8")
+        with self.lock:
+            self.xrepo = (stamp, data)
+        return data
+
+    def ai_sources(self, paths: list[str]) -> list[tuple[str, dict]]:
+        """The (name, model) of every consented repository among the requested ones (AC-530)."""
+        roots = self.group()
+        names = multi_repo.repo_names([str(r) for r in roots])
+        wanted = {os.path.normcase(p) for p in paths}
+        out = []
+        for root, name in zip(roots, names):
+            key = os.path.normcase(str(root))
+            if key in wanted and key in self.ai_consent:
+                out.append((name, self.raw_model(root)))
+        return out
 
     def codegraph_bytes(self) -> bytes:
         with self.lock:
@@ -153,8 +248,16 @@ class State:
     def set_root(self, root: Path) -> None:
         with self.lock:
             self.root = root
+            self.extra = [e for e in self.extra if e != root]
             self.previews.clear()
             self.catalog_baseline = self._catalog_hash(root)
+
+    def switch_root(self, root: Path) -> None:
+        """FR-010: the switch replaces the whole group with one repository (FR-1099 keeps adding as a separate action)."""
+        with self.lock:
+            self.extra = []
+            self.cache.clear()
+        self.set_root(root)
 
     def build_for(self, root: Path, inv: repo_scan.Inventory | None = None, source: str | None = None) -> dict:
         """The background build of root's raw model for this source state: joins a running build, reuses a finished one."""
@@ -173,7 +276,7 @@ class State:
                    "done": threading.Event(),
                    "model": None, "dataStatus": None, "error": None, "published": None, "partial": None, "revision": 0,
                    "stage": None, "progress": {"phase": "prepare", "completed": 0, "total": 1}}
-            self.builds = {k: v for k, v in self.builds.items() if k == str(self.root)}  # bounded: current + this one
+            self.builds = {k: v for k, v in self.builds.items() if k in {str(self.root), *map(str, self.extra)}}  # bounded: the group + this one
             self.builds[key] = job
             self.latest_build = job
         threading.Thread(target=self._build, args=(job, root, inv), daemon=True).start()
@@ -195,6 +298,9 @@ class State:
             model["meta"]["generatedData"] = data_status
             model.setdefault("tasks", [])
             model["remote"] = {"status": "loading", "issues": [], "pulls": [], "runs": []}
+            # FR-1095: a model that is still being built is never judged ("unknown", not a premature "ok")
+            model["release"] = {"state": "unknown", "reasons": [{"code": "pending"}], "goals": [], "items": [],
+                                "ledgerRunAt": None, "modelAt": model["meta"].get("generatedAt"), "approvalRequests": 0}
             data = json.dumps(model, ensure_ascii=False).encode("utf-8")
             with self.build_lock:
                 job.update(partial=data, revision=job["revision"] + 1, stage=stage, published=time.monotonic())
@@ -253,7 +359,8 @@ class State:
                 root = self.root
                 inv = repo_scan.inventory(root)
                 source = eabk_model.fingerprint(root, inv)
-                fp = self._fingerprint(source)
+                extras = list(self.extra)
+                fp = self._fingerprint(source) + self._extras_stamp(extras)
                 hit = self.cache.get(str(root))
                 if hit and hit[0] == fp:
                     return hit[1]
@@ -270,11 +377,52 @@ class State:
                 model["meta"]["generatedData"] = job["dataStatus"]
                 model["tasks"] = self.tasks.list(root, self._imported(root, model))
                 model["meta"]["taskStorage"] = str(self.tasks.path)
-                fp = self._fingerprint(source)
+                if self.extra != extras:
+                    continue
+            model["release"] = release.judge(raw)  # FR-1095
+            names = multi_repo.repo_names([str(r) for r in [root, *extras]])
+            if extras:
+                model = self._group_model(model, root, extras, names)  # FR-1099
+            repos = self.repos_status()
+            with self.lock:
+                if self.root != root or self.extra != extras:
+                    continue
+                model["meta"]["repos"] = repos
+                fp = self._fingerprint(source) + self._extras_stamp(extras)
                 model["meta"]["stateFingerprint"] = str(root) + "#" + fp
                 data = json.dumps(model, ensure_ascii=False).encode("utf-8")
                 self.cache = {str(root): (fp, data)}
                 return data
+
+    @staticmethod
+    def _extras_stamp(extras: list[Path]) -> str:
+        def one(e: Path) -> str:
+            try:
+                return eabk_model.fingerprint(e) if e.is_dir() else "missing"
+            except (repo_scan.ScanError, OSError, ValueError) as exc:
+                return "error:" + str(exc)
+        return "".join("|" + str(e) + "#" + one(e) for e in extras)
+
+    def _group_model(self, primary: dict, root: Path, extras: list[Path], names: list[str]) -> dict:
+        """FR-1099 AC-536..AC-538: repositories that fail to load are left out (and reported), the rest are shown."""
+        entries = [{"name": names[0], "path": str(root), "model": primary}]
+        for path, name in zip(extras, names[1:]):
+            try:
+                if not path.is_dir():
+                    raise OSError(f"folder not found: {path}")
+                raw = self.raw_model(path)
+            except (repo_scan.ScanError, OSError, ValueError, sqlite3.Error) as exc:
+                self.repo_errors[str(path)] = str(exc)  # reported by repos_status(); the others are still shown
+                continue
+            self.repo_errors.pop(str(path), None)
+            if raw["meta"].get("error"):
+                continue
+            entries.append({"name": name, "path": str(path), "model": {**raw, "release": release.judge(raw)}})
+        merged = multi_repo.merge(entries)
+        merged["release"] = multi_repo.group_release(entries)
+        merged["tasks"] = primary.get("tasks", [])
+        merged["remote"] = primary.get("remote")
+        return merged
 
     def update_task(self, payload: dict) -> dict:
         root = self.root
@@ -290,7 +438,7 @@ class State:
 
     def fingerprint(self) -> str:
         with self.lock:
-            return str(self.root) + "#" + self._fingerprint()
+            return str(self.root) + "#" + self._fingerprint() + self._extras_stamp(list(self.extra))
 
     def data_status(self) -> dict:
         root = self.root
@@ -557,6 +705,24 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "analysis-failed", "detail": str(exc)}, HTTPStatus.UNPROCESSABLE_ENTITY)
         if path == "/api/repo":
             return self.send_json({"repo": str(STATE.root)})
+        if path == "/api/repos":
+            return self.send_json({"repos": STATE.repos_status(), "limit": multi_repo.LIMIT})
+        if path == "/api/xrepo":
+            try:
+                return self.send_bytes(STATE.xrepo_bytes(), MIME[".json"])
+            except (repo_scan.ScanError, OSError, ValueError) as exc:
+                return self.send_json({"error": "analysis-failed", "detail": str(exc)}, HTTPStatus.UNPROCESSABLE_ENTITY)
+        if path == "/api/ai/status":
+            q = parse_qs(urlparse(self.path).query)
+            provider, endpoint = (q.get("provider") or [""])[0], (q.get("endpoint") or [""])[0]
+            try:
+                endpoint = ai._endpoint(endpoint) if endpoint else ""
+            except ai.AIError as exc:
+                return self.send_json(exc.as_dict(), HTTPStatus.BAD_REQUEST)
+            status = STATE.ai_keys.status(provider, endpoint) if provider in ai.AUTHS else {"stored": False, "session": False}
+            return self.send_json({**status, "vault": ai.secret_store.availability(),
+                                   "copilotSdk": ai.copilot_available(), "timeout": ai.TIMEOUT,
+                                   "consented": sorted(STATE.ai_consent)})
         if path == "/api/data":
             try:
                 return self.send_json(STATE.data_status())
@@ -617,6 +783,16 @@ class Handler(BaseHTTPRequestHandler):
         if endpoint == "/api/remote/refresh":
             self._body()
             return self.send_json(STATE.refresh_remote())
+        if endpoint.startswith(("/api/repos/", "/api/ai/")):
+            try:
+                payload = json.loads(self._body(32768) or b"{}")
+                if not isinstance(payload, dict) or self._unread > 0:
+                    raise ValueError("invalid payload")
+            except (ValueError, TypeError):
+                return self.send_json({"error": "bad request"}, HTTPStatus.BAD_REQUEST)
+            if endpoint.startswith("/api/repos/"):
+                return self._repos(endpoint, payload)
+            return self._ai(endpoint, payload)
         if endpoint not in ("/api/repo", "/api/tasks", "/api/maintenance/preview", "/api/maintenance/apply",
                             "/api/data/sync", "/api/data/delete"):
             return self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
@@ -666,8 +842,80 @@ class Handler(BaseHTTPRequestHandler):
             STATE.tasks.list(root, model.get("tasks", []))
         except (repo_scan.ScanError, OSError, ValueError, sqlite3.Error) as exc:
             return self.send_json({"error": "analysis-failed", "detail": str(exc)}, HTTPStatus.UNPROCESSABLE_ENTITY)
-        STATE.set_root(root)
+        STATE.switch_root(root)
         self.send_json({"repo": str(root)})
+
+    def _repos(self, endpoint: str, payload: dict) -> None:
+        """FR-1099 AC-536: add (folder dialog on the server) or remove one repository of the group."""
+        try:
+            if endpoint == "/api/repos/add":
+                picked = pick_folder(str(STATE.root))
+                if picked is None:
+                    return self.send_json({"error": "picker-unavailable"}, HTTPStatus.NOT_IMPLEMENTED)
+                if not picked:
+                    return self.send_json({"cancelled": True, "repos": STATE.repos_status()})
+                return self.send_json({"repos": STATE.add_repo(picked)})
+            if endpoint == "/api/repos/restore":
+                # restore the saved group: only paths, the first must be the current repository
+                paths = payload.get("paths") or []
+                added, skipped = [], []
+                if isinstance(paths, list) and paths and os.path.normcase(str(paths[0])) == os.path.normcase(str(STATE.root)):
+                    for p in paths[1:]:
+                        try:
+                            STATE.add_repo(str(p))
+                            added.append(str(p))
+                        except ValueError as exc:
+                            skipped.append({"path": str(p), "error": str(exc)})
+                return self.send_json({"repos": STATE.repos_status(), "added": added, "skipped": skipped})
+            if endpoint == "/api/repos/remove":
+                return self.send_json({"repos": STATE.remove_repo(str(payload.get("path", "")))})
+        except ValueError as exc:
+            return self.send_json({"error": str(exc), "repos": STATE.repos_status(), "limit": multi_repo.LIMIT},
+                                  HTTPStatus.CONFLICT)
+        return self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+
+    def _ai(self, endpoint: str, payload: dict) -> None:
+        """FR-1096..FR-1098, NFR-SEC-024: every call starts from a user action; keys never come back in a response."""
+        name = endpoint.rsplit("/api/ai/", 1)[-1]
+        try:
+            if name == "key":
+                cfg = ai.check_config(payload.get("config") or {})
+                if not cfg.get("endpoint"):
+                    raise ai.AIError("bad-config", "enter the endpoint first")
+                status = STATE.ai_keys.put(cfg["provider"], cfg["endpoint"], str(payload.get("key") or ""),
+                                           bool(payload.get("persist")))
+                return self.send_json(status)
+            if name == "key/delete":
+                cfg = ai.check_config(payload.get("config") or {})
+                return self.send_json(STATE.ai_keys.delete(cfg["provider"], cfg.get("endpoint") or ""))
+            if name == "signin":
+                return self.send_json(ai.signin(str(payload.get("provider") or "")))
+            if name == "resources":
+                return self.send_json({"items": ai.list_resources(str(payload.get("level") or ""),
+                                                                  str(payload.get("subscription") or ""),
+                                                                  str(payload.get("account") or ""))})
+            if name == "test":
+                return self.send_json(ai.test_connection(payload.get("config") or {}, STATE.ai_keys))
+            if name == "consent":
+                known = {os.path.normcase(str(r)) for r in STATE.group()}
+                for p in payload.get("repos") or []:
+                    if os.path.normcase(str(p)) in known:
+                        STATE.ai_consent.add(os.path.normcase(str(p)))
+                return self.send_json({"consented": sorted(STATE.ai_consent)})
+            if name == "ask":
+                paths = [str(p) for p in payload.get("repos") or [str(STATE.root)]]
+                sources = STATE.ai_sources(paths)
+                if not sources:
+                    raise ai.AIError("consent-required", "agree to send this repository's information first")
+                step = int(payload.get("step") or 1)
+                return self.send_json(ai.ask(payload.get("config") or {}, STATE.ai_keys, step,
+                                             str(payload.get("question") or ""), str(payload.get("lang") or "ja"), sources))
+        except ai.AIError as exc:
+            status = {"consent-required": HTTPStatus.CONFLICT, "bad-config": HTTPStatus.BAD_REQUEST}.get(exc.code, HTTPStatus.BAD_GATEWAY)
+            return self.send_json(exc.as_dict(), status)
+        except (repo_scan.ScanError, OSError, ValueError, sqlite3.Error) as exc:
+            return self.send_json({"error": "provider-error", "detail": str(exc)[:300]}, HTTPStatus.BAD_GATEWAY)
+        return self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
 
 _PICKER_SCRIPT = (
@@ -740,8 +988,7 @@ def main(argv=None) -> int:
     ap.add_argument("--repo", default=None, help="repository to view, with or without EABK (default: current directory)")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-open", action="store_true", help="do not open the browser")
-    ap.add_argument("--role", choices=sorted(ROLE_ROUTES), default=None,
-                    help="first screen: pm=dashboard, architect=2D map, swe=tables")
+
     operations = ap.add_mutually_exclusive_group()
     operations.add_argument("--check", action="store_true",
                     help="list the data-layer files found/missing and record counts, then exit (0 = data layer found, 1 = none)")
@@ -801,7 +1048,7 @@ def main(argv=None) -> int:
     if srv is None:
         print("no free port", file=sys.stderr)
         return 1
-    url = f"http://127.0.0.1:{srv.server_address[1]}/" + (ROLE_ROUTES[args.role] if args.role else "")
+    url = f"http://127.0.0.1:{srv.server_address[1]}/"
     print(f"HVE Studio {eabk_model.STUDIO_VERSION}\n  repo: {root}\n  url : {url}\n  (Ctrl+C to stop)")
     if not args.no_open:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()

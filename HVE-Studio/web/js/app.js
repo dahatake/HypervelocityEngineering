@@ -9,11 +9,14 @@ import { cameraCommands } from './camera3d.js';
 import { changeLayout, resetLayout } from './layout.js';
 import { initManagedData } from './managed-data.js';
 import { startGuide } from './guide.js';
+import { STEPS, currentStep, stepFor, setStep, onStep, renderStepBar, renderStepText, stepCommands } from './steps.js';
+import { openAsk, openSettings, aiCommands } from './aiassist.js';
+import { initRepos, restoreRepos, savePaths, renderRepoListBtn } from './repos.js';
 
 // 初めての方へ: ヘッダーのボタンから、いま開いている画面の使い方をウィザードで案内する。
 const guideBtn = document.getElementById('guideBtn');
 guideBtn.prepend(icon('guide', { size: 16 }));
-guideBtn.addEventListener('click', () => startGuide(navKeyOf(routeName())));
+guideBtn.addEventListener('click', () => startGuide(routeName() === 'release' ? 'implstatus' : navKeyOf(routeName())));
 
 // NFR-UX-002 AC-015/041: 配置の変更・既定へ戻す。検索語・選択・絞り込みは再描画しないので保たれる。
 document.querySelector('[data-testid="layout-change"]')?.addEventListener('click', changeLayout);
@@ -31,6 +34,7 @@ publishDim({ dims: ['2d'], current: '2d', selected: '2d' });
 const ROUTES = {
   dashboard: { icon: 'dashboard', load: () => import('./dashboard.js') },
   implstatus: { icon: 'progress', load: () => import('./implstatus.js') },
+  release: { icon: 'progress', load: () => import('./release.js') },   // FR-1095: a view of the implementation-status item
   map2d: { navKey: 'map', icon: 'map2d', dim: '2d', load: () => import('./map2d.js') },
   map3d: { navKey: 'map', icon: 'map3d', dim: '3d', load: () => import('./map3d.js') },
   mapgraph: { navKey: 'map', icon: 'map2d', dim: 'graph', load: () => import('./mapgraph.js') },
@@ -41,6 +45,7 @@ const ROUTES = {
   source: { icon: 'source', load: () => import('./source.js') },
   codegraph: { navKey: 'source', icon: 'source', hidden: true, load: () => import('./codegraph.js') },
   floorplan: { navKey: 'source', icon: 'source', hidden: true, load: () => import('./floorplan.js') },
+  xrepo: { navKey: 'source', icon: 'source', hidden: true, load: () => import('./repos.js') },   // FR-1100
   tables: { icon: 'tables', load: () => import('./tables.js') },
   maintenance: { icon: 'maintenance', mount: mountMaintenance },
   structure: { navKey: 'maintenance', hidden: true, mount: mountStructure },
@@ -58,20 +63,6 @@ const navDesc = document.getElementById('navDesc');
 let current = null, token = 0, fingerprint = null, modelError = null;
 const MODS = new Map();
 
-const personaBar = document.getElementById('personaBar');
-function renderPersonas() {
-  personaBar.replaceChildren();
-  for (const [id, glyph] of [['pm', 'goal'], ['arch', 'structure'], ['swe', 'source']]) {
-    const name = t('persona.' + id);
-    personaBar.append(el('button', { class: 'chip persona', 'aria-label': t('persona.view', { name }), onclick: () => {
-      if (id === 'arch') location.hash = '#/map2d';
-      else if (id === 'swe') location.hash = '#/tables';
-      else location.hash = '#/dashboard';
-    } }, el('span', { class: 'biz-icon', 'aria-hidden': 'true' }, icon(glyph, { size: 16 })), name, el('span', { class: 'sr-only' }, ' ' + t('persona.suffix'))));
-  }
-}
-renderPersonas();
-onLang(renderPersonas);
 
 const routeName = () => { const r = (location.hash.replace(/^#\/?/, '') || 'dashboard').split('?')[0]; return r === 'maprpg' ? 'map2d' : ROUTES[r] ? r : 'dashboard'; };
 // 画面撮影用の固定表示（ヘッダー非表示・アニメーション停止）は、明示した `snapshot` 付きのリンクだけ。
@@ -93,15 +84,30 @@ function applyDeepLink() {
   }
 }
 
+// FR-1094: the step bar, and in the step band only the screens of the current step (each of FR-1041's nine items
+// belongs to at least one step). 'release' is the release-judgment view of the implementation-status item (FR-1095).
+const stepsEl = document.getElementById('steps');
+const stepJudge = document.getElementById('stepJudge');
+const stepNext = document.getElementById('stepNext');
+const itemKeyOf = (route) => (route === 'release' ? 'release' : navKeyOf(route));
+const itemHref = (item) => item.href || '#/' + (item.key === 'map' ? navTarget('map') : item.key);
 function renderNav() {
-  const r = navKeyOf(routeName());
-  nav.replaceChildren(...NAV.map((k) => {
-    const label = t('nav.' + k), desc = t('navd.' + k);
-    return el('a', { href: '#/' + navTarget(k), class: k === r ? 'on' : '', 'aria-current': k === r ? 'page' : null, title: desc, 'data-nav': k, 'aria-describedby': 'navDesc' }, businessIcon(ROUTES[navTarget(k)].icon, label), el('span', {}, label));
+  const r = itemKeyOf(routeName());
+  nav.replaceChildren(...currentStep().items.map((it) => {
+    const k = it.key, label = t('nav.' + k), desc = t('navd.' + k);
+    return el('a', { href: itemHref(it), class: k === r ? 'on' : '', 'aria-current': k === r ? 'page' : null, title: desc, 'data-nav': k, 'aria-describedby': 'navDesc' }, businessIcon(ROUTES[k === 'map' ? navTarget(k) : k].icon, label), el('span', {}, label));
   }));
   // each screen opens with the same one-line description (AC-224)
-  navDesc.textContent = ROUTES[routeName()]?.hidden && !NAV.includes(r) ? '' : t('navd.' + r);
+  navDesc.textContent = t('navd.' + r);
+  renderStepBar(stepsEl, itemHref);
+  renderStepText(stepJudge, stepNext);
 }
+onStep(() => renderNav());
+store.on('model', () => { renderStepBar(stepsEl, itemHref); renderRepoListBtn(); });
+document.getElementById('aiAskBtn').prepend(icon('sparkle', { size: 16 }));
+document.getElementById('aiAskBtn').addEventListener('click', openAsk);
+document.getElementById('aiSetBtn').append(icon('settings', { size: 16 }));
+document.getElementById('aiSetBtn').addEventListener('click', openSettings);
 
 // Old URLs move to the item that holds the view now, keeping the kind / dimension / ?select / ?q (FR-1041 AC-226).
 function legacyRedirect(name) {
@@ -157,6 +163,8 @@ async function route() {
   document.documentElement.dataset.route = name;
   document.documentElement.classList.toggle('snapshot', isSnapshotLink());
   if (ROUTES[name].dim) dimState.map = ROUTES[name].dim;
+  const stepN = stepFor(itemKeyOf(name));   // AC-515: a screen opened directly selects the step it belongs to
+  if (stepN !== currentStep().n) setStep(stepN);
   // default for screens without a display mode: only 2D (the screens that have one publish their own below)
   publishDim({ dims: ['2d'], current: '2d', selected: '2d' });
   renderNav();
@@ -314,6 +322,8 @@ function hl(text, toks) {
 // FR-1041 AC-226: every nav item (and the 2D / 3D switch) is reachable from the command box.
 function navCommands() {
   const list = NAV.map((k) => ({ cmd: true, id: 'cmd:nav:' + k, label: t('cmd.goto') + t('nav.' + k), key: t('nav.' + k), run: () => { location.hash = '#/' + navTarget(k); } }));
+  list.push({ cmd: true, id: 'cmd:nav:release', label: t('cmd.goto') + t('nav.release'), key: t('nav.release'), run: () => { location.hash = '#/release'; } });
+  list.push(...stepCommands(itemHref), ...aiCommands());   // FR-1094 AC-514, NFR-UX-019 AC-532
   list.push({ cmd: true, id: 'cmd:codegraph', label: t('cmd.codegraph'), key: t('nav.codegraph'), run: () => { location.hash = '#/floorplan'; } });
   for (const c of window.eabkTheme.choices) list.push({ cmd: true, id: 'cmd:theme:' + c, label: t('theme.cmd') + t('theme.' + c), key: t('theme.keys') + ' ' + t('theme.' + c), run: () => window.eabkTheme.set(c) });
   if (hasDimHandler()) {
@@ -436,6 +446,7 @@ async function switchRepository(cur, path) {
     ]);
     return;
   }
+  savePaths([path]);   // FR-010: the switch replaces the whole group (FR-1099)
   // AC-333: nothing of the previous repository may remain (selection, focus, filter, search, drawer, deep-link query).
   store.clear();
   store.setImplFilter(null);
@@ -498,5 +509,7 @@ async function start() {
   await route();
   splashProgress(3, 'splash.done');
   finishSplash();
+  if (await restoreRepos().catch(() => false)) route();   // FR-1099 AC-536: the saved group of repositories
 }
+initRepos(() => loadModel(true).then(() => route()));
 start().catch(showLoadError);

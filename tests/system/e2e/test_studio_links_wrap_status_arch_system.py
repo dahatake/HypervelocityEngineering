@@ -199,7 +199,7 @@ def test_ac191_dashboard_chips_stay_inside_their_boxes_with_long_data(browser, t
 
 # FR-1033 AC-194
 def test_ac194_overall_segment_click_applies_state_across_kanban_list_and_other_graphs(page):
-    page.get_by_role("link", name="実装状態").first.click()
+    page.locator('[data-testid="step"][data-step="4"]').click()   # FR-1094: step 4 opens the implementation status
     expect(page.locator("#view")).to_contain_text("実装状態")
     seg = page.locator('[data-testid="impl-bar-segment"][data-scope="all"]').first
     state, count = seg.get_attribute("data-state"), int(seg.get_attribute("data-count"))
@@ -220,7 +220,7 @@ def test_ac194_overall_segment_click_applies_state_across_kanban_list_and_other_
 
 # FR-1033 AC-194 (abnormal: 再クリックで元に戻る)
 def test_ac194_reclick_restores_all_views(page):
-    page.get_by_role("link", name="実装状態").first.click()
+    page.locator('[data-testid="step"][data-step="4"]').click()   # FR-1094: step 4 opens the implementation status
     seg = page.locator('[data-testid="impl-bar-segment"][data-scope="all"]').first
     before = page.locator('[data-testid="impl-kanban-card"][data-match="true"]').count()
     seg.click()

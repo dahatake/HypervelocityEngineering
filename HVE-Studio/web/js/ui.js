@@ -60,6 +60,17 @@ const ICON_PATHS = {
   state: 'M7 5a3 3 0 1 0 0 6a3 3 0 1 0 0-6M17 13a3 3 0 1 0 0 6a3 3 0 1 0 0-6M9.5 11l5 2',
   component: 'M4 4h7v7H4zM13 13h7v7h-7zM13 4h7v4h-7zM4 15h4v5H4z',
   guide: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z',
+  // FR-1094..FR-1100: steps, release state, AI and repository group (same line style)
+  check: 'M5 12.5l4.5 4.5L19 7.5',
+  success: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M8 12.5l3 3 5-6',
+  warning: 'M12 3l10 18H2zM12 10v5M12 18v.5',
+  sparkle: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z',
+  settings: 'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1',
+  plus: 'M12 5v14M5 12h14',
+  close: 'M6 6l12 12M18 6L6 18',
+  copy: 'M8 8h12v12H8zM4 16V4h12',
+  retry: 'M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5',
+  repos: 'M3 6h6l2 2h10v11H3zM7 12h10M7 15h6',
 };
 // The icon's accessible name when no label is given: dictionary keys bizicon.<kind>.
 export const BUSINESS_ICON = Object.fromEntries(['dashboard', 'map2d', 'map3d', 'diagrams', 'placement', 'entities', 'integrations', 'source', 'tables', 'maintenance',

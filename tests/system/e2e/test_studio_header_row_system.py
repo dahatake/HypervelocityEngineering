@@ -5,9 +5,10 @@ the oracle.  Widths are PARAM-048 = 1280 / 1024 / 800 / 600 / 320 CSS px (320 = 
 (HVE-Studio/tests/test_header_row_ui.py).
 
 CONTRACT (受入基準から独立に定義。実装に合わせて oracle を変更しない):
-  - ヘッダー帯: <header class="top">。要素: ナビ #nav a（8）、表示モード切替 [data-testid="header-dim-toggle"] button（2D・3D・Graph。RPG は対象外）、
-    検索 #q、リポジトリ名 #repoBtn、日時 #modelTime、ロール #personaBar button（3）、言語 #lang、
-    テーマ [data-testid="theme-toggle"] button。
+  - ヘッダー帯: <header class="top">。要素: 表示モード切替 [data-testid="header-dim-toggle"] button（2D・3D・Graph。RPG は対象外）、
+    検索 #q、リポジトリ名 #repoBtn と追加・一覧のボタン、日時 #modelTime、言語 #lang、テーマ [data-testid="theme-toggle"] button。
+    改訂 2026-11-20（AC-391）: 役割の選択は廃止。作業ステップ #steps [data-testid=step]（6）と、選択中のステップの画面 #nav a
+    （#/map2d はステップ 3: マップ・図式・ソース対応の 3）を画面上部の要素に含める。
   - 地図の表示面: #view canvas。説明パネル（上位層・ロールの説明）: [data-testid="map-tiers"]（<details>、開閉は summary）。
   - 画面: #/map2d。AC-393 の RPG 非対象・残る 3 モード条件も適用。
 """
@@ -21,12 +22,12 @@ WIDTHS = [1280, 1024, 800, 600, 320]  # PARAM-048
 TOL = 2  # PARAM-050: 縦位置の中心の許容差 (CSS px)
 
 ITEMS = {
-    "nav": "header.top #nav a",
+    "steps": '#steps [data-testid="step"]',
+    "nav": "#nav a",
     "dim": '[data-testid="header-dim-toggle"] button',
     "search": "header.top #q",
-    "repo": "header.top #repoBtn",
+    "repo": "header.top #repoBtn, header.top #repoAddBtn, header.top #repoListBtn",
     "time": "header.top #modelTime",
-    "persona": "header.top #personaBar button",
     "lang": "header.top #lang button",
     "theme": 'header.top [data-testid="theme-toggle"] button',
 }
@@ -45,7 +46,7 @@ def _fr1041_nav_count():
 
 
 NAV_COUNT = _fr1041_nav_count()
-EXPECT_COUNT = {"nav": NAV_COUNT, "dim": 3, "persona": 3}
+EXPECT_COUNT = {"steps": 6, "nav": 3, "dim": 3}  # FR-1094: step 3 (the map) lists the map, diagrams and source mapping
 
 JS_RECTS = """(sel) => [...document.querySelectorAll(sel)].map((e) => {
   const r = e.getBoundingClientRect();
@@ -67,7 +68,7 @@ def _open(browser, url, width, route="map2d", height=800):
     p.goto(url.split("#")[0] + "#/" + route)
     p.wait_for_load_state("networkidle")
     p.wait_for_selector("header.top")
-    p.wait_for_selector("header.top #nav a")
+    p.wait_for_selector("#nav a")
     return ctx, p
 
 
@@ -122,8 +123,9 @@ def test_ac391_all_header_elements_are_inside_viewport_and_wrap(browser, zurl, w
         assert len(items[k]) == n, f"{k}: {len(items[k])} != {n}"
     _assert_remaining_modes(page)
     assert len(items["lang"]) == 2, "lang"  # FR-011 AC-430: JA/EN の 2 button
-    for k in ("search", "repo", "time"):
+    for k in ("search", "time"):
         assert len(items[k]) == 1, k
+    assert len(items["repo"]) == 3, "repo"  # switch, add, list (FR-010, FR-1099)
     assert len(items["theme"]) >= 1
     _in_viewport(page, items, width)
     hdr = page.evaluate(JS_HDR)
@@ -134,10 +136,10 @@ def test_ac391_all_header_elements_are_inside_viewport_and_wrap(browser, zurl, w
         assert hdr["h"] > tallest * 1.5, f"header height did not grow at {width}px: {hdr['h']}"
     if width == 320:
         assert rows >= 3, f"320px should wrap into several rows (rows={rows})"
-    # ヘッダーの高さは要素を内包する（切り取りなし）
-    assert max(r["y"] + r["h"] for v in items.values() for r in v) <= hdr["bottom"] + 1
-    xs = [r["x"] for r in items["nav"]]
-    assert len(items["nav"]) == NAV_COUNT  # FR-1041 のナビ全項目
+    # ヘッダー・作業ステップ・ステップの帯は要素を内包する（切り取りなし）
+    top = page.evaluate("() => document.querySelector('#stepBand').getBoundingClientRect().bottom")
+    assert max(r["y"] + r["h"] for v in items.values() for r in v) <= top + 1
+    assert max(r["y"] + r["h"] for k in ("dim", "search", "repo", "time", "lang", "theme") for r in items[k]) <= hdr["bottom"] + 1
     assert page.evaluate("() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1")
     ctx.close()
 
@@ -152,10 +154,9 @@ def test_ac391_all_visible_in_english_on_other_screen(browser, zurl, width):
     page.reload()
     page.wait_for_load_state("networkidle")
     page.wait_for_selector("header.top")
-    page.wait_for_function(
-        "n => document.querySelectorAll('header.top #nav a').length >= n", arg=NAV_COUNT)
+    page.wait_for_selector("#nav a")
     items = _all(page)
-    assert len(items["nav"]) == NAV_COUNT
+    assert len(items["nav"]) == 1 and len(items["steps"]) == 6  # step 1 lists the dashboard only (FR-1094)
     _assert_remaining_modes(page)
     _in_viewport(page, items, width)
     if width <= 600:
@@ -204,7 +205,7 @@ def test_ac392_every_header_element_is_reachable_without_scrolling(browser, zurl
 @pytest.mark.parametrize("width", [800, 600, 320])
 def test_ac392_tab_walks_all_header_controls(browser, zurl, width):
     ctx, page = _open(browser, zurl, width)
-    page.locator("header.top #nav a").first.focus()
+    page.locator("header.top a.brand").focus()
     seen = set()
     for _ in range(40):
         ident = page.evaluate("() => { const a = document.activeElement; return a && a.closest('header.top') ? (a.closest('#lang') ? 'lang' : a.id || a.getAttribute('href') || a.dataset.dim || a.textContent.trim()) : null; }")
@@ -214,7 +215,11 @@ def test_ac392_tab_walks_all_header_controls(browser, zurl, width):
         page.keyboard.press("Tab")
     must = {"q", "repoBtn", "lang"}
     assert must <= seen, f"not reached by Tab: {must - seen}"
-    assert len([s for s in seen if s and s.startswith("#/")]) == NAV_COUNT
+    for _ in range(20):  # after the header, Tab goes on to the work steps (FR-1094)
+        if page.evaluate("() => !!document.activeElement.closest('#steps')"):
+            break
+        page.keyboard.press("Tab")
+    assert page.evaluate("() => !!document.activeElement.closest('#steps')"), "the work steps are not reached by Tab"
     ctx.close()
 
 

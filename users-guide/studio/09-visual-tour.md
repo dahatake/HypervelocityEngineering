@@ -23,7 +23,7 @@ Studio は「**見るだけ**」のアプリです。要求や実装を変える
 
 ```bash
 python HVE-Studio/studio.py --check      # データ層が読めるか確認
-python HVE-Studio/studio.py --role pm    # ブラウザーが開く（pm / architect / swe）
+python HVE-Studio/studio.py              # ブラウザーが開く（作業ステップ 1 から）
 ```
 
 ## 1. 画面の全体像（どの画面でも共通）
@@ -139,7 +139,7 @@ python HVE-Studio/studio.py --role pm    # ブラウザーが開く（pm / archi
 ## 9. 最初の 10 分のおすすめ手順
 
 1. `python HVE-Studio/studio.py --check` で、データ層が読めることを確かめます。
-2. `python HVE-Studio/studio.py --role pm`（または `architect`・`swe`）で開きます。
+2. `python HVE-Studio/studio.py` で開きます。
 3. **「初めての方へ」** を押して、案内を最後まで進めます。
 4. ダッシュボードで、「未回答の質問」と「BLOCKED の要求」が 0 か確かめます。
 5. 気になる目的（G-ID）を選び、**実装状態**で未着手の要求を見ます。

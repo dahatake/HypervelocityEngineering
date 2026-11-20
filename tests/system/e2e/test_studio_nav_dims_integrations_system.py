@@ -157,29 +157,36 @@ def test_ac226_legacy_screen_ids_remain_valid_in_screen_image_manifest():
 
 # FR-1041 AC-226
 def test_ac226_every_nav_item_is_reachable_by_keyboard_and_command_search(page):
-    nav = page.locator("#nav")
-    items = nav.locator("a, button")
-    n = items.count()
-    assert n >= 9, "ナビ項目が 9 項目未満"
-    for i in range(n):
-        label = items.nth(i).inner_text().strip()
-        if not label:
-            continue
-        page.goto(page.url.split("#")[0] + "#/dashboard")
-        page.keyboard.press("Control+k")
-        page.keyboard.type(label)
-        page.keyboard.press("Enter")
-        page.wait_for_load_state("networkidle")
-        assert not ERROR_RE.search(page.locator("#view").inner_text()), label
-        items.nth(i).focus()
-        page.keyboard.press("Enter")
-        assert page.locator("#view").inner_text().strip(), label
+    # FR-1094: the nav lists the items of the current step; every step is walked so that all nine items are tried
+    base = page.url.split("#")[0]
+    keys = set()
+    for step in range(1, 7):
+        page.goto(base + "#/dashboard")
+        page.locator(f'[data-testid="step"][data-step="{step}"]').click()
+        labels = [(a.inner_text().strip(), a.get_attribute("data-nav")) for a in page.locator("#nav a").all()]
+        for i, (label, key) in enumerate(labels):
+            keys.add(key)
+            page.goto(base + "#/dashboard")
+            page.keyboard.press("Control+k")
+            page.keyboard.type(label)
+            page.keyboard.press("Enter")
+            page.wait_for_load_state("networkidle")
+            if "#/release" in page.url:   # lists ledger titles verbatim (they may say "error")
+                expect(page.get_by_test_id("release-state")).to_be_visible()
+            else:
+                assert not ERROR_RE.search(page.locator("#view").inner_text()), label
+            page.locator(f'[data-testid="step"][data-step="{step}"]').click()
+            page.locator("#nav a").nth(i).focus()
+            page.keyboard.press("Enter")
+            assert page.locator("#view").inner_text().strip(), label
+    assert {"dashboard", "implstatus", "map", "diagrams", "entities", "integrations", "source", "tables", "maintenance"} <= keys
 
 
 # FR-1042 AC-227
 def test_ac227_integrations_list_shows_columns_and_detail_shows_16_viewpoints_links_and_responsibility(page, int_url):
     page.goto(int_url)
     page.wait_for_load_state("networkidle")
+    page.locator('[data-testid="step"][data-step="2"]').click()   # FR-1094: integrations is in step 2
     page.locator("#nav").get_by_text("外部連携").first.click()
     rows = page.get_by_test_id("integration-row")
     expect(rows).to_have_count(2)
@@ -196,6 +203,7 @@ def test_ac227_integrations_list_shows_columns_and_detail_shows_16_viewpoints_li
 def test_ac227_integrations_sort_filter_and_csv(page, int_url):
     page.goto(int_url)
     page.wait_for_load_state("networkidle")
+    page.locator('[data-testid="step"][data-step="2"]').click()   # FR-1094: integrations is in step 2
     page.locator("#nav").get_by_text("外部連携").first.click()
     page.locator("#view input").first.fill("倉庫")
     rows = page.get_by_test_id("integration-row")
@@ -214,6 +222,7 @@ def test_ac227_integrations_sort_filter_and_csv(page, int_url):
 def test_ac227_filter_with_no_match_shows_zero_rows_without_error(page, int_url):
     page.goto(int_url)
     page.wait_for_load_state("networkidle")
+    page.locator('[data-testid="step"][data-step="2"]').click()   # FR-1094: integrations is in step 2
     page.locator("#nav").get_by_text("外部連携").first.click()
     page.locator("#view input").first.fill("存在しない連携先-zzz")
     expect(page.get_by_test_id("integration-row")).to_have_count(0)

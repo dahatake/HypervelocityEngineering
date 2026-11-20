@@ -1,13 +1,13 @@
 # 外部連携カタログ
 
-Studio が読み取る連携。INT-001 はローカルのファイル、INT-002 は GitHub の読み取り専用の取得です（どちらも書込みはしません）。INT-003・INT-004 は、利用者が設定して明示的に開始する生成 AI の呼出しです（検討中。未実装）。
+Studio が読み取る連携。INT-001 はローカルのファイル、INT-002 は GitHub の読み取り専用の取得です（どちらも書込みはしません）。INT-003・INT-004 は、利用者が設定して明示的に開始する生成 AI の呼出しです（2026-11-20 実装。`HVE-Studio/ai.py`）。
 
 | ID | 名前 | 連携先 | 状態 | 関連する要求 |
 |---|---|---|---|---|
 | INT-001 | 指定リポジトリのローカル解析 | 利用者が選択したローカル Git リポジトリ | 運用中 | FR-1086、FR-1088、FR-1099、FR-1100 |
 | INT-002 | GitHub の Issue・PR・Actions の読取り | 指定リポジトリの origin が指す GitHub | 運用中 | FR-1088、NFR-SEC-003 |
-| INT-003 | Microsoft Azure の生成 AI（推論とリソースの一覧） | Azure OpenAI（Microsoft Foundry）と Azure Resource Manager | 検討中 | FR-1096、FR-1097、FR-1098、NFR-SEC-024 |
-| INT-004 | GitHub Copilot SDK の生成 AI | Microsoft Copilot SDK（旧 GitHub Copilot SDK）のランタイムと、その先の GitHub Copilot または BYOK の提供元 | 検討中 | FR-1096、FR-1098、NFR-SEC-024 |
+| INT-003 | Microsoft Azure の生成 AI（推論とリソースの一覧） | Azure OpenAI（Microsoft Foundry）と Azure Resource Manager | 運用中 | FR-1096、FR-1097、FR-1098、NFR-SEC-024 |
+| INT-004 | GitHub Copilot SDK の生成 AI | Microsoft Copilot SDK（旧 GitHub Copilot SDK）のランタイムと、その先の GitHub Copilot または BYOK の提供元 | 運用中 | FR-1096、FR-1098、NFR-SEC-024 |
 
 #### INT-001 指定リポジトリのローカル解析
 - 連携先: 利用者が選択したローカル Git リポジトリ。ファイルと Git のオブジェクトが正本。FR-1099 の対象リポジトリ群では、選んだ各リポジトリを同じ方式で個別に読み、FR-1100 のリポジトリ間の関係もこの読取りの結果から作る（2026-11-20）。
@@ -65,14 +65,14 @@ Studio が読み取る連携。INT-001 はローカルのファイル、INT-002 
 - 可用性・SLA: Azure のサービスの SLA に従う。使えなくても AI 以外の機能は動く。
 - レート制限: デプロイのクォータ（1 分あたりのトークン数・要求数）に従う。超過は原因として表示する。
 - エラー・再試行・冪等性: 認証の失敗・権限不足・接続先なし・時間切れ・レート制限を区別して示す（AC-521・AC-524・AC-533）。自動では再試行せず、利用者のやり直しで再送する。推論は副作用がないため、やり直しは安全。
-- 契約・バージョン: Azure OpenAI の推論 API の api-version と Resource Manager の api-version を設定または実装で固定する。具体値は実装時に決めてここに追記する（利用者の判断は不要な実装の細部）。
+- 契約・バージョン: 実装で固定（`HVE-Studio/ai.py`、2026-11-20）。推論は `POST {endpoint}/openai/deployments/{deployment}/chat/completions?api-version=2024-10-21`（GA）。Resource Manager はサブスクリプションの一覧 `api-version=2022-12-01`、Cognitive Services のアカウントとデプロイの一覧 `api-version=2023-05-01`（種類 OpenAI・AIServices だけを一覧にする）。トークンは Azure CLI の `az account get-access-token --resource`（推論は `https://cognitiveservices.azure.com`、一覧は `https://management.azure.com`）で実行時に取得する。エンドポイントは https（ローカルの提供元と検査のための 127.0.0.1・localhost の http を除く）だけを受け付ける。
 - 変更通知: なし。提供元のモデル・API の変更は Azure の告知に従う。
 - 監視: 設定画面の「接続を確認」と、回答ごとの提供元・モデル名・時刻の表示。
 - データ保持: Studio は回答をディスクに保存しない（AC-527）。送った内容の保持は Azure のサービスの規約とリソースの設定に従う（利用者が確認）。
 - 障害時の代替: AI を使わずに、同じステップの画面で同じデータを確認できる。
 - 責任分界: リソース・役割の割当て・費用・データの取扱いは Azure のサブスクリプションの管理者と利用者、呼出しと表示は Studio。
 - 法務・ライセンス: 利用者の Azure の契約と、生成 AI の利用規約に従う。送るデータの社外への送信の可否は利用者の組織の規程による（Q-021）。
-- 状態: 検討中
+- 状態: 運用中
 - 関連する要求: FR-1096、FR-1097、FR-1098、NFR-SEC-003、NFR-SEC-024
 
 #### INT-004 GitHub Copilot SDK の生成 AI
@@ -87,12 +87,12 @@ Studio が読み取る連携。INT-001 はローカルのファイル、INT-002 
 - 可用性・SLA: GitHub Copilot または BYOK の提供元に依存。使えなくても AI 以外の機能は動く。
 - レート制限: GitHub Copilot の利用量の上限、または BYOK の提供元のクォータに従う。超過は原因として表示する。
 - エラー・再試行・冪等性: SDK の不足・未サインイン・契約なし・キーの誤り・時間切れを区別して示す。自動では再試行しない。
-- 契約・バージョン: Copilot SDK のプロトコル版（sdk-protocol-version）とパッケージの版を実装時に固定し、ここに追記する（利用者の判断は不要な実装の細部）。
+- 契約・バージョン: パッケージは `microsoft-copilot-sdk`（Python 3.11 以上。Studio は導入しない）。呼出しは SDK の README（2026-11-20 取得）の API に合わせる: `CopilotClient(mode="empty", github={"token": <gh のトークン>, "use_logged_in_user": False})`、`create_session(tools={"available_tools": []}, permissions={"on_request": <すべて拒否>}, system_message={"mode": "replace"}, working_directory=<一時フォルダー>)`、`send_and_wait`。BYOK は `inference.providers`（type・base_url・api_key）と `github.capi.enabled=False`。パッケージの版とプロトコル版は固定していない（SDK を導入した端末での実機確認は未実施。11.3 の [ASSUMPTION]）。
 - 変更通知: SDK のリポジトリの CHANGELOG とリリース。GitHub Copilot SDK から Microsoft Copilot SDK への移行中（SRC-053）。
 - 監視: 設定画面の「接続を確認」と、回答ごとの提供元・モデル名・時刻の表示。
 - データ保持: Studio は回答をディスクに保存しない（AC-527）。送った内容の保持は GitHub Copilot または BYOK の提供元の規約に従う。
 - 障害時の代替: AI を使わずに、同じステップの画面で同じデータを確認できる。
 - 責任分界: 契約・利用量・課金は GitHub Copilot または提供元の契約者、呼出しと表示は Studio。
 - 法務・ライセンス: SDK は MIT ライセンス。GitHub Copilot の利用規約、または BYOK の提供元の規約に従う。
-- 状態: 検討中
+- 状態: 運用中
 - 関連する要求: FR-1096、FR-1098、NFR-SEC-003、NFR-SEC-024

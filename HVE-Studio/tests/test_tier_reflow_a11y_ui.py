@@ -215,8 +215,13 @@ def _derived_requirement_areas(page, base):
 
 
 def _screen_routes(page):
-    hrefs = page.evaluate("""() => [...document.querySelectorAll('#nav a[href^="#/"]')]
-        .filter(a => !a.hasAttribute('data-no-items')).map(a => a.getAttribute('href').slice(2))""")
+    # FR-1094: the nav lists the current step's items; walk every step to collect all of them
+    hrefs = []
+    for step in range(1, 7):
+        page.locator(f'[data-testid="step"][data-step="{step}"]').click()
+        page.wait_for_selector(f'[data-testid="step"][data-step="{step}"][aria-current="step"]')
+        hrefs += page.evaluate("""() => [...document.querySelectorAll('#nav a[href^="#/"]')]
+            .filter(a => !a.hasAttribute('data-no-items')).map(a => a.getAttribute('href').slice(2))""")
     return sorted(set(hrefs))
 
 

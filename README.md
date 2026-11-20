@@ -354,7 +354,7 @@ GitHub Copilot には、agents・skills・hooks をまとめて配布する標�
 2. **Copilot が規則に従って同じ変更で更新します**。`AGENTS.md` の規則に従い、要求定義書の要求と受入基準・カタログ・テスト・コードを同じ変更の中で更新し、`python scripts/verify.py` を exit 0 にします。新しい ID は `next-id.py`、台帳は `ledger.py` で更新します。差分を確認し、承認が必要な要求はチャットで承認します。
 3. **push・PR で CI が同じ検査をします**。`ebak-verify` が手元と同じ検査を実行します（検査だけで、修復の commit はしません）。データ層が不合格なら、手元で `python scripts/rdfix.py --full --apply` を実行して同じ変更に含めます。
 4. **節目に rd-auditor に監査を頼みます**。機能のまとまりが終わったとき・リリースの前などに、Agent に `rd-auditor` を選んで「差分を監査して」「全量を 3 回で監査して」などと頼みます。差分の既定は `base_branch`（既定 `main`）との差分です。サブエージェントを使えるクライアントでは指定の回数を並行して多数決します。結果は `work/audit/<日時>/report.md` に出ます。指摘を反映するかは利用者が判断し、別の変更で直します。
-5. **状況は HVE Studio で見ます**（任意）。`python HVE-Studio/studio.py --role pm` などで、要求・カタログ・試験の状態を図と表で確かめます（[HVE Studio](#hve-studioデータ層のビューアー)）。
+5. **状況は HVE Studio で見ます**（任意）。`python HVE-Studio/studio.py` で開き、画面上部の作業ステップに沿って、要求・カタログ・試験の状態を図と表で確かめます（[HVE Studio](#hve-studioデータ層のビューアー)）。
 
 詳しくは [ふだんの進め方](users-guide/02-daily-workflow.md) と [依頼の書き方](users-guide/01-writing-requests.md) を参照してください。
 
@@ -434,10 +434,10 @@ toolkit を入れたリポジトリのルートで、次を実行します。
 
 ```bash
 python HVE-Studio/studio.py --check      # データ層が読めるか（見つかったファイルと解析できた件数）を確認
-python HVE-Studio/studio.py --role pm    # ブラウザーが開く。--role は pm / architect / swe
+python HVE-Studio/studio.py              # ブラウザーが開く。画面上部の作業ステップ 1 から始まる
 ```
 
-Windows では `.\HVE-Studio\start.ps1 -Role pm`、macOS / Linux では `./HVE-Studio/start.sh . 8765 --role pm` でも起動できます。詳細は [HVE-Studio/README.md](HVE-Studio/README.md)、スクリプトのオプションは [スクリプトリファレンス](users-guide/05-scripts-reference.md) です。
+Windows では `.\HVE-Studio\start.ps1`、macOS / Linux では `./HVE-Studio/start.sh . 8765` でも起動できます。詳細は [HVE-Studio/README.md](HVE-Studio/README.md)、スクリプトのオプションは [スクリプトリファレンス](users-guide/05-scripts-reference.md) です。
 
 ### EABK なしで Studio を使う（コードのモード）
 

@@ -16,9 +16,9 @@ This folder is Part 2 of the [EABK User Guide](../README.en.md) (EABK itself is 
 
 | You are | Read first | Launch | First screen |
 |---|---|---|---|
-| Product Manager (decides what to invest in) | [05-product-manager.en.md](05-product-manager.en.md) | `python HVE-Studio/studio.py --role pm` | Dashboard |
-| Architect (checks design consistency and boundaries) | [06-architect.en.md](06-architect.en.md) | `python HVE-Studio/studio.py --role architect` | 2D map |
-| Software Engineer (looks for where implementation and tests are) | [07-software-engineer.en.md](07-software-engineer.en.md) | `python HVE-Studio/studio.py --role swe` | Tables |
+| Product Manager (decides what to invest in) | [05-product-manager.en.md](05-product-manager.en.md) | Step 1 "Understand the whole" | Dashboard |
+| Architect (checks design consistency and boundaries) | [06-architect.en.md](06-architect.en.md) | Step 3 "Check the impact" | 2D map |
+| Software Engineer (looks for where implementation and tests are) | [07-software-engineer.en.md](07-software-engineer.en.md) | Steps 2 "Settle requirements" and 4 "Track progress" | Tables |
 
 You can also switch roles at any time with the `Product Manager`, `Architect`, and `Software Engineer` buttons at the top right of the screen.
 

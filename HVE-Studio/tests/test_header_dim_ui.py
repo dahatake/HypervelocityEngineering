@@ -103,9 +103,9 @@ def test_ac373_zoom_level_is_restored_after_zoomless_screen(studio):
     page.wait_for_selector('[data-testid="semantic-zoom"][data-ready="true"]')
     page.evaluate("() => window.eabkView.setScale(3)")
     before = page.locator('[data-testid="semantic-zoom"]').get_attribute("data-level")
-    page.locator('#nav a[data-nav="tables"]').click()
+    page.evaluate("() => { location.hash = '#/tables'; }")   # a screen without zoom (step 2 since FR-1094)
     page.wait_for_selector('#nav a[data-nav="tables"].on')
-    page.locator('#nav a[data-nav="map"]').click()
+    page.locator('[data-testid="step"][data-step="3"]').click()   # step 3 opens the map again
     page.wait_for_selector('[data-testid="semantic-zoom"][data-ready="true"]')
     assert page.locator('[data-testid="semantic-zoom"]').get_attribute("data-level") == before
     page.context.close()

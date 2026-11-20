@@ -276,7 +276,7 @@ python tools/uninstall.py --target <導入先> --purge --runs     # 管理デー
 インストールすると、導入先の `HVE-Studio/` に入ります。データ層（要求定義書・カタログ・台帳）を図・表・検索で見る、ローカルの読み取り専用の Web アプリです（日本語・英語）。EABK を入れていない git リポジトリも、HVE の clone から `python HVE-Studio/studio.py --repo <任意の git リポジトリ>` で見られます（コードのモード。FR-1086）。
 
 ```text
-python HVE-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--role pm|architect|swe] [--check]
+python HVE-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--no-remote] [--check]
 ```
 
 | オプション | 動作 |
@@ -284,10 +284,10 @@ python HVE-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--role pm|ar
 | `--repo DIR` | 対象リポジトリ。EABK がなくてもよい（親へさかのぼってデータ層を探し、なければ git のルート）。省略時はカレントディレクトリ（データ層があるか、コードのモードで見られる git リポジトリのとき）、それ以外は Studio 自身のリポジトリ |
 | `--port N` | 待ち受けポート（既定 8765。使用中なら次の番号を最大 20 まで試す） |
 | `--no-open` | ブラウザーを自動で開かない |
-| `--role pm\|architect\|swe` | 最初に開く画面（ダッシュボード／2D マップ／表） |
+| `--no-remote` | GitHub の Issue・PR・Actions を gh で読まない（生成 AI の設定には影響しない） |
 | `--check` | 管理データのファイルの有無と、解析できた件数・警告を表示して終了。データ層があるか、コードのモードで見られれば exit 0（`mode: code (...) requirement-docs=… requirements=… linked-to-code=… code-files=… test-files=… components=…` の行が出ます）、どちらでもなければ exit 1 |
 
-- ラッパー: `HVE-Studio/start.ps1 [-Repo DIR] [-Port N] [-Role …] [-Check] [-NoOpen]`、`HVE-Studio/start.sh [DIR] [PORT] [studio.py のオプション…]`。
+- ラッパー: `HVE-Studio/start.ps1 [-Repo DIR] [-Port N] [-Check] [-NoOpen]`、`HVE-Studio/start.sh [DIR] [PORT] [studio.py のオプション…]`。
 - コードのモードでは、Markdown の表の先頭の列と見出しにある要求 ID（`FR-…`・`NFR-…`。`docs/PRD.md` などを先に読む）、その ID を書いたコードとテスト、コンポーネントにまとめたソースを読み取りだけで導出します。台帳と受入基準は空です。対象は git リポジトリのルートだけで、空のフォルダーや git でないフォルダーは exit 1 です。
 - データ層があるときはソースコードを読まず、127.0.0.1 だけで待ち受けます。書き込むのは「整合性保守」で確認して実行した `docs/catalog.md` の題名・決定状態だけです。
 - 役割別のガイドは [studio/README.md](studio/README.md) にあります。

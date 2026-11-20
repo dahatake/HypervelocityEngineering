@@ -1,4 +1,4 @@
-// FR-1002/1003/1005/1006: decision-oriented views derived only from the loaded model.
+// FR-1003/1005/1006: decision-oriented views derived only from the loaded model.
 import { store } from './store.js';
 import { t, onLang } from './i18n.js';
 import { el, vscodeUrl } from './ui.js';
@@ -30,33 +30,15 @@ export function evidenceTarget(record) {
     : { label: t('ins.noloc'), href: '' };
 }
 
-// The screens that carry a role-by-role analysis; their words are the dictionary keys ins.page.<route>.n / i / p / d.
-const PAGE = { dashboard: 1, map2d: 1, map3d: 1, diagrams: 1, placement: 1, source: 1, tables: 1 };
-
-export function analysis(route) {
-  return live(() => {
-    const name = t(`ins.page.${route}.n`), info = t(`ins.page.${route}.i`);
-    const perspective = t(`ins.page.${route}.p`), decision = t(`ins.page.${route}.d`);
-    const roles = ['pm', 'arch', 'swe'].map((id) => [t('persona.' + id), t('ins.role.info', { v: info }), t(`ins.role.${id}.p`, { v: perspective }), t(`ins.role.${id}.d`, { v: decision })]);
-    return el('section', { class: 'analysis card', role: 'region', 'aria-label': t('ins.analysis', { name }) },
-      el('div', { class: 'analysis-title' }, el('b', {}, t('ins.analysis', { name })), el('span', {}, t('ins.roleread'))),
-      el('div', { class: 'analysis-grid' }, roles.map(([role, a, b, c]) =>
-        el('article', {}, el('h2', {}, role),
-          el('p', {}, el('b', {}, t('ins.l.info')), a),
-          el('p', {}, el('b', {}, t('ins.l.persp')), b),
-          el('p', {}, el('b', {}, t('ins.l.decide')), c)))));
-  });
-}
-
 export function decorate(route, host) {
+  // FR-1002 (role-by-role explanations) was retired on 2026-11-20; the step band above every screen says what to decide (FR-1094 AC-516).
   const page = host.querySelector('.page');
-  if (route in PAGE) (page || host).prepend(analysis(route));
   if (route === 'dashboard' && page) page.append(historyProgress());
   if (route === 'placement' && new URLSearchParams(location.hash.split('?')[1] || '').get('kind') === 'runtime') {
-    host.replaceChildren(el('div', { class: 'page' }, analysis('placement'), runtimePlacement()));
+    host.replaceChildren(el('div', { class: 'page' }, runtimePlacement()));
   }
   if (route === 'diagrams' && new URLSearchParams(location.hash.split('?')[1] || '').get('kind') === 'er') {
-    host.replaceChildren(el('div', { class: 'page' }, analysis('diagrams'), entityER()));
+    host.replaceChildren(el('div', { class: 'page' }, entityER()));
   }
 }
 

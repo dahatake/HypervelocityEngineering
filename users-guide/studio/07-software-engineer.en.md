@@ -4,7 +4,7 @@
 
 This guide shows you how to decide "where are the implementation and tests that satisfy this requirement" and "which file to fix next" by tracing from a requirement **all the way to the file**. It takes about 15 minutes.
 
-Click `💻 Software Engineer` at the top right of the screen to open the tables screen. Launching with `--role swe` also opens this screen first.
+Choose work step 2 "Settle requirements" at the top of the screen to open the tables screen (the role selector was replaced by the work steps on 2026-11-20).
 
 ## S7.1 Screens to view and the data they read
 
@@ -21,7 +21,7 @@ Click `💻 Software Engineer` at the top right of the screen to open the tables
 
 1. **Launch** (1 minute).
    ```powershell
-   python HVE-Studio/studio.py --role swe
+   python HVE-Studio/studio.py
    ```
 2. **Choose a requirement to work on** (2 minutes). Open `Tables` → `Requirements`. In the `status: all` filter choose `approved`, and in the `impl` filter choose `none` (implementation files empty) or `unlisted` (no row in the catalog). Look at priority starting from `MUST`.
 

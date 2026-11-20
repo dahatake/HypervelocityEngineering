@@ -21,7 +21,7 @@
 <rect x="750" y="40" width="320" height="8" rx="4" fill="#107c10" stroke="#107c10" stroke-width="1" />
 <text x="910.0" y="76" font-size="14" fill="#222" font-weight="bold" text-anchor="middle">3. 確認する</text>
 <text x="910.0" y="98" font-size="11" fill="#555" font-weight="normal" text-anchor="middle">python scripts/verify.py → exit 0</text>
-<text x="910.0" y="116" font-size="11" fill="#555" font-weight="normal" text-anchor="middle">python HVE-Studio/studio.py --role pm</text>
+<text x="910.0" y="116" font-size="11" fill="#555" font-weight="normal" text-anchor="middle">python HVE-Studio/studio.py</text>
 <text x="910.0" y="134" font-size="11" fill="#555" font-weight="normal" text-anchor="middle">→ ブラウザーで状態を見る</text>
 <text x="910.0" y="152" font-size="11" fill="#555" font-weight="normal" text-anchor="middle">→ 納得したらマージ</text>
 <path d="M350 135 H390" stroke="#667" stroke-width="2" fill="none" marker-end="url(#ar)"/>

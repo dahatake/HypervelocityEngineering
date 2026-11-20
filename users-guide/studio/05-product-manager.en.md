@@ -4,7 +4,7 @@
 
 This guide shows you how to judge "what we decided to build," "how far along we are," and "what to invest in next" without reading any code. It takes about 15 minutes.
 
-Click `🎯 Product Manager` at the top right of the screen to open the dashboard. Launching with `--role pm` also opens this screen first.
+Choose work step 1 "Understand the whole" at the top of the screen to open the dashboard (the role selector was replaced by the work steps on 2026-11-20).
 
 ![Header (search, role switcher, tabs)](images/header.png)
 
@@ -24,7 +24,7 @@ Click `🎯 Product Manager` at the top right of the screen to open the dashboar
 
 1. **Launch** (about 1 minute). Run the following in the repository folder. A browser opens.
    ```powershell
-   python HVE-Studio/studio.py --role pm
+   python HVE-Studio/studio.py
    ```
    If it does not open properly, first run `python HVE-Studio/studio.py --check` to confirm that the data layers are found.
 2. **Read the overall numbers** (2 minutes). Read the numbers in the top row of the dashboard from left to right.

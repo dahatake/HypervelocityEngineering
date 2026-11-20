@@ -12,19 +12,26 @@ def _nav(page):
     return page.locator("#nav a")
 
 
-# FR-1041 AC-224: nine items, each with a tooltip; the screen opens with the same sentence; no two items share one.
+# FR-1041 AC-224 / FR-1094 AC-514: nine items, each with a tooltip; the screen opens with the same sentence; no two items
+# share one. Since FR-1094 the nav lists only the current step's items, so every step is walked and all nine are found.
 @pytest.mark.parametrize("lang", [None, "en"])
 def test_ac224_every_nav_item_has_unique_description_in_tooltip_and_screen_header(studio, lang):
     page = _open(studio, "dashboard", lang=lang)
-    links = _nav(page)
-    assert links.count() == len(NAV_KEYS)
-    titles = [links.nth(i).get_attribute("title") for i in range(links.count())]
-    assert all(titles) and len(set(titles)) == len(titles)
-    for i in range(links.count()):
-        links.nth(i).click()
-        page.wait_for_function("t => document.getElementById('navDesc').textContent === t", arg=titles[i])
-        assert page.locator("#navDesc").inner_text().strip() == titles[i]
-    assert any(re.search(r"データ|record|data|graph|グラフ|図|diagram", x, re.I) for x in titles)
+    titles = {}
+    for step in range(1, 7):
+        page.locator(f'[data-testid="step"][data-step="{step}"]').click()
+        page.wait_for_selector(f'[data-testid="step"][data-step="{step}"][aria-current="step"]')
+        links = _nav(page)
+        for i in range(links.count()):
+            key, title = links.nth(i).get_attribute("data-nav"), links.nth(i).get_attribute("title")
+            assert title and titles.get(key, title) == title
+            titles[key] = title
+            links.nth(i).click()
+            page.wait_for_function("t => document.getElementById('navDesc').textContent === t", arg=title)
+            assert page.locator("#navDesc").inner_text().strip() == title
+    assert set(NAV_KEYS) <= set(titles)
+    assert len(set(titles.values())) == len(titles)
+    assert any(re.search(r"データ|record|data|graph|グラフ|図|diagram", x, re.I) for x in titles.values())
     page.context.close()
 
 
@@ -126,8 +133,9 @@ def test_ac226_map_dimension_switch_keeps_query_and_nav_stays_on_map_item(studio
     page.wait_for_function("() => document.querySelector('[data-testid=dim-toggle]')?.dataset.current === '3d'")
     assert page.locator('#nav a[data-nav="map"]').get_attribute("aria-current") == "page"
     page.goto(page.url.split("#")[0] + "#/dashboard")
-    page.locator('#nav a[data-nav="map"]').click()
+    page.locator('[data-testid="step"][data-step="3"]').click()   # step 3 opens the map item (FR-1094)
     page.wait_for_function("() => location.hash.startsWith('#/map3d')")  # the map opens in the dimension used last
+    assert page.locator('#nav a[data-nav="map"]').get_attribute("aria-current") == "page"
     page.context.close()
 
 

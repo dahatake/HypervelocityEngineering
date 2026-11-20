@@ -276,7 +276,7 @@ The catalog `tools/uninstall-catalog.json` is built by `tools/build-uninstall-ca
 Installed into `HVE-Studio/` of the target repository. A local, read-only web app that shows the data layer (requirements definition, catalog, ledger) as diagrams, tables and search (Japanese and English). A git repository without EABK can also be viewed from an HVE clone with `python HVE-Studio/studio.py --repo <any-git-repo>` (code mode, FR-1086).
 
 ```text
-python HVE-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--role pm|architect|swe] [--check]
+python HVE-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--no-remote] [--check]
 ```
 
 | Option | Behavior |
@@ -284,10 +284,10 @@ python HVE-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--role pm|ar
 | `--repo DIR` | Target repository, with or without EABK (searches parent directories for the data layer, otherwise uses the git root). Default: the current directory if it has a data layer or is a git repository showable in code mode, otherwise Studio's own repository |
 | `--port N` | Listening port (default 8765; if in use, tries the next numbers up to 20 times) |
 | `--no-open` | Do not open the browser automatically |
-| `--role pm\|architect\|swe` | First screen to open (dashboard / 2D map / table) |
+| `--no-remote` | Do not read GitHub Issues, PRs and Actions through gh (does not affect the AI settings) |
 | `--check` | Print which management-data files exist, the parsed counts and warnings, then exit. Exit 0 if a data layer exists or code mode has something to show (a `mode: code (...) requirement-docs=… requirements=… linked-to-code=… code-files=… test-files=… components=…` line is printed), otherwise 1 |
 
-- Wrappers: `HVE-Studio/start.ps1 [-Repo DIR] [-Port N] [-Role …] [-Check] [-NoOpen]`, `HVE-Studio/start.sh [DIR] [PORT] [studio.py options…]`.
+- Wrappers: `HVE-Studio/start.ps1 [-Repo DIR] [-Port N] [-Check] [-NoOpen]`, `HVE-Studio/start.sh [DIR] [PORT] [studio.py options…]`.
 - In code mode it derives, read-only, requirement IDs (`FR-…`, `NFR-…`) from the first column of markdown tables and from headings (`docs/PRD.md` and the like first), the code and test files that mention each ID, and source files grouped into components. The ledger and acceptance criteria are empty. Only a git repository root is used; an empty or non-git folder exits 1.
 - With a data layer it never reads source code. It listens on 127.0.0.1 only. The only writes are catalog titles and decision states in `docs/catalog.md` that you confirm and run in "整合性保守" (consistency maintenance).
 - Role-based guides are in [studio/README.en.md](studio/README.en.md).

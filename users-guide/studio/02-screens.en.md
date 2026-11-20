@@ -6,6 +6,32 @@ Switch screens with the navigation at the top (9 items). Point at any item and a
 
 ![Header (tabs, search, target repository, role switch, language)](images/header.png)
 
+## Work steps (the Product Manager's order of work)
+
+Six numbered work steps line the top of the screen (FR-1094). Studio starts on step 1. Choosing a step opens its default screen; the band below shows the step's screen tabs, what to decide, what the screen shows and the next step. The role selector (Product Manager, Architect, Software Engineer) was removed on 2026-11-20.
+
+| Step | Default screen | Screens in the step |
+|---|---|---|
+| 1 Understand the whole | Dashboard | — |
+| 2 Settle requirements | Tables (requirements) | Entities, Integrations |
+| 3 Check the impact | Map | Diagrams, Source mapping |
+| 4 Track progress | Implementation status | Tables (test cases) |
+| 5 Decide on release | "Release decision" of Implementation status | Tables (test cases) |
+| 6 Tidy up and record | Integrity maintenance | Tables (decisions) |
+
+- **Release decision** (step 5, FR-1095): met / not met / undetermined per goal and the overall "needs attention / OK / unknown" with reasons, the last ledger run and the items to act on. When it cannot be judged it says "unknown", never "OK". The state is always shown next to step 5.
+- **Ask AI** (optional, FR-1096..FR-1098): choose Microsoft Azure (Key / Entra ID) or the GitHub Copilot SDK (GitHub CLI sign-in / Key) in "AI settings" to ask for explanations, summaries and recommendations on every step. Before anything is sent, Studio shows what is sent and where, and asks for consent. Code file contents, paths, Issue and PR bodies and keys are never sent. Without settings, nothing is sent to any AI.
+- **Several repositories** (FR-1099, FR-1100): add repositories with "+" in the header; IDs get the repository name as a prefix. The "Between repositories" tab of Source mapping shows package dependencies, function and API calls and data exchange, split into confirmed and candidate, as a diagram and a table.
+
+### Microsoft Design principles and their acceptance criteria
+
+| Principle | Behaviour | Judged by |
+|---|---|---|
+| Natural on every platform | Follows the OS colours, text size and narrow screens | AC-259, AC-273, AC-534 |
+| Built for focus | Only the screens and fields needed now | AC-514, AC-516, AC-520 |
+| One for all, all for one | Usable by anyone at WCAG 2.2 AA | AC-269, AC-270, AC-271, AC-272, AC-273, AC-274 |
+| Unmistakably Microsoft | Consistent Fluent 2 tokens, components and icons | AC-258, AC-261, AC-262, AC-263, AC-268 |
+
 ## Navigation overview (what data you see)
 
 | Item | Data you can browse |

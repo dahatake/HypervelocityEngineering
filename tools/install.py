@@ -12,7 +12,7 @@ From a local clone:
 
 What it does (idempotent) - EABK Lite: rules + data layer + deterministic checks, no orchestration:
   * copies the managed files (.github/agents/rd-auditor, .github/skills, .github/workflows/ebak-verify.yml (check only),
-    scripts/*, HVE-Studio/ = the data-layer viewer with its role guides
+    scripts/*, HVE-Studio/ = the data-layer viewer with its guides
     and screenshots) and updates them on re-run unless you modified them locally;
   * keeps no migration code for older versions: `--clean` (clean install) deletes every file the toolkit installed
     (the manifest's records, this version's files, backups, the config, the marked blocks and appended lines) and
@@ -146,6 +146,30 @@ MANAGED = [
     "HVE-Studio/web/js/ui.js",
     "HVE-Studio/web/vendor/three.LICENSE",
     "HVE-Studio/web/vendor/three.module.min.js",
+    "HVE-Studio/ai.py",
+    "HVE-Studio/multi_repo.py",
+    "HVE-Studio/release.py",
+    "HVE-Studio/secret_store.py",
+    "HVE-Studio/xrepo.py",
+    "HVE-Studio/web/tokens.css",
+    "HVE-Studio/web/js/aiassist.js",
+    "HVE-Studio/web/js/camera3d.js",
+    "HVE-Studio/web/js/dgm3d.js",
+    "HVE-Studio/web/js/dim.js",
+    "HVE-Studio/web/js/graph.js",
+    "HVE-Studio/web/js/guide.js",
+    "HVE-Studio/web/js/integrations.js",
+    "HVE-Studio/web/js/layout.js",
+    "HVE-Studio/web/js/mapgraph.js",
+    "HVE-Studio/web/js/maptiers.js",
+    "HVE-Studio/web/js/release.js",
+    "HVE-Studio/web/js/repos.js",
+    "HVE-Studio/web/js/shapes3d.js",
+    "HVE-Studio/web/js/steps.js",
+    "HVE-Studio/web/js/theme.js",
+    "HVE-Studio/web/js/tierlist.js",
+    "HVE-Studio/web/js/viz.js",
+    "HVE-Studio/web/js/xref.js",
     "users-guide/studio/README.md",
     "users-guide/studio/01-first-steps.md",
     "users-guide/studio/02-screens.md",
@@ -706,9 +730,9 @@ def main(argv=None) -> int:
     print("  3. いつもの Copilot（既定のエージェント）に、ふだんどおり依頼します。AGENTS.md の規則に従って、")
     print("     要求定義書・カタログ・テストが同じ変更の中で更新され、push すると CI の ebak-verify が同じ検査をします")
     print("     （節目には custom agent `rd-auditor` に意味の監査を頼めます。手順: EABK-docs/06-quality-gates.md）")
-    print("  4. （任意）要求・カタログ・試験を図と表で見るには、HVE Studio を起動します（読み取り専用。役割は pm / architect / swe）:")
+    print("  4. （任意）要求・カタログ・試験を図と表で見るには、HVE Studio を起動します（読み取り専用。画面上部の作業ステップに沿って使います）:")
     print("     python HVE-Studio/studio.py --check            # データ層が読めるか確認")
-    print("     python HVE-Studio/studio.py --role pm          # ブラウザーが開きます。ガイド: EABK-docs/studio/README.md")
+    print("     python HVE-Studio/studio.py                    # ブラウザーが開きます。ガイド: EABK-docs/studio/README.md")
     return 0
 
 

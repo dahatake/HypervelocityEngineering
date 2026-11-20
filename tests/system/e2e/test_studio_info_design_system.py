@@ -140,7 +140,7 @@ def test_ac281_screen_name_is_unified(browser, studio_url, lang, word, banned):
     p.goto(studio_url + "#/tables")
     p.wait_for_load_state("networkidle")
     p.wait_for_selector("#view [role=tab]")  # 表の画面が描画されるまで待つ
-    nav = p.locator('nav a[href="#/tables"]').first
+    nav = p.locator('#nav a[data-nav="tables"]').first   # FR-1094: the item opens #/tables?tab=… of its step
     def _strip(s):  # 絵文字・記号を除いた画面名
         return re.sub(r"[^\w]+", " ", s, flags=re.UNICODE).strip()
     nav_text = _strip(nav.inner_text())
@@ -164,7 +164,7 @@ def test_ac283_entity_detail_has_breadcrumb(browser, tmp_path):
         p.goto(url + "/#/entities")
         p.wait_for_load_state("networkidle")
         p.get_by_text("注文", exact=True).first.click()
-        nav = p.locator("nav[aria-label]").filter(has_text="エンティティ")
+        nav = p.locator("nav[aria-label]:not(#nav)").filter(has_text="エンティティ")   # #nav: the step band (FR-1094)
         expect(nav.first).to_be_visible()
         expect(nav.first.locator("[aria-current=page]")).to_contain_text("注文")
         back = nav.first.locator("a", has_text=re.compile(r"^エンティティ$"))

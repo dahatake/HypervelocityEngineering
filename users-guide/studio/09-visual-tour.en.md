@@ -23,7 +23,7 @@ If you are new, finish the README [Quickstart](../../README.en.md#quickstart) fi
 
 ```bash
 python HVE-Studio/studio.py --check      # can the data layer be read?
-python HVE-Studio/studio.py --role pm    # opens the browser (pm / architect / swe)
+python HVE-Studio/studio.py              # opens the browser (from work step 1)
 ```
 
 ## 1. The screen layout (common to every screen)
@@ -139,7 +139,7 @@ This screen has two tabs: **"See how functions relate"** (the floorplan and the 
 ## 9. A suggested first 10 minutes
 
 1. Run `python HVE-Studio/studio.py --check` to confirm the data layer can be read.
-2. Open with `python HVE-Studio/studio.py --role pm` (or `architect`, `swe`).
+2. Open with `python HVE-Studio/studio.py`.
 3. Press **"New here?"** and go through the tour to the end.
 4. On the Dashboard, check that "open questions" and "BLOCKED" are 0.
 5. Pick a goal (G-ID) that concerns you and look at its not-started requirements in **Impl. status**.

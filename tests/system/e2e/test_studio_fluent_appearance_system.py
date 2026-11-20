@@ -46,7 +46,8 @@ from test_studio_links_wrap_status_arch_system import _serve
 
 WEB = ROOT / "HVE-Studio" / "web"
 BASE = "80c7cc55"
-NAV = ["dashboard", "implstatus", "map", "diagrams", "entities", "integrations", "source", "tables", "maintenance"]
+NAV = ["dashboard", "implstatus", "map", "diagrams", "entities", "integrations", "source", "tables", "maintenance",
+       "release"]  # NFR-UX-020 AC-534: the release decision view (FR-1095) is checked like the nine items
 P_BODY, P_SMALL, P_GRID, P_MOTION, P_RM = 14, 12, 4, 300, 1  # PARAM-035/036/030/032/037
 P_TEXT, P_NONTEXT, P_TARGET, P_REFLOW = 4.5, 3.0, 24, 320  # PARAM-028/029/031/034
 P_TOL, P_ZOOM_MS, P_FIRST_S, P_N = 1.10, 100, 3, 20  # PARAM-033/021/022/038
@@ -382,7 +383,7 @@ def test_ac264_interactive_states_defined_and_selection_not_color_only(page):
     css = _css()
     for pseudo in (":hover", ":active", ":focus-visible", r":disabled|\[aria-disabled"):
         assert re.search(pseudo, css), f"{pseudo} のスタイルが無い"
-    _go(page, "dashboard")
+    _go(page, "map2d")   # FR-1094: step 3 lists three items (the dashboard's step lists one)
     diff = page.evaluate("""() => { const on = document.querySelector('#nav a[aria-current="page"]'),
         off = document.querySelector('#nav a:not([aria-current])'); const a = getComputedStyle(on), b = getComputedStyle(off);
         return ['fontWeight','textDecorationLine','borderBottomWidth','borderBottomStyle','outlineWidth','boxShadow'].filter(p => a[p] !== b[p]) }""")
@@ -583,7 +584,7 @@ def test_ac271_forced_colors_defined_and_state_visible(browser, studio_url):
     assert re.search(r"@media[^{]*forced-colors:\s*active", _css())
     ctx = browser.new_context(forced_colors="active")
     page = ctx.new_page()
-    page.goto(studio_url)
+    page.goto(studio_url.split("#")[0].rstrip("/") + "/#/map2d")   # FR-1094: step 3 lists three items
     page.wait_for_load_state("networkidle")
     diff = page.evaluate("""() => { const on = document.querySelector('#nav a[aria-current="page"]'), off = document.querySelector('#nav a:not([aria-current])');
         const a = getComputedStyle(on), b = getComputedStyle(off);

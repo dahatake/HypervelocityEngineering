@@ -4,7 +4,7 @@
 
 This guide shows you how to verify the **connections, boundaries, and placement** between requirements and implementation from a design perspective. It takes about 15 minutes.
 
-Click `🏗️ Architect` at the top right of the screen to open the 2D map. Launching with `--role architect` also opens this screen first.
+Choose work step 3 "Check the impact" at the top of the screen to open the 2D map (the role selector was replaced by the work steps on 2026-11-20).
 
 ## S6.1 Screens to view and the data they read
 
@@ -22,7 +22,7 @@ Click `🏗️ Architect` at the top right of the screen to open the 2D map. Lau
 
 1. **Launch** (1 minute).
    ```powershell
-   python HVE-Studio/studio.py --role architect
+   python HVE-Studio/studio.py
    ```
 2. **Get an overview** (2 minutes). The 2D map runs from left to right: "goal → requirement → data, shared components, APIs, tables → source files → test cases." Zoom with the wheel and pan by dragging. Double-click or use `Bird's-eye view` to return to the whole view.
 

@@ -2,12 +2,12 @@
 
 正式名称は **Hypervelocity Engineering Studio** です。旧名は EABK Studio です。フォルダーは `EABK-Studio/` から `HVE-Studio/` に、ルートの起動スクリプトは `start-eabk-studio.*` から `start-hve-studio.*` に変わりました。ブラウザーに保存した表示設定は引き続き使えます。
 
-EABK Lite のデータ層（要求定義書・カタログ・System Test の台帳・ID 台帳）を、Product Manager・Architect・Software Engineer の視点で見て回る、ローカル専用の Web アプリです。
+EABK Lite のデータ層（要求定義書・カタログ・System Test の台帳・ID 台帳）を、Product Manager の作業の順番（作業ステップ）に沿って見て回る、ローカル専用の Web アプリです。
 EABK を入れた**どのリポジトリでも**動きます（このリポジトリに依存しません）。EABK を使っていない git リポジトリも、コードと PRD から読み取りだけで導出して表示します（下の「EABK なしで使う（コードのモード）」）。UI は日本語・英語を右上の `JA | EN` で切り替えます。
 
 *A local-only web app that lets a product manager explore the EABK Lite data layer (requirements, catalog, system-test ledger, ID registry) of **any** repository with EABK; a git repository without EABK is shown in read-only "code mode", derived from its code and PRD. The UI switches between Japanese and English with the `JA | EN` button.*
 
-> 初めての方は、役割に合うガイドから読んでください: [Product Manager](../users-guide/studio/05-product-manager.md)・[Architect](../users-guide/studio/06-architect.md)・[Software Engineer](../users-guide/studio/07-software-engineer.md)（索引は [users-guide/studio/README.md](../users-guide/studio/README.md)）。各画面が読むデータの一覧は [08-data-reference.md](../users-guide/studio/08-data-reference.md) です。`tools/install.py` で他のリポジトリへ入れると、これらのガイドも一緒に入ります。
+> 初めての方は、目的に合うガイドから読んでください: [Product Manager](../users-guide/studio/05-product-manager.md)・[Architect](../users-guide/studio/06-architect.md)・[Software Engineer](../users-guide/studio/07-software-engineer.md)（索引は [users-guide/studio/README.md](../users-guide/studio/README.md)）。各画面が読むデータの一覧は [08-data-reference.md](../users-guide/studio/08-data-reference.md) です。`tools/install.py` で他のリポジトリへ入れると、これらのガイドも一緒に入ります。
 
 ## 起動 / Start
 
@@ -15,10 +15,9 @@ Python 3.9 以上で動き、追加 Python パッケージは不要です。Git 
 
 ```powershell
 python HVE-Studio/studio.py --repo C:\path\to\your-repo      # ブラウザーが開きます
-python HVE-Studio/studio.py --role architect                  # 役割に合う画面から始める
 python HVE-Studio/studio.py --check                           # データ層が読めるかだけを確認（起動しない）
-.\HVE-Studio\start.ps1 C:\path\to\your-repo -Role pm          # 同じ（Windows）。-Check / -NoOpen も可
-./HVE-Studio/start.sh /path/to/your-repo 8765 --role swe      # 同じ（macOS / Linux）。第 3 引数以降は studio.py にそのまま渡す
+.\HVE-Studio\start.ps1 C:\path\to\your-repo                  # 同じ（Windows）。-Check / -NoOpen も可
+./HVE-Studio/start.sh /path/to/your-repo 8765                # 同じ（macOS / Linux）。第 3 引数以降は studio.py にそのまま渡す
 ```
 
 | オプション | 意味 |
@@ -26,7 +25,7 @@ python HVE-Studio/studio.py --check                           # データ層が�
 | `--repo PATH` | 対象リポジトリ。EABK は不要です。親へたどって最寄りの Git または管理データのルートを使い、入れ子の Git では親の管理データへ移動しません。省略時は、現在のフォルダーにデータ層があるか Git ならそこ、それ以外は Studio 自身のリポジトリです |
 | `--port N` | 待ち受けポート（既定 8765。使用中なら次の番号） |
 | `--no-open` | ブラウザーを自動で開かない |
-| `--role pm\|architect\|swe` | 最初に開く画面（pm = ダッシュボード、architect = マップ（2D）、swe = 表）。画面右上のロールのボタンと同じ |
+| `--no-remote` | GitHub の Issue・PR・Actions を gh で読まない（INT-002）。生成 AI の設定（INT-003・INT-004）には影響しません |
 | `--check` | 管理データのファイルの有無と、解析できた件数・警告を表示して終了（データ層があるか、コードのモードで見られれば 0、どちらでもなければ 1）。コードのモードでは `mode: code (...) requirement-docs=… requirements=… linked-to-code=… code-files=… test-files=… components=…` の行も出ます。サーバーは起動しません |
 | `--sync-data` | 表示用管理データを作成・同期し、実際の段階・処理数の進捗を出力して終了。失敗は理由付きで exit 1 |
 | `--data-status` | 生成ファイルの有無・絶対パス・同期状態を JSON で出力して終了 |
@@ -44,6 +43,55 @@ python HVE-Studio/studio.py --check                           # データ層が�
 - 進捗は `GET /api/model/progress`（`status`・段階・件数・経過ミリ秒・部分モデルの版）、部分モデルは `GET /api/model/partial` で取得できます（ローカル専用・読み取りのみ）。
 
 *While a large repository is analyzed, the splash shows the real phase, counts and elapsed time (no ETA). The screen opens on the first partial model and refreshes about every 5 seconds until the full model replaces it. A banner shows the progress during partial views, repository switches and reloads. Build time scales about linearly with the number of requirements.*
+## 作業ステップ・リリース判断・生成 AI・複数のリポジトリ / Work steps, release decision, AI, several repositories
+
+### 作業ステップ（FR-1094）
+
+役割の選択（Product Manager・Architect・Software Engineer）は 2026-11-20 に廃止し（FR-008・FR-1002）、画面上部に Product Manager の作業の順番を 6 つのステップとして並べました。ステップを選ぶと既定の画面が開き、すぐ下の帯に、そのステップの画面（ナビの 9 項目のうち、そのステップの判断に使うものだけ）・判断すること・画面に表示される情報・次のステップが出ます。ステップは矢印キーと Enter、コマンド検索（`>ステップ`）でも選べます。旧 URL や検索結果から画面を直接開くと、その画面が属するステップが選ばれます。
+
+| ステップ | 判断すること | 既定の画面 | ステップ内の画面 |
+|---|---|---|---|
+| 1 全体を把握する | 目的ごとの進み具合と、どこに手を打つか | ダッシュボード | — |
+| 2 要求を固める | 未回答の質問・承認待ち・BLOCKED の解消 | 表（要求） | エンティティ、外部連携 |
+| 3 影響を確かめる | 変更がどのデータ・部品・API・コード・リポジトリに及ぶか | マップ | 図式、ソース対応（リポジトリ間の関係を含む） |
+| 4 進捗を追う | 実装の登録と試験の pass の進み具合 | 実装状態 | 表（試験ケース） |
+| 5 リリースを判断する | 目的が達成されたか、出してよいか | 実装状態の「リリース判断」 | 表（試験ケース） |
+| 6 整えて記録する | カタログ・台帳の不整合を直し、決定を残す | 整合性保守 | 表（決定記録） |
+
+### リリース判断（FR-1095）
+
+実装状態の項目の「リリース判断」タブ（`#/release`。ナビの 9 項目は増やしません）に、目的ごとの達成判定（達成・未達・未判定）と、全体の状態（要対応・正常・不明）を、理由・判定に使った台帳の最終実行日時・モデルの測定時刻・要対応の項目の一覧とともに表示します。判定はサーバーの `HVE-Studio/release.py` が管理データだけから行います。管理データを読めない・台帳がない・目的が 0 件・判定対象のない目的がある、のどれかでは「不明」で、「正常」とは示しません。全体の状態はステップ 5 の名前の横に常に出ます。
+
+### 生成 AI（任意。FR-1096〜FR-1098、NFR-SEC-024、NFR-UX-019）
+
+帯の「AI の設定」で、使うかどうかと提供元・認証方式を選びます。選んだ組み合わせに必要な入力欄だけが出ます。
+
+| 提供元 | 認証方式 | 入力・選択 | 必要なもの |
+|---|---|---|---|
+| Microsoft Azure | Key | エンドポイント、デプロイ名、キー | Azure OpenAI（Microsoft Foundry）のリソース |
+| Microsoft Azure | Entra ID | サブスクリプション → リソース → デプロイを一覧から選ぶ | Azure CLI（`az login` 済み）、推論の役割（Cognitive Services OpenAI User など） |
+| GitHub Copilot SDK | GitHub CLI のサインイン | モデル | GitHub CLI（`gh auth login` 済み）、`pip install microsoft-copilot-sdk`（Python 3.11 以上）、GitHub Copilot の契約 |
+| GitHub Copilot SDK | Key（BYOK） | 接続先の種類、エンドポイント、キー、モデル | `pip install microsoft-copilot-sdk` |
+
+- AI を設定しない・「AI を使わない」を選んだ間は、AI の提供元・Azure Resource Manager・GitHub Copilot へは一切通信しません。必要な部品が足りないときは、不足と導入手順を示すだけで自動では導入しません。
+- キーは「保存」で OS の資格情報の保管庫（Windows の資格情報マネージャー、macOS のキーチェーン、Linux の Secret Service〔`secret-tool`〕）にだけ保存し、「キーを削除」で消せます。保管庫を使えない環境では「このセッションだけ使う」（Studio を終了すると消える）を選べます。キーは画面・応答・ログ・ブラウザーの保存先に出ません。gh のトークンは呼出しのたびに `gh auth token` で取得し、SDK へ明示的に渡します（保存しません）。
+- 「AI に聞く」は、リポジトリごとに最初の送信の前に、送る情報（ID・題名・状態・受入基準の文・質問票の文・件数・リポジトリ名）と送り先を示して同意を求めます。コードファイルの内容・ファイルのパス・Issue と PR の本文・キーは送りません。回答には「AI 生成（派生物）」・時刻・提供元とモデルが付き、モデルにない ID は「未確認の ID」、選択肢にない推奨は「推奨できない」と示します。「この回答の根拠」に、使ったステップ・送った情報の種類・参照した ID の Studio 上の状態と、送った内容そのものが出ます。Copilot SDK はツールをすべて無効にして呼び出し、AI は管理データ・コードを書き換えません。1 回の応答の待ち時間の上限は 60 秒（PARAM-068）です。
+
+### 複数のリポジトリ（FR-1099・FR-1100）
+
+ヘッダーのリポジトリのボタンの横の「＋」で、OS のフォルダー選択からリポジトリを 1 つずつ追加します（最大 10 個。PARAM-069）。一覧のボタンで、名前・パス・表示の方式・読込みの状態と、削除・再試行を表示します。複数のときは ID の前にリポジトリ名が付き（例: `api:FR-001`）、同じ ID も混ざりません。リリース判断はリポジトリごとと全体で示します。選んだパスの一覧だけをブラウザーに保存し、次回の起動で戻します。従来の「リポジトリのボタン」（FR-010）は、全体を 1 つのリポジトリに置き換えます。
+
+ソース対応の「リポジトリ間の関係」タブ（`#/xrepo`）は、各リポジトリのコードから決定的に読み取った関係（コードは実行せず、外部へ通信しません）を図と表で示します。確定: パッケージの依存（宣言した名前の一致）、そのパッケージの import を通した関数の呼出し、HTTP の呼出し（メソッドとパスが一致するエンドポイントを持つリポジトリが 1 つだけのとき）。候補: 一致するエンドポイントが複数あるときの HTTP の呼出し、テーブル名（一方の `CREATE TABLE` と他方の参照）・メッセージのトピック/キュー名・データファイルのパスの名前だけの一致。候補は既定では図に出さず、出すときは破線と「候補」の語で区別します。
+
+### Microsoft Design の原則と、それを判定する受入基準（NFR-UX-020 AC-535）
+
+| 原則 | 具体化した振る舞い | 判定する受入基準 |
+|---|---|---|
+| Natural on every platform | OS の配色・文字の大きさ・狭い画面に合う | AC-259、AC-273、AC-534 |
+| Built for focus | いま必要な画面と入力だけが出る | AC-514、AC-516、AC-520 |
+| One for all, all for one | WCAG 2.2 AA で誰でも使える | AC-269、AC-270、AC-271、AC-272、AC-273、AC-274 |
+| Unmistakably Microsoft | Fluent 2 のトークン・部品・アイコンで一貫する | AC-258、AC-261、AC-262、AC-263、AC-268 |
+
 ### 表示用管理データの作成・同期・削除 / Display data
 
 全画面の上部に、生成ファイルの有無・絶対パス・同期状態と **作成・同期／削除** を常設表示します。処理中は実際の段階と処理済み数／対象数の進捗バーが出ます。削除は対象パスを確認して実行します。

@@ -7,7 +7,6 @@ import { listTiers, hierarchy } from './tierlist.js';
 import { region } from './viz.js';
 
 const PALETTE = ['--viz-sel', '--viz-accent-2', '--viz-accent-3', '--viz-api', '--viz-goal', '--viz-entity', '--viz-external', '--viz-param'];
-let persona = 'Product Manager';
 
 function focusAndGo(ids, label) {
   if (!ids.length) return;

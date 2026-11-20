@@ -30,9 +30,9 @@ def _fr1041_nav_count():
 NAV_COUNT = _fr1041_nav_count()
 
 CTRL = {
-    "nav": "header.top #nav a",
+    "nav": "#nav a",   # FR-1094: the current step's items, in the step band
+    "steps": '#steps [data-testid="step"]',
     "dim": '[data-testid="header-dim-toggle"] button',
-    "persona": "header.top #personaBar button",
     "lang": "header.top #lang",
     "theme": 'header.top [data-testid="theme-toggle"] button',
 }
@@ -79,7 +79,7 @@ def test_ac393_shortened_labels_keep_full_name_and_no_function_is_dropped(studio
     wide = _open(studio, "map2d", width=1280, lang=lang)
     ref = {k: wide.evaluate(JS_NAMES, sel) for k, sel in CTRL.items()}
     wide.context.close()
-    assert len(ref["nav"]) == NAV_COUNT and len(ref["persona"]) == 3 and len(ref["dim"]) == 3 and len(ref["lang"]) == 1 and ref["theme"]
+    assert len(ref["nav"]) == 3 and len(ref["steps"]) == 6 and len(ref["dim"]) == 3 and len(ref["lang"]) == 1 and ref["theme"]
     for width in (1024, 800, 600, 320):
         page = _open(studio, "map2d", width=width, lang=lang)
         for k, sel in CTRL.items():

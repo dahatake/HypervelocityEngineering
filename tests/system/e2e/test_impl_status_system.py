@@ -34,6 +34,8 @@ def _approved_requirement_count():
 
 
 def _open(page):
+    # FR-1094: the implementation-status item belongs to step 4 "進捗を追う"
+    page.locator('[data-testid="step"][data-step="4"]').click()
     page.get_by_role("link", name="実装状態").first.click()
     expect(page.locator("#view")).to_contain_text("実装状態")
 
@@ -76,7 +78,7 @@ def test_impl_status_card_selection_opens_requirement_detail_and_links_views(pag
     card.click()
     expect(page.locator("#drawer")).to_contain_text(req_id)
     # selection is shared with other representations (map keeps the selection)
-    page.locator('a[href="#/map2d"]').click()
+    page.locator('[data-testid="step"][data-step="3"]').click()   # FR-1094: step 3 opens the map
     expect(page.locator("#drawer")).to_contain_text(req_id)
 
 

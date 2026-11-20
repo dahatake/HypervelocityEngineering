@@ -50,8 +50,13 @@ def _signature(page):
 
 
 def _screens(page):
-    hrefs = page.evaluate("""() => [...document.querySelectorAll('#nav a[href^="#/"]')]
-        .filter(a => !a.hasAttribute('data-no-items')).map(a => a.getAttribute('href').slice(2).split('?')[0])""")
+    # FR-1094: the nav lists the current step's items; every step is walked to collect all screens
+    hrefs = []
+    for step in range(1, 7):
+        page.locator(f'[data-testid="step"][data-step="{step}"]').click()
+        page.wait_for_selector(f'[data-testid="step"][data-step="{step}"][aria-current="step"]')
+        hrefs += page.evaluate("""() => [...document.querySelectorAll('#nav a[href^="#/"]')]
+            .filter(a => !a.hasAttribute('data-no-items')).map(a => a.getAttribute('href').slice(2).split('?')[0])""")
     return sorted(set(hrefs))
 
 

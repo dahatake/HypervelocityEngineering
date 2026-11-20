@@ -161,17 +161,12 @@ def test_entity_relationships_are_explicit_only(repo):
     assert reqs["NFR-SEC-001"]["relation"] == ""
 
 
-# FR-1002 AC-044 / FR-1003 AC-045 / FR-1005 AC-048 / FR-1006 AC-049 AC-050 AC-051
+# FR-1003 AC-045 / FR-1005 AC-048 / FR-1006 AC-049 AC-050 AC-051 (FR-1002 AC-044 retired 2026-11-20: no role-by-role text)
 def test_decision_views_define_personas_and_evidence_renderers():
     source = (ROOT / "web" / "js" / "insights.js").read_text(encoding="utf-8")
     # FR-011 AC-432: the words of these views live in the dictionary (web/js/i18n.js), not in insights.js
     dictionary = (ROOT / "web" / "js" / "i18n.js").read_text(encoding="utf-8")
-    for persona in ("Product Manager", "Architect", "Software Engineer"):
-        assert persona in dictionary
-    assert "'persona.' + id" in source
-    for route in ("dashboard", "map2d", "map3d", "diagrams", "placement", "source", "tables"):
-        assert f"{route}:" in source
-        assert f"'ins.page.{route}.n'" in dictionary
+    assert "'persona.' + id" not in source and "ins.roleread" not in source
     for term in (
         "現状", "理想", "適用規則", "判定理由", "根拠",
         "外部／クラウド境界",
@@ -678,18 +673,17 @@ def test_start_does_not_build_model_before_serving(repo, monkeypatch):
     assert studio.main(["--repo", str(repo), "--no-open", "--no-remote", "--port", "0"]) == 0
 
 
-def test_role_sets_the_first_screen(repo, monkeypatch, capsys):
+# FR-008 retired 2026-11-20 ("役割は削除"): there is no --role; Studio always opens on step 1 (FR-1094 AC-514)
+def test_role_option_is_gone_and_start_url_is_the_root(repo, monkeypatch, capsys):
     def fake_serve(self):
         raise KeyboardInterrupt
 
     monkeypatch.setattr(ThreadingHTTPServer, "serve_forever", fake_serve)
-    for role, route in (("pm", "#/dashboard"), ("architect", "#/map2d"), ("swe", "#/tables")):
-        assert studio.main(["--repo", str(repo), "--no-open", "--port", "0", "--role", role]) == 0
-        output = capsys.readouterr().out
-        assert route in output
-        assert output.startswith(f"HVE Studio {m.STUDIO_VERSION}")
+    assert studio.main(["--repo", str(repo), "--no-open", "--port", "0"]) == 0
+    output = capsys.readouterr().out
+    assert output.startswith(f"HVE Studio {m.STUDIO_VERSION}") and "#/" not in output
     with pytest.raises(SystemExit):
-        studio.main(["--repo", str(repo), "--role", "ceo"])
+        studio.main(["--repo", str(repo), "--no-open", "--port", "0", "--role", "pm"])
 
 
 # FR-1012 AC-080 AC-081 AC-082 AC-083 / FR-1013 AC-084 AC-085 / FR-004 AC-004

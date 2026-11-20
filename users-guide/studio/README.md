@@ -16,9 +16,9 @@
 
 | あなたは | 最初に読む | 起動 | 最初の画面 |
 |---|---|---|---|
-| Product Manager（何に投資するか決める） | [05-product-manager.md](05-product-manager.md) | `python HVE-Studio/studio.py --role pm` | ダッシュボード |
-| Architect（設計の整合・境界を確かめる） | [06-architect.md](06-architect.md) | `python HVE-Studio/studio.py --role architect` | 2D マップ |
-| Software Engineer（実装・テストの場所を探す） | [07-software-engineer.md](07-software-engineer.md) | `python HVE-Studio/studio.py --role swe` | 表 |
+| Product Manager（何に投資するか決める） | [05-product-manager.md](05-product-manager.md) | ステップ 1「全体を把握する」 | ダッシュボード |
+| Architect（設計の整合・境界を確かめる） | [06-architect.md](06-architect.md) | ステップ 3「影響を確かめる」 | 2D マップ |
+| Software Engineer（実装・テストの場所を探す） | [07-software-engineer.md](07-software-engineer.md) | ステップ 2「要求を固める」・4「進捗を追う」 | 表 |
 
 役割は、画面右上の `Product Manager`・`Architect`・`Software Engineer` のボタンでも、いつでも切り替えられます。
 

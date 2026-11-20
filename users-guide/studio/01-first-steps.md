@@ -30,10 +30,10 @@ python HVE-Studio/studio.py
 python HVE-Studio/studio.py --repo C:\path\to\your-repo
 ```
 
-役割に合った画面から始めるときは `--role` を付けます（`pm` = ダッシュボード、`architect` = 2D マップ、`swe` = 表）。起動前にデータ層が見つかるかだけを確認するときは `--check` です。
+画面上部に Product Manager の作業ステップ（1 全体を把握する〜6 整えて記録する）が並び、起動直後はステップ 1 のダッシュボードが開きます。起動前にデータ層が見つかるかだけを確認するときは `--check` です。
 
 ```powershell
-python HVE-Studio/studio.py --role architect
+python HVE-Studio/studio.py --check
 python HVE-Studio/studio.py --check
 ```
 
@@ -41,7 +41,7 @@ python HVE-Studio/studio.py --check
 
 起動中はスプラッシュ画面にアプリの読込み、ソース・管理データの解析、初期画面の準備を表示します。進捗は完了した段階を示し、ファイル数や残り時間の推定ではありません。読込みに失敗した場合は原因と再試行を確認できます。
 
-Windows は `.\HVE-Studio\start.ps1 <リポジトリ>`、macOS / Linux は `./HVE-Studio/start.sh <リポジトリ>` でも起動できます。オプションは、PowerShell では `-Role pm`・`-Check`・`-NoOpen`、シェルでは `./HVE-Studio/start.sh . 8765 --role pm` のように渡せます。
+Windows は `.\HVE-Studio\start.ps1 <リポジトリ>`、macOS / Linux は `./HVE-Studio/start.sh <リポジトリ>` でも起動できます。オプションは、PowerShell では `-Check`・`-NoOpen`、シェルでは `./HVE-Studio/start.sh . 8765 --no-open` のように渡せます。
 
 役割別の進め方は [05-product-manager.md](05-product-manager.md)・[06-architect.md](06-architect.md)・[07-software-engineer.md](07-software-engineer.md) にあります。
 

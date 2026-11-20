@@ -132,35 +132,6 @@ def _whole_repo_fingerprint(repo):
     }
 
 
-# FR-1002 AC-044
-def test_every_page_has_page_specific_analysis_for_all_three_personas(studio_page):
-    page = studio_page
-    personas = ("Product Manager", "Architect", "Software Engineer")
-    page_texts = {}
-    for route, (screen_name, screen_terms) in ROUTES.items():
-        page.goto(page.url.split("#")[0] + f"#/{route}")
-        analysis = page.get_by_role("region", name=re.compile("分析|analysis", re.I))
-        expect(analysis).to_be_visible()
-        expect(analysis).to_contain_text(screen_name)
-        for persona in personas:
-            section = analysis.get_by_role("heading", name=persona).locator("..")
-            expect(section).to_contain_text(re.compile("表示情報|information", re.I))
-            expect(section).to_contain_text(re.compile("分析観点|perspective", re.I))
-            expect(section).to_contain_text(re.compile("判断|decision", re.I))
-            assert any(term in section.inner_text() for term in screen_terms)
-        page_texts[route] = analysis.inner_text()
-    assert len(set(page_texts.values())) == len(ROUTES), "generic text reused instead of page-specific analysis"
-    # FR-1041 AC-226: 旧「配置」は図式へ移り、移った先でも図式の分析が 3 ペルソナ分表示される
-    for old in ("placement", "placement?kind=runtime"):
-        page.goto(page.url.split("#")[0] + f"#/{old}")
-        expect(page).to_have_url(re.compile(r"#/diagrams\?.*kind=layers"))
-        analysis = page.get_by_role("region", name=re.compile("分析|analysis", re.I))
-        expect(analysis).to_be_visible()
-        expect(analysis).to_contain_text("図式")
-        for persona in personas:
-            expect(analysis.get_by_role("heading", name=persona)).to_be_visible()
-
-
 # FR-1003 AC-045
 def test_current_and_ideal_structure_explain_every_layer_and_difference_type(studio_page, tmp_path):
     requirements = """# Synthetic structure repository
@@ -250,6 +221,7 @@ def test_explicit_maintenance_previews_and_applies_only_two_catalog_columns(stud
     repo = _maintenance_repo(tmp_path)
     _switch_repo(studio_page, repo)
     before = _whole_repo_fingerprint(repo)
+    studio_page.locator('[data-testid="step"][data-step="6"]').click()   # FR-1094: step 6 opens the maintenance item
     studio_page.get_by_role("link", name=re.compile("整合性保守|maintenance", re.I)).click()
     expect(studio_page).to_have_url(re.compile(r"#/maintenance"))
     studio_page.locator(".maintenance-item").filter(has_text="FR-VALID").click()
