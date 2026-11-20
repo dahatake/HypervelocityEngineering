@@ -59,3 +59,8 @@ def installed_repo(tmp_path: Path) -> Path:
     # install は 1 プロセスに 1 回だけ行い、各テストにはそのコピーを渡す（分離は同じ）
     return snapshots.clone("installed", _build_installed, tmp_path / "EABK system test repository with spaces")
 
+
+@pytest.fixture(scope="session")
+def shared_browser(request):
+    """The UI tests copied from HVE-Studio/tests (test_links_wrap_status_ui's `studio` fixture) share one browser."""
+    yield request.getfixturevalue("browser")

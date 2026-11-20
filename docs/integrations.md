@@ -87,7 +87,7 @@ Studio が読み取る連携。INT-001 はローカルのファイル、INT-002 
 - 可用性・SLA: GitHub Copilot または BYOK の提供元に依存。使えなくても AI 以外の機能は動く。
 - レート制限: GitHub Copilot の利用量の上限、または BYOK の提供元のクォータに従う。超過は原因として表示する。
 - エラー・再試行・冪等性: SDK の不足・未サインイン・契約なし・キーの誤り・時間切れを区別して示す。自動では再試行しない。
-- 契約・バージョン: パッケージは `microsoft-copilot-sdk`（Python 3.11 以上。Studio は導入しない）。呼出しは SDK の README（2026-11-20 取得）の API に合わせる: `CopilotClient(mode="empty", github={"token": <gh のトークン>, "use_logged_in_user": False})`、`create_session(tools={"available_tools": []}, permissions={"on_request": <すべて拒否>}, system_message={"mode": "replace"}, working_directory=<一時フォルダー>)`、`send_and_wait`。BYOK は `inference.providers`（type・base_url・api_key）と `github.capi.enabled=False`。パッケージの版とプロトコル版は固定していない（SDK を導入した端末での実機確認は未実施。11.3 の [ASSUMPTION]）。
+- 契約・バージョン: パッケージは `microsoft-copilot-sdk`（Python 3.11 以上。Studio は導入しない）。呼出しは、公開されているパッケージ 1.0.29 の API で実装・実機確認した（2026-11-20）: `CopilotClient(mode="empty", base_directory=<一時フォルダー>, working_directory=<一時フォルダー>, github_token=<gh のトークン>, use_logged_in_user=False)`（Key〔BYOK〕では github_token を渡さない）、`create_session(on_permission_request=<すべて拒否>, available_tools=[], system_message={"mode": "replace", ...}, provider={"type", "base_url", "api_key"}, model=...)`、`send_and_wait`。`mode="empty"` は保存先の指定が要るため、呼出しごとの一時フォルダーを使い、`~/.copilot` へは書かない。実機では BYOK（OpenAI 互換のローカルの疑似サーバー）で、ツールが要求に含まれないこと・回答の取得を確認した。GitHub CLI のサインインでの呼出しは、この端末の gh のトークンが無効のため未確認。使用量（トークン数）は SDK の応答から得られないため、FR-1101 の概算（4 文字 = 1 トークン）にする。
 - 変更通知: SDK のリポジトリの CHANGELOG とリリース。GitHub Copilot SDK から Microsoft Copilot SDK への移行中（SRC-053）。
 - 監視: 設定画面の「接続を確認」と、回答ごとの提供元・モデル名・時刻の表示。
 - データ保持: Studio は回答をディスクに保存しない（AC-527）。送った内容の保持は GitHub Copilot または BYOK の提供元の規約に従う。

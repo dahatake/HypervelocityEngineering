@@ -235,7 +235,7 @@ def test_explicit_maintenance_previews_and_applies_only_two_catalog_columns(stud
     expect(preview).to_contain_text("python scripts/verify.py --docs-only")
     assert _whole_repo_fingerprint(repo) == before, "preview must not write"
     preview.get_by_role("button", name=re.compile("確認して実行|confirm.*apply", re.I)).click()
-    result = studio_page.get_by_role("status")
+    result = studio_page.locator(".maintenance-result[role=status]")   # data-message (display data) is also a status region
     expect(result).to_contain_text(re.compile("exit 0", re.I))
     expect(result).to_contain_text(re.compile("preview.*一致|matches.*preview", re.I))
     after = _whole_repo_fingerprint(repo)

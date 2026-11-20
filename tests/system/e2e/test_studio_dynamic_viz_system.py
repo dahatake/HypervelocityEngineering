@@ -153,8 +153,11 @@ def test_ac442_wheel_zoom_drag_pan_reset_keep_state(studio, route):
     host = page.locator("[data-zoom]").first
     host.wait_for(timeout=8000)
     z0, p0 = host.get_attribute("data-zoom"), host.get_attribute("data-pan")
+    host.scroll_into_view_if_needed()
     box = host.bounding_box()
-    cx, cy = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+    vh = page.viewport_size["height"]   # the step bar and band take room: aim at the visible part of the host
+    top, bottom = max(box["y"], 0), min(box["y"] + box["height"], vh)
+    cx, cy = box["x"] + box["width"] / 2, (top + bottom) / 2
     page.mouse.move(cx, cy)
     page.mouse.wheel(0, -400)
     page.wait_for_function("(z) => document.querySelector('[data-zoom]').dataset.zoom !== z", arg=z0)

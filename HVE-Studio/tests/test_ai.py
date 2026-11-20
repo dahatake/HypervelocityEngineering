@@ -44,7 +44,7 @@ class Fake:
                     self.send_response(401)
                     self.end_headers()
                     return
-                data = json.dumps({"model": "fake-model", "choices": [{"message": {"content": answer}}]}).encode()
+                data = json.dumps({"model": "fake-model", "choices": [{"message": {"content": answer}}], "usage": {"prompt_tokens": 120, "completion_tokens": 30}}).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(data)))
@@ -150,6 +150,7 @@ def test_ac526_answer_checks_and_ac527_no_writes(studio):
     assert {i["id"]: i["known"] for i in r["ids"]} == {"FR-001": True, "FR-999": False, "Q-001": False}
     assert r["recommendations"] == [{"question": "Q-001", "option": None, "valid": False}]
     assert "Japanese" in fake.calls[-1]["body"]
+    assert r["usage"] == {"inputTokens": 120, "outputTokens": 30, "estimated": False}   # FR-1101: the provider's counts
     assert _snapshot(studio["repo"]) == before
 
 
@@ -199,3 +200,9 @@ def test_missing_copilot_sdk_is_reported_not_installed(monkeypatch):
     with pytest.raises(ai.AIError) as e:
         ai.chat({"provider": "copilot", "auth": "gh", "model": "gpt-5"}, ai.Keys(), [{"role": "user", "content": "x"}])
     assert e.value.code == "missing-component" and "pip install microsoft-copilot-sdk" in e.value.action
+
+
+# FR-1101 AC-547: no counts from the provider -> 4 characters = 1 token, marked as an estimate
+def test_ac547_usage_is_estimated_when_the_provider_returns_no_counts():
+    u = ai.estimate_usage([{"role": "system", "content": "a" * 40}, {"role": "user", "content": "b" * 41}], "c" * 8)
+    assert u == {"inputTokens": 21, "outputTokens": 2, "estimated": True}

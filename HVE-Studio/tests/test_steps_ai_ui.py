@@ -189,12 +189,13 @@ def test_ac523_ac524_entra_lists(studio):
 
 
 def _configure(page):
-    page.evaluate("() => localStorage.setItem('eabk-studio.ai', JSON.stringify({provider:'azure',auth:'key',endpoint:'https://x.openai.azure.com',deployment:'d'}))")
+    page.evaluate("() => localStorage.setItem('eabk-studio.ai', JSON.stringify({provider:'azure',auth:'key',endpoint:'https://x.openai.azure.com',deployment:'d',priceIn:'100',priceOut:'400'}))")
 
 
 def _answer(text):
     return {"answer": text, "provider": "azure", "auth": "key", "model": "gpt-x", "at": "2026-11-20T10:00:00+09:00", "step": 2,
             "sentKinds": ["id", "title"], "sent": [{"repository": "r"}],
+            "usage": {"inputTokens": 1000, "outputTokens": 500, "estimated": False},
             "ids": [{"id": "FR-001", "known": True}, {"id": "FR-999", "known": False}],
             "recommendations": [{"question": "Q-001", "option": None, "valid": False}]}
 
@@ -326,3 +327,113 @@ def test_ac535_principles_table_points_to_existing_criteria():
             assert ids, (path.name, principle)
             for i in ids:
                 assert re.search(rf"受入基準 {i}:", doc), i
+
+
+
+def _ask_once(page, answer="FR-001"):
+    page.get_by_test_id("ai-ask").click()
+    if page.get_by_test_id("ai-example").count():
+        page.get_by_test_id("ai-example").first.click()
+    page.wait_for_selector('[data-testid="ai-answer"], [data-testid="ai-budget-block"], [data-testid="ai-consent"]')
+    if page.get_by_test_id("ai-consent-agree").count():
+        page.get_by_test_id("ai-consent-agree").click()
+        page.wait_for_selector('[data-testid="ai-answer"]')
+
+
+def _route_ai(page, usage=None):
+    page.route("**/api/ai/consent", lambda r: r.fulfill(status=200, content_type="application/json", body='{"consented": []}'))
+    body = _answer("FR-001")
+    if usage is not None:
+        body["usage"] = usage
+    page.route("**/api/ai/ask", lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps(body)))
+
+
+# FR-1101 AC-546: cap and unit prices are settings kept in the browser; without a unit price nothing is sent
+def test_ac546_cap_and_prices_are_saved_and_missing_price_blocks_sending(studio):
+    page = _open(studio, "dashboard")
+    page.evaluate("() => localStorage.setItem('eabk-studio.ai', JSON.stringify({provider:'azure',auth:'key',endpoint:'https://x.openai.azure.com',deployment:'d'}))")
+    page.reload()
+    page.wait_for_load_state("networkidle")
+    asked = []
+    page.on("request", lambda r: asked.append(r.url) if r.url.endswith("/api/ai/ask") else None)
+    page.get_by_test_id("ai-ask").click()
+    page.get_by_test_id("ai-example").first.click()
+    block = page.get_by_test_id("ai-budget-block")
+    block.wait_for()
+    assert "単価" in block.inner_text() and asked == []
+    page.get_by_test_id("ai-settings-open").click()
+    assert page.get_by_test_id("ai-budgetYen").get_attribute("placeholder") == "100000"     # PARAM-070 is the default
+    page.get_by_test_id("ai-budgetYen").fill("50000")
+    page.get_by_test_id("ai-budgetYen").press("Tab")
+    page.get_by_test_id("ai-priceIn").fill("120")
+    page.get_by_test_id("ai-priceIn").press("Tab")
+    page.get_by_test_id("ai-priceOut").fill("480")
+    page.get_by_test_id("ai-priceOut").press("Tab")
+    page.reload()
+    page.wait_for_load_state("networkidle")
+    cfg = json.loads(page.evaluate("() => localStorage.getItem('eabk-studio.ai')"))
+    assert (cfg["budgetYen"], cfg["priceIn"], cfg["priceOut"]) == ("50000", "120", "480")
+    page.get_by_test_id("ai-settings-btn").click()
+    assert page.get_by_test_id("ai-budgetYen").input_value() == "50000"
+    page.context.close()
+
+
+# FR-1101 AC-547: usage per answer (provider's tokens, or an estimate marked as such), the month's running total, month reset,
+# and nothing of the question or answer is kept in the usage record
+def test_ac547_usage_cost_and_monthly_total(studio):
+    page = _open(studio, "dashboard")
+    _configure(page)
+    page.reload()
+    page.wait_for_load_state("networkidle")
+    _route_ai(page)
+    _ask_once(page)
+    line = page.get_by_test_id("ai-usage-line").inner_text()
+    assert "入力 1000" in line and "出力 500" in line and "概算" in line      # 1000*100/1e6 + 500*400/1e6 = 0.30 yen
+    assert "0.30 円" in line and "（概算）" not in line                        # the provider returned the counts
+    assert "0.30 円 / 上限 100,000 円（0%）" in page.get_by_test_id("ai-budget-status").inner_text()
+    stored = json.loads(page.evaluate("() => localStorage.getItem('eabk-studio.ai-usage')"))
+    assert set(stored) == {"month", "inTokens", "outTokens", "yen"} and stored["inTokens"] == 1000
+    page.get_by_test_id("ai-dismiss").click()
+    page.unroute("**/api/ai/ask")
+    _route_ai(page, {"inputTokens": 400, "outputTokens": 100, "estimated": True})
+    page.get_by_test_id("ai-example").first.click()
+    page.wait_for_selector('[data-testid="ai-answer"]')
+    assert "（概算）" in page.get_by_test_id("ai-usage-line").inner_text()
+    assert json.loads(page.evaluate("() => localStorage.getItem('eabk-studio.ai-usage')"))["inTokens"] == 1400
+    page.evaluate("() => { const u = JSON.parse(localStorage.getItem('eabk-studio.ai-usage')); u.month = '2000-01'; localStorage.setItem('eabk-studio.ai-usage', JSON.stringify(u)); }")
+    page.get_by_test_id("ai-close").click()
+    page.get_by_test_id("ai-ask").click()
+    assert "0.00 円" in page.get_by_test_id("ai-budget-status").inner_text()     # a new month starts from zero
+    page.context.close()
+
+
+# FR-1101 AC-548: warning at 80% (icon and words), stop at 100% with the reason; everything else keeps working
+def test_ac548_warning_at_80_percent_and_stop_at_100_percent(studio):
+    page = _open(studio, "dashboard")
+    _configure(page)
+    page.evaluate("""() => { const d = new Date(), m = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+        localStorage.setItem('eabk-studio.ai', JSON.stringify({provider:'azure',auth:'key',endpoint:'https://x.openai.azure.com',deployment:'d',priceIn:'100',priceOut:'400',budgetYen:'1000'}));
+        localStorage.setItem('eabk-studio.ai-usage', JSON.stringify({month: m, inTokens: 0, outTokens: 0, yen: 799}));}""")
+    page.reload()
+    page.wait_for_load_state("networkidle")
+    asked = []
+    page.on("request", lambda r: asked.append(r.url) if r.url.endswith("/api/ai/ask") else None)
+    page.get_by_test_id("ai-ask").click()
+    status = page.get_by_test_id("ai-budget-status")
+    assert status.get_attribute("data-level") == "ok"
+    page.evaluate("() => { const u = JSON.parse(localStorage.getItem('eabk-studio.ai-usage')); u.yen = 800; localStorage.setItem('eabk-studio.ai-usage', JSON.stringify(u)); }")
+    page.get_by_test_id("ai-close").click()
+    page.get_by_test_id("ai-ask").click()
+    status = page.get_by_test_id("ai-budget-status")
+    assert status.get_attribute("data-level") == "warn" and status.locator("svg").count() == 1 and "80%" in status.inner_text()
+    page.evaluate("() => { const u = JSON.parse(localStorage.getItem('eabk-studio.ai-usage')); u.yen = 1000; localStorage.setItem('eabk-studio.ai-usage', JSON.stringify(u)); }")
+    page.get_by_test_id("ai-close").click()
+    page.get_by_test_id("ai-ask").click()
+    assert page.get_by_test_id("ai-budget-status").get_attribute("data-level") == "stop"
+    page.get_by_test_id("ai-example").first.click()
+    block = page.get_by_test_id("ai-budget-block")
+    block.wait_for()
+    assert "上限" in block.inner_text() and "来月" in block.inner_text() and asked == []
+    page.locator('[data-testid="step"][data-step="3"]').click()           # AI is off the path of the other screens
+    page.wait_for_function("() => location.hash.startsWith('#/map')")
+    page.context.close()

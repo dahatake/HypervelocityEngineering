@@ -271,7 +271,7 @@ def list_resources(level: str, subscription: str = "", account: str = "") -> lis
 
 
 # ---------------------------------------------------------------- calling a provider
-def _azure_chat(cfg: dict, keys: Keys, messages: list[dict], max_tokens: int) -> tuple[str, str]:
+def _azure_chat(cfg: dict, keys: Keys, messages: list[dict], max_tokens: int) -> tuple[str, str, dict | None]:
     endpoint, deployment = cfg.get("endpoint"), cfg.get("deployment")
     if not endpoint or not deployment:
         raise AIError("bad-config", "endpoint and deployment are required")
@@ -282,7 +282,9 @@ def _azure_chat(cfg: dict, keys: Keys, messages: list[dict], max_tokens: int) ->
     url = f"{endpoint}/openai/deployments/{urllib.parse.quote(deployment)}/chat/completions?api-version={AZURE_API_VERSION}"
     data = _http("POST", url, headers, {"messages": messages, "max_tokens": max_tokens})
     choice = (data.get("choices") or [{}])[0]
-    return ((choice.get("message") or {}).get("content") or "").strip(), data.get("model") or deployment
+    u = data.get("usage") or {}
+    usage = {"inputTokens": int(u["prompt_tokens"]), "outputTokens": int(u.get("completion_tokens") or 0), "estimated": False} if "prompt_tokens" in u else None
+    return ((choice.get("message") or {}).get("content") or "").strip(), data.get("model") or deployment, usage
 
 
 def copilot_available() -> bool:
@@ -293,51 +295,47 @@ def copilot_available() -> bool:
         return False
 
 
-def _copilot_chat(cfg: dict, keys: Keys, messages: list[dict]) -> tuple[str, str]:
+def _copilot_chat(cfg: dict, keys: Keys, messages: list[dict]) -> tuple[str, str, dict | None]:
+    """Microsoft Copilot SDK (pip package microsoft-copilot-sdk, flat API of the published release). Tools are all disabled."""
     if not copilot_available():
-        raise AIError("missing-component", f"the Copilot SDK is not installed (Python 3.11+)",
-                      f"pip install {COPILOT_PACKAGE}")
+        raise AIError("missing-component", "the Copilot SDK is not installed (Python 3.11+)", f"pip install {COPILOT_PACKAGE}")
     import asyncio
     import tempfile
 
     from copilot import CopilotClient  # type: ignore[import-not-found]
-
-    try:
-        from copilot.rpc import PermissionDecisionReject  # type: ignore[import-not-found]
-    except ImportError:  # older SDKs
-        PermissionDecisionReject = None  # noqa: N806
+    from copilot.rpc import PermissionDecisionReject  # type: ignore[import-not-found]
 
     def deny(request, invocation):  # AC-527: never allow a tool (file edit, shell, fetch ...)
-        return PermissionDecisionReject(feedback="tools are disabled in HVE Studio") if PermissionDecisionReject else {"kind": "denied"}
+        return PermissionDecisionReject(feedback="tools are disabled in HVE Studio")
 
     model = cfg.get("model") or ""
     system = next((m["content"] for m in messages if m["role"] == "system"), "")
     prompt = "\n\n".join(m["content"] for m in messages if m["role"] != "system")
-    session_opts: dict = {"tools": {"available_tools": []}, "permissions": {"on_request": deny},
+    session_opts: dict = {"on_permission_request": deny, "available_tools": [],
                           "system_message": {"mode": "replace", "content": system}}
+    client_opts: dict = {"mode": "empty"}
     if cfg["auth"] == "byok":
         endpoint = cfg.get("endpoint")
         if not endpoint or not model:
             raise AIError("bad-config", "endpoint and model are required")
-        provider = {"name": "byok", "type": cfg.get("byokType") or "openai", "base_url": endpoint,
-                    "api_key": keys.get("copilot", endpoint)}
-        session_opts.update(github={"capi": {"enabled": False}}, inference={"default_provider": "byok", "providers": [provider]})
-        client_opts = {"mode": "empty"}
+        session_opts["provider"] = {"type": cfg.get("byokType") or "openai", "base_url": endpoint,
+                                    "api_key": keys.get("copilot", endpoint)}
     else:
-        client_opts = {"mode": "empty", "github": {"token": github_token(), "use_logged_in_user": False}}
+        client_opts.update(github_token=github_token(), use_logged_in_user=False)
     if model:
         session_opts["model"] = model
 
     async def run() -> str:
-        with tempfile.TemporaryDirectory(prefix="hve-ai-") as scratch:  # a working directory outside every repository
-            async with CopilotClient(**client_opts) as client:
+        with tempfile.TemporaryDirectory(prefix="hve-ai-") as scratch:  # working and data directory outside every repository
+            # mode "empty" needs its own storage; it never falls back to ~/.copilot
+            async with CopilotClient(base_directory=scratch, working_directory=scratch, **client_opts) as client:
                 async with await client.create_session(working_directory=scratch, **session_opts) as session:
                     reply = await asyncio.wait_for(session.send_and_wait(prompt), TIMEOUT)
         data = getattr(reply, "data", None)
         return (getattr(data, "content", None) or (str(reply) if reply is not None else "")).strip()
 
     try:
-        return asyncio.run(run()), model or "copilot"
+        return asyncio.run(run()), model or "copilot", None   # the SDK reply carries no token counts
     except asyncio.TimeoutError as exc:
         raise AIError("timeout", f"no answer in {TIMEOUT} s", "try again") from exc
     except AIError:
@@ -348,16 +346,22 @@ def _copilot_chat(cfg: dict, keys: Keys, messages: list[dict]) -> tuple[str, str
         raise AIError(code, text[:300]) from exc
 
 
-def chat(cfg: dict, keys: Keys, messages: list[dict], max_tokens: int = 1200) -> tuple[str, str]:
+def estimate_usage(messages: list[dict], text: str) -> dict:
+    """FR-1101 AC-547: when the provider returns no token counts, 4 characters count as 1 token (marked as an estimate)."""
+    sent = sum(len(m["content"]) for m in messages)
+    return {"inputTokens": -(-sent // 4), "outputTokens": -(-len(text) // 4), "estimated": True}
+
+
+def chat(cfg: dict, keys: Keys, messages: list[dict], max_tokens: int = 1200) -> tuple[str, str, dict]:
     cfg = check_config(cfg)
-    if cfg["provider"] == "azure":
-        return _azure_chat(cfg, keys, messages, max_tokens)
-    return _copilot_chat(cfg, keys, messages)
+    text, model, usage = (_azure_chat(cfg, keys, messages, max_tokens) if cfg["provider"] == "azure"
+                          else _copilot_chat(cfg, keys, messages))
+    return text, model, usage or estimate_usage(messages, text)
 
 
 def test_connection(cfg: dict, keys: Keys) -> dict:
     started = time.monotonic()
-    text, model = chat(cfg, keys, [{"role": "system", "content": "Reply with OK."}, {"role": "user", "content": "ping"}], 5)
+    text, model, _ = chat(cfg, keys, [{"role": "system", "content": "Reply with OK."}, {"role": "user", "content": "ping"}], 5)
     return {"ok": True, "model": model, "ms": int((time.monotonic() - started) * 1000)}
 
 
@@ -466,7 +470,7 @@ def ask(cfg: dict, keys: Keys, step: int, question: str, lang: str, sources: lis
         raise AIError("bad-config", "unknown step")
     contexts = [step_context(model, step, name) for name, model in sources]
     messages = messages_for(step, question.strip()[:2000], contexts, lang)
-    text, model_name = chat(cfg, keys, messages)
+    text, model_name, usage = chat(cfg, keys, messages)
     known, questions = set(), {}
     for name, model in sources:
         ids = {n["id"] for n in (model.get("graph") or {}).get("nodes", [])}
@@ -484,4 +488,4 @@ def ask(cfg: dict, keys: Keys, step: int, question: str, lang: str, sources: lis
     checked = check_answer(text, known, questions)
     return {"answer": text, "provider": cfg["provider"], "auth": cfg["auth"], "model": model_name,
             "at": datetime.now().astimezone().isoformat(timespec="seconds"), "step": step,
-            "sentKinds": list(SENT_KINDS), "sent": contexts, **checked}
+            "sentKinds": list(SENT_KINDS), "sent": contexts, "usage": usage, **checked}

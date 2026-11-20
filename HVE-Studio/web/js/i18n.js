@@ -294,6 +294,10 @@ const D = {
         'xr.kind.package': 'パッケージの依存', 'xr.kind.function': '関数の呼出し', 'xr.kind.api': 'API の呼出し', 'xr.kind.data': 'データのやり取り', 'xr.cand': '候補', 'xr.conf': '確定', 'xr.open': 'エディターで開く',
         'xr.col.kind': '種類', 'xr.col.certainty': '確度', 'xr.col.label': '内容', 'xr.col.from': '呼出し・参照する側', 'xr.col.to': '呼ばれる・定義する側', 'xr.col.reqs': '関係する要求',
         'xr.none': '関係は見つかりませんでした。調べた種類: {kinds}。リポジトリごとのファイル数: {files}', 'xr.repo.entry': '{name} の中を見る:', 'xr.repo.files': 'ソース対応', 'xr.repo.table': 'ファイルの表', 'xr.all': 'すべての関係を表示',
+        // FR-1101: 生成 AI の月の費用の上限
+        'ai.budget.h': '費用の上限', 'ai.budget.d': '提供元の単価を入力すると、回答ごとの使用量から費用を概算し、月の上限で止めます。概算はこの端末の分だけで、質問や回答は保存しません。', 'ai.budget.limit': '月の上限（円）', 'ai.budget.pin': '入力の単価（円 / 100 万トークン）', 'ai.budget.pout': '出力の単価（円 / 100 万トークン）',
+        'ai.budget.noprice': '単価が未入力のため、費用を概算できず送信しません。AI の設定で、入力・出力の単価を入力してください。', 'ai.budget.status': '今月の概算: {yen} 円 / 上限 {limit} 円（{pct}%）', 'ai.budget.warn': '上限の 80% に達しました。', 'ai.budget.stopshort': '上限に達しました。', 'ai.budget.stop': '今月の概算が上限に達したため、送信を止めています。AI の設定で上限を上げるか、来月まで待ってください。',
+        'ai.usage.line': '今回の使用量: 入力 {i}・出力 {o} トークン{est}・概算 {yen} 円', 'ai.usage.est': '（概算）',
         // @@ja6
       },
   en: {
@@ -586,6 +590,10 @@ const D = {
         'xr.kind.package': 'Package dependency', 'xr.kind.function': 'Function call', 'xr.kind.api': 'API call', 'xr.kind.data': 'Data exchange', 'xr.cand': 'candidate', 'xr.conf': 'confirmed', 'xr.open': 'Open in the editor',
         'xr.col.kind': 'Kind', 'xr.col.certainty': 'Certainty', 'xr.col.label': 'What', 'xr.col.from': 'Calling / using side', 'xr.col.to': 'Called / defining side', 'xr.col.reqs': 'Related requirements',
         'xr.none': 'No relation was found. Kinds examined: {kinds}. Files per repository: {files}', 'xr.repo.entry': 'Look inside {name}:', 'xr.repo.files': 'Source mapping', 'xr.repo.table': 'File table', 'xr.all': 'Show all relations',
+        // FR-1101: monthly cost cap of the generative AI
+        'ai.budget.h': 'Cost cap', 'ai.budget.d': 'Enter the provider\'s unit prices to estimate each answer\'s cost from its usage and stop at the monthly cap. The estimate covers this device only; questions and answers are not saved.', 'ai.budget.limit': 'Monthly cap (JPY)', 'ai.budget.pin': 'Input price (JPY per 1M tokens)', 'ai.budget.pout': 'Output price (JPY per 1M tokens)',
+        'ai.budget.noprice': 'No unit price is set, so the cost cannot be estimated and nothing is sent. Enter the input and output prices in the AI settings.', 'ai.budget.status': 'This month (estimate): {yen} JPY of the {limit} JPY cap ({pct}%)', 'ai.budget.warn': '80% of the cap is reached.', 'ai.budget.stopshort': 'The cap is reached.', 'ai.budget.stop': 'This month\'s estimate has reached the cap, so sending is stopped. Raise the cap in the AI settings or wait until next month.',
+        'ai.usage.line': 'Usage of this answer: input {i} · output {o} tokens{est} · about {yen} JPY', 'ai.usage.est': ' (estimated)',
         // @@en6
       },
 };

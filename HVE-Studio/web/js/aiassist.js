@@ -15,6 +15,29 @@ const AUTHS = { azure: ['key', 'entra'], copilot: ['gh', 'byok'] };
 const MODELS = ['gpt-5', 'gpt-4.1', 'claude-sonnet-4.5'];
 const ID_RE = /(?:[A-Za-z0-9_.-]+:)?[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d{2,}/g;
 
+// FR-1101: the monthly cost cap. Only the month's totals are kept in the browser (never questions or answers).
+const USAGE_KEY = 'eabk-studio.ai-usage';
+export const DEFAULT_BUDGET_YEN = 100000;   // PARAM-070
+const monthNow = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+export function loadUsage() {
+  try { const u = JSON.parse(localStorage.getItem(USAGE_KEY) || 'null'); if (u && u.month === monthNow()) return u; } catch { /* a broken entry restarts the month */ }
+  return { month: monthNow(), inTokens: 0, outTokens: 0, yen: 0 };
+}
+const num = (v) => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? n : 0; };
+export const costOf = (usage, cfg) => (num(usage.inputTokens) * num(cfg.priceIn) + num(usage.outputTokens) * num(cfg.priceOut)) / 1e6;
+function addUsage(usage, cfg) {
+  const u = loadUsage();
+  u.inTokens += num(usage.inputTokens); u.outTokens += num(usage.outputTokens); u.yen += costOf(usage, cfg);
+  try { localStorage.setItem(USAGE_KEY, JSON.stringify(u)); } catch { /* the cap still counts for this page */ }
+  return u;
+}
+export function budgetState() {
+  const cfg = loadConfig(), limit = num(cfg.budgetYen) || DEFAULT_BUDGET_YEN, u = loadUsage();
+  const pct = Math.floor((u.yen / limit) * 100);
+  return { limit, yen: u.yen, pct, priced: num(cfg.priceIn) > 0 || num(cfg.priceOut) > 0, warn: pct >= 80, stop: pct >= 100 };
+}
+const yenText = (v) => (v < 100 ? v.toFixed(2) : Math.round(v).toLocaleString());
+
 let conn = { state: 'unset', detail: '' };   // 3.4: unset -> configured (unchecked) -> checked / failed (memory only)
 let seenIntro = false;
 
@@ -26,7 +49,7 @@ export function loadConfig() {
   return { provider: 'off' };
 }
 function saveConfig(c) {
-  const keep = ['provider', 'auth', 'endpoint', 'deployment', 'model', 'byokType', 'subscription', 'account'];
+  const keep = ['provider', 'auth', 'endpoint', 'deployment', 'model', 'byokType', 'subscription', 'account', 'budgetYen', 'priceIn', 'priceOut'];
   const clean = Object.fromEntries(keep.filter((k) => c[k] != null && c[k] !== '').map((k) => [k, String(c[k])]));
   try { localStorage.setItem(KEY, JSON.stringify(clean)); } catch { /* the setting still applies to this page */ }
   window.dispatchEvent(new Event('eabk-ai-config'));
@@ -169,6 +192,12 @@ export function openSettings() {
         field('endpoint', t('ai.f.endpoint'), text('endpoint', cfg.endpoint, 'https://', (v) => set({ endpoint: v }))),
         keyField('copilot'), field('model', t('ai.f.model'), text('model', cfg.model, MODELS[0], (v) => set({ model: v }), 'ai-models')));
       }
+      const numField = (id, label, value, ph) => el('div', { class: 'ai-field', 'data-budget': id }, el('label', { for: 'ai-b-' + id }, label),
+        el('input', { id: 'ai-b-' + id, type: 'number', min: '0', step: 'any', inputmode: 'decimal', value: value ?? '', placeholder: ph || '', 'data-testid': 'ai-' + id, onchange: (e) => set({ [id]: e.target.value }) }));
+      parts.push(el('fieldset', { class: 'ai-group ai-budget', 'data-testid': 'ai-budget' }, el('legend', {}, t('ai.budget.h')),
+        el('p', { class: 'mini' }, t('ai.budget.d')),
+        numField('budgetYen', t('ai.budget.limit'), cfg.budgetYen, String(DEFAULT_BUDGET_YEN)),
+        numField('priceIn', t('ai.budget.pin'), cfg.priceIn), numField('priceOut', t('ai.budget.pout'), cfg.priceOut)));
       parts.push(el('div', { class: 'row' }, el('button', { type: 'button', class: 'btn', 'data-testid': 'ai-test', onclick: test }, t('ai.test'))), live);
     } else {
       parts.push(el('p', { class: 'mini' }, t('ai.off.d')));
@@ -243,6 +272,20 @@ export function openAsk() {
   };
   const cancel = () => { if (ctrl) { ctrl.abort(); ctrl = null; announce(t('ai.cancelled')); draw(); } };
 
+  function sendGate() {
+    const b = budgetState();
+    if (!b.priced) return t('ai.budget.noprice');
+    return b.stop ? t('ai.budget.stop') : '';
+  }
+
+  function budgetLine() {
+    const b = budgetState();
+    return el('div', { class: 'ai-budget-line' + (b.stop ? ' stop' : b.warn ? ' warn' : ''), 'data-testid': 'ai-budget-status', 'data-level': b.stop ? 'stop' : b.warn ? 'warn' : 'ok' },
+      (b.warn || b.stop) ? icon('warning', { size: 16 }) : null, (b.warn || b.stop) ? ' ' : null,
+      t('ai.budget.status', { yen: yenText(b.yen), limit: b.limit.toLocaleString(), pct: b.pct }),
+      b.stop ? el('b', {}, ' ' + t('ai.budget.stopshort')) : b.warn ? el('b', {}, ' ' + t('ai.budget.warn')) : null);
+  }
+
   function intro(first) {
     return el('div', { class: 'ai-intro' + (first ? ' first' : ''), 'data-testid': 'ai-intro' },
       el('p', {}, el('b', {}, t('ai.can.h')), ' ', t('ai.can')),
@@ -270,6 +313,8 @@ export function openAsk() {
 
   async function send(question) {
     lastQuestion = question;
+    const gate = sendGate();
+    if (gate) { out.replaceChildren(el('div', { class: 'warnbox', role: 'alert', 'data-testid': 'ai-budget-block' }, icon('warning', { size: 16 }), ' ', gate)); announce(gate); return; }
     const targets = repos().filter((r) => consented.has(r.path));
     if (!targets.length) { out.replaceChildren(consentBox(() => send(question))); return; }
     ctrl = new AbortController();
@@ -280,7 +325,8 @@ export function openAsk() {
       const r = await post('/api/ai/ask', { config: loadConfig(), step: currentStep().n, question, lang: lang(), repos: targets.map((x) => x.path) }, mine.signal);
       if (ctrl !== mine) return;
       ctrl = null;
-      showAnswer(r);
+      const total = r.usage ? addUsage(r.usage, loadConfig()) : loadUsage();
+      showAnswer(r, total);
       announce(t('ai.done'));
     } catch (e) {
       if (mine.signal.aborted) return;
@@ -291,7 +337,7 @@ export function openAsk() {
     }
   }
 
-  function showAnswer(r) {
+  function showAnswer(r, total) {
     draw();
     const evidence = el('details', { class: 'ai-evidence', 'data-testid': 'ai-evidence' }, el('summary', {}, t('ai.why')),
       el('p', {}, t('ai.why.step', { n: r.step, name: t(`step.${r.step}.name`) })),
@@ -308,7 +354,9 @@ export function openAsk() {
     const card = el('article', { class: 'ai-answer card', 'data-testid': 'ai-answer' },
       el('div', { class: 'ai-answer-head' }, el('span', { class: 'chip ai-derived', 'data-testid': 'ai-derived' }, icon('sparkle', { size: 16 }), t('ai.derived')),
         el('span', { class: 'mini', 'data-testid': 'ai-meta' }, t('ai.meta', { at: r.at, provider: t('ai.provider.' + r.provider), model: r.model }))),
-      ...answerText(r.answer), ...recs, evidence,
+      ...answerText(r.answer), ...recs,
+      r.usage ? el('p', { class: 'mini', 'data-testid': 'ai-usage-line' }, t('ai.usage.line', { i: r.usage.inputTokens, o: r.usage.outputTokens,
+        est: r.usage.estimated ? t('ai.usage.est') : '', yen: yenText(costOf(r.usage, loadConfig())) })) : null, evidence,
       el('div', { class: 'row' },
         el('button', { type: 'button', class: 'btn ghost', 'data-testid': 'ai-copy', onclick: () => navigator.clipboard?.writeText(r.answer).then(() => toast(t('ai.copied'))) }, icon('copy', { size: 16 }), t('ai.copy')),
         el('button', { type: 'button', class: 'btn ghost', 'data-testid': 'ai-retry', onclick: () => send(lastQuestion) }, icon('retry', { size: 16 }), t('ai.again')),
@@ -333,7 +381,7 @@ export function openAsk() {
       busy ? el('button', { type: 'button', class: 'btn', 'data-testid': 'ai-cancel', onclick: cancel }, t('ai.cancel'))
         : el('button', { type: 'button', class: 'btn', 'data-testid': 'ai-send', onclick: () => { if (q.value.trim()) send(q.value.trim()); } }, icon('sparkle', { size: 16 }), t('ai.send')),
       busy ? el('span', { class: 'mini', 'data-testid': 'ai-busy' }, el('span', { class: 'spin', 'aria-hidden': 'true' }), ' ', t('ai.generating')) : null);
-    box.replaceChildren(head, intro(!seenIntro), examples, q, actions, out, live);
+    box.replaceChildren(head, intro(!seenIntro), budgetLine(), examples, q, actions, out, live);
     seenIntro = true;
   }
 

@@ -105,6 +105,7 @@
   --color-wash-selected: rgba(17, 94, 163, 0.14);
   --color-wash-mark: rgba(255, 185, 0, 0.45);
   --color-scrim: rgba(0, 0, 0, 0.4);
+  --color-scrim-strong: rgba(20, 22, 28, 0.62);
   --color-shadow-1: rgba(0, 0, 0, 0.14);
   --color-shadow-2: rgba(0, 0, 0, 0.2);
   --color-deco-1: #dbe8f7;
@@ -199,6 +200,7 @@
   --color-wash-selected: rgba(71, 158, 245, 0.24);
   --color-wash-mark: rgba(255, 185, 0, 0.4);
   --color-scrim: rgba(0, 0, 0, 0.6);
+  --color-scrim-strong: rgba(20, 22, 28, 0.78);
   --color-shadow-1: rgba(0, 0, 0, 0.5);
   --color-shadow-2: rgba(0, 0, 0, 0.6);
   --color-deco-1: #14204a;
