@@ -6,9 +6,9 @@ the oracle.  Widths are PARAM-048 = 1280 / 1024 / 800 / 600 / 320 CSS px (320 = 
 
 CONTRACT (受入基準から独立に定義。実装に合わせて oracle を変更しない):
   - ヘッダー帯: <header class="top">。要素: 表示モード切替 [data-testid="header-dim-toggle"] button（2D・3D・Graph。RPG は対象外）、
-    検索 #q、リポジトリ名 #repoBtn と追加・一覧のボタン、日時 #modelTime、言語 #lang、テーマ [data-testid="theme-toggle"] button。
+    検索 #q、リポジトリ名 #repoBtn とリポジトリ一覧のボタン #repoListBtn、日時 #modelTime、言語 #lang、テーマ [data-testid="theme-toggle"] button。
     改訂 2026-11-20（AC-391）: 役割の選択は廃止。作業ステップ #steps [data-testid=step]（6）と、選択中のステップの画面 #nav a
-    （#/map2d はステップ 3: マップ・図式・ソース対応の 3）を画面上部の要素に含める。
+    （#/map2d はステップ 3: ソースコード構造・マップ・図式の 3）を画面上部の要素に含める。
   - 地図の表示面: #view canvas。説明パネル（上位層・ロールの説明）: [data-testid="map-tiers"]（<details>、開閉は summary）。
   - 画面: #/map2d。AC-393 の RPG 非対象・残る 3 モード条件も適用。
 """
@@ -26,7 +26,7 @@ ITEMS = {
     "nav": "#nav a",
     "dim": '[data-testid="header-dim-toggle"] button',
     "search": "header.top #q",
-    "repo": "header.top #repoBtn, header.top #repoAddBtn, header.top #repoListBtn",
+    "repo": "header.top #repoBtn, header.top #repoListBtn",
     "time": "header.top #modelTime",
     "lang": "header.top #lang button",
     "theme": 'header.top [data-testid="theme-toggle"] button',
@@ -46,7 +46,7 @@ def _fr1041_nav_count():
 
 
 NAV_COUNT = _fr1041_nav_count()
-EXPECT_COUNT = {"steps": 6, "nav": 3, "dim": 3}  # FR-1094: step 3 (the map) lists the map, diagrams and source mapping
+EXPECT_COUNT = {"steps": 6, "nav": 3, "dim": 3}  # FR-1094: step 3 lists source code structure, map and diagrams
 
 JS_RECTS = """(sel) => [...document.querySelectorAll(sel)].map((e) => {
   const r = e.getBoundingClientRect();
@@ -125,7 +125,7 @@ def test_ac391_all_header_elements_are_inside_viewport_and_wrap(browser, zurl, w
     assert len(items["lang"]) == 2, "lang"  # FR-011 AC-430: JA/EN の 2 button
     for k in ("search", "time"):
         assert len(items[k]) == 1, k
-    assert len(items["repo"]) == 3, "repo"  # switch, add, list (FR-010, FR-1099)
+    assert len(items["repo"]) == 2, "repo"  # switch, list (FR-010, FR-1099); adding is done inside the list
     assert len(items["theme"]) >= 1
     _in_viewport(page, items, width)
     hdr = page.evaluate(JS_HDR)

@@ -435,5 +435,5 @@ def test_ac548_warning_at_80_percent_and_stop_at_100_percent(studio):
     block.wait_for()
     assert "上限" in block.inner_text() and "来月" in block.inner_text() and asked == []
     page.locator('[data-testid="step"][data-step="3"]').click()           # AI is off the path of the other screens
-    page.wait_for_function("() => location.hash.startsWith('#/map')")
+    page.wait_for_function("() => location.hash.startsWith('#/floorplan')")
     page.context.close()

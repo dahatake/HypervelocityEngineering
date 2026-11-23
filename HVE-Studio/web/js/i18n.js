@@ -285,7 +285,7 @@ const D = {
         'ai.ex.6.1': 'カタログと要求のずれを要約して', 'ai.ex.6.2': '未対応の監査指摘は何件？', 'ai.ex.6.3': '記録に残すべき決定は？',
         'cmd.ai.ask': 'AI に聞く', 'cmd.ai.settings': 'AI の設定を開く',
         // FR-1099・FR-1100: 複数のリポジトリ
-        'repos.group': '対象リポジトリ', 'repos.add': 'リポジトリを追加', 'repos.title': '対象リポジトリ群', 'repos.d': 'アプリケーションを構成するリポジトリを並べて開きます。各リポジトリのデータは混ぜず、ID の前にリポジトリ名を付けて区別します。', 'repos.list.aria': '対象リポジトリ群（{n} 件）',
+        'repos.group': '対象リポジトリ', 'repos.listBtn': 'リポジトリ一覧', 'repos.add': 'リポジトリを追加', 'repos.title': '対象リポジトリ群', 'repos.d': 'アプリケーションを構成するリポジトリを並べて開きます。各リポジトリのデータは混ぜず、ID の前にリポジトリ名を付けて区別します。', 'repos.list.aria': '対象リポジトリ群（{n} 件）',
         'repos.col.name': '名前', 'repos.col.path': 'パス', 'repos.col.mode': '表示の方式', 'repos.col.status': '読込みの状態', 'repos.primary': '（最初）', 'repos.mode.eabk': '管理データ', 'repos.mode.code': 'コードのモード',
         'repos.st.pending': '待機中', 'repos.st.loading': '読込み中', 'repos.st.loaded': '読込み済み', 'repos.st.error': '読込み失敗', 'repos.retry': '再試行', 'repos.remove': '削除', 'repos.remove.aria': '{name} を一覧から削除', 'repos.limit': '{n} / {max} 件', 'repos.relations': 'リポジトリ間の関係を見る',
         'repos.err.not-a-directory': 'フォルダーが見つかりません。', 'repos.err.duplicate': '同じリポジトリはすでに一覧にあります。', 'repos.err.limit': '追加できるのは {n} 件までです。', 'repos.err.no-data-layer': 'このフォルダーには表示できる管理データもコードもありません。', 'repos.err.not-in-group': '一覧にないリポジトリです。', 'repos.err.last-repository': '最後の 1 件は削除できません。', 'repos.err.bad': '操作に失敗しました。',
@@ -581,7 +581,7 @@ const D = {
         'ai.ex.6.1': 'Summarize mismatches between the catalog and the requirements', 'ai.ex.6.2': 'How many audit findings are open?', 'ai.ex.6.3': 'Which decisions should be recorded?',
         'cmd.ai.ask': 'Ask AI', 'cmd.ai.settings': 'Open AI settings',
         // FR-1099, FR-1100: several repositories
-        'repos.group': 'Repositories', 'repos.add': 'Add repository', 'repos.title': 'Repository group', 'repos.d': 'Open the repositories that make up the application side by side. Their data is not mixed: IDs are prefixed with the repository name.', 'repos.list.aria': 'Repository group ({n})',
+        'repos.group': 'Repositories', 'repos.listBtn': 'Repository list', 'repos.add': 'Add repository', 'repos.title': 'Repository group', 'repos.d': 'Open the repositories that make up the application side by side. Their data is not mixed: IDs are prefixed with the repository name.', 'repos.list.aria': 'Repository group ({n})',
         'repos.col.name': 'Name', 'repos.col.path': 'Path', 'repos.col.mode': 'Mode', 'repos.col.status': 'Loading state', 'repos.primary': '(first)', 'repos.mode.eabk': 'Management data', 'repos.mode.code': 'Code mode',
         'repos.st.pending': 'Waiting', 'repos.st.loading': 'Loading', 'repos.st.loaded': 'Loaded', 'repos.st.error': 'Failed to load', 'repos.retry': 'Retry', 'repos.remove': 'Remove', 'repos.remove.aria': 'Remove {name} from the list', 'repos.limit': '{n} / {max}', 'repos.relations': 'See relations between repositories',
         'repos.err.not-a-directory': 'The folder was not found.', 'repos.err.duplicate': 'This repository is already in the list.', 'repos.err.limit': 'Up to {n} repositories can be added.', 'repos.err.no-data-layer': 'This folder has neither management data nor code to show.', 'repos.err.not-in-group': 'This repository is not in the list.', 'repos.err.last-repository': 'The last repository cannot be removed.', 'repos.err.bad': 'The operation failed.',

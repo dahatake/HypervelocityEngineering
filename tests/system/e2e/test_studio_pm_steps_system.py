@@ -26,12 +26,12 @@ NINE = {"dashboard", "implstatus", "map", "diagrams", "entities", "integrations"
 STEPS = {
     1: ("dashboard", ["dashboard"]),
     2: ("tables", ["tables", "entities", "integrations"]),
-    3: ("map", ["map", "diagrams", "source"]),
+    3: ("source", ["source", "map", "diagrams"]),
     4: ("implstatus", ["implstatus", "tables"]),
     5: ("release", ["release", "tables"]),
     6: ("maintenance", ["maintenance", "tables"]),
 }
-HASH = {"dashboard": "#/dashboard", "tables": "#/tables", "map": "#/map", "implstatus": "#/implstatus", "release": "#/release",
+HASH = {"dashboard": "#/dashboard", "tables": "#/tables", "source": "#/floorplan", "implstatus": "#/implstatus", "release": "#/release",
         "maintenance": "#/maintenance"}
 
 
@@ -81,12 +81,30 @@ def test_ac514_steps_in_order_with_default_screens_and_all_nine_items(browser, u
     for n, (default, items) in STEPS.items():
         steps.nth(n - 1).click()
         expect(steps.nth(n - 1)).to_have_attribute("aria-current", "step")
-        page.wait_for_function("h => location.hash.startsWith(h)", arg=HASH[default] if default != "map" else "#/map")
+        page.wait_for_function("h => location.hash.startsWith(h)", arg=HASH[default])
         listed = page.locator("#nav a").evaluate_all("els => els.map(e => e.dataset.nav)")
         assert listed == items, (n, listed)
         expect(page.locator(f'#nav a[data-nav="{default}"]')).to_have_attribute("aria-current", "page")
         reached |= set(listed)
     assert NINE <= reached
+
+
+def test_ac514_impact_step_opens_source_and_keeps_other_tabs_available(browser, url):
+    page = _open(browser, url)
+    step = _steps(page).nth(2)
+    step.click()
+    tabs = page.locator("#nav a")
+    expect(tabs).to_have_text(["ソースコード構造", "マップ", "図式"])
+    expect(tabs.nth(0)).to_have_attribute("aria-current", "page")
+    expect(page.get_by_test_id("src-tab-functions")).to_have_attribute("aria-selected", "true")
+    for key in ("map", "diagrams"):
+        tab = page.locator(f'#nav a[data-nav="{key}"]')
+        tab.click()
+        expect(tab).to_have_attribute("aria-current", "page")
+        expect(step).to_have_attribute("aria-current", "step")
+    _steps(page).nth(0).click()
+    step.click()
+    expect(page.get_by_test_id("src-tab-functions")).to_have_attribute("aria-selected", "true")
 
 
 def test_ac514_keyboard_and_command_search_choose_a_step(browser, url):

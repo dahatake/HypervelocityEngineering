@@ -133,9 +133,10 @@ def test_ac226_map_dimension_switch_keeps_query_and_nav_stays_on_map_item(studio
     page.wait_for_function("() => document.querySelector('[data-testid=dim-toggle]')?.dataset.current === '3d'")
     assert page.locator('#nav a[data-nav="map"]').get_attribute("aria-current") == "page"
     page.goto(page.url.split("#")[0] + "#/dashboard")
-    page.locator('[data-testid="step"][data-step="3"]').click()   # step 3 opens the map item (FR-1094)
+    page.locator('[data-testid="step"][data-step="3"]').click()
+    page.locator('#nav a[data-nav="map"]').click()
     page.wait_for_function("() => location.hash.startsWith('#/map3d')")  # the map opens in the dimension used last
-    assert page.locator('#nav a[data-nav="map"]').get_attribute("aria-current") == "page"
+    page.wait_for_selector('#nav a[data-nav="map"][aria-current="page"]')
     page.context.close()
 
 

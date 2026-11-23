@@ -83,6 +83,19 @@ def _open(context, url, route="#/tables?tab=reqs"):
     return page
 
 
+def _count(page, n):
+    expect(page.locator("#repoListBtn")).to_have_attribute("aria-label", f"対象リポジトリ群（{n} 件）")
+
+
+def _add(page):
+    """Adding lives inside the repository list (the header has no [+] button)."""
+    page.get_by_test_id("repo-list-open").click()
+    page.get_by_test_id("repo-add-in-list").click()
+    page.wait_for_timeout(300)
+    if page.get_by_test_id("repo-panel").count():
+        page.get_by_test_id("repo-list-open").click()
+
+
 def _rows(page):
     page.get_by_test_id("repo-list-open").click()
     page.wait_for_selector('[data-testid="repo-row"]')
@@ -99,36 +112,36 @@ def test_ac536_add_list_duplicate_restore_and_cancel(browser, repos):
     try:
         context = browser.new_context(viewport={"width": 1400, "height": 900})
         page = _open(context, st.url)
-        page.get_by_test_id("repo-add").click()
-        expect(page.locator("#repoListBtn")).to_contain_text("2")
+        _add(page)
+        _count(page, 2)
         rows = _rows(page)
         assert [Path(r["path"]) for r in rows] == [a, b]
         assert all(r["status"] == "loaded" for r in rows)
         assert "std" in rows[0]["text"] and "oth" in rows[1]["text"] and "管理データ" in rows[0]["text"]
         assert str(b) in rows[1]["text"]
-        page.get_by_test_id("repo-add").click()          # the same path again
+        _add(page)          # the same path again
         expect(page.locator("#toast")).to_contain_text("すでに一覧")
-        expect(page.locator("#repoListBtn")).to_contain_text("2")
+        _count(page, 2)
         saved = json.loads(page.evaluate("() => localStorage.getItem('eabk-studio.repos')"))
         assert [Path(p) for p in saved] == [a, b] and all(isinstance(p, str) for p in saved)
         st.stop()
         st.start(None)                                     # next start: the server opens only `a` ...
         page.reload()
         page.wait_for_selector("#splash[hidden]", state="attached", timeout=30000)
-        expect(page.locator("#repoListBtn")).to_contain_text("2")   # ... and the browser restores the group
+        _count(page, 2)   # ... and the browser restores the group
         st.stop()
         st.start("")                                       # cancel: nothing changes, no error
         page.reload()
         page.wait_for_selector("#splash[hidden]", state="attached", timeout=30000)
-        expect(page.locator("#repoListBtn")).to_contain_text("2")
-        page.get_by_test_id("repo-add").click()
+        _count(page, 2)
+        _add(page)
         page.wait_for_timeout(500)
-        expect(page.locator("#repoListBtn")).to_contain_text("2")
+        _count(page, 2)
         assert page.locator("#toast:not([hidden])").count() == 0
         rows = _rows(page)                                 # removing from the list
         page.get_by_test_id("repo-list-open").click()
         page.locator(f'[data-testid="repo-row"][data-path="{rows[1]["path"]}"] [data-testid="repo-remove"]'.replace("\\", "\\\\")).click()
-        expect(page.locator("#repoListBtn")).to_contain_text("1")
+        _count(page, 1)
         assert [Path(p) for p in json.loads(page.evaluate("() => localStorage.getItem('eabk-studio.repos')"))] == [a]
     finally:
         st.stop()
@@ -145,7 +158,7 @@ def test_ac536_limit_and_partial_failure(browser, repos):
         assert [s["error"] for s in data["skipped"]] == ["limit"]
         context = browser.new_context(viewport={"width": 1400, "height": 900})
         page = _open(context, st.url)
-        expect(page.locator("#repoListBtn")).to_contain_text("10")
+        _count(page, 10)
         shutil.rmtree(extra[0])                            # this one now fails to load
         page.reload()
         page.wait_for_selector("#splash[hidden]", state="attached", timeout=60000)
@@ -185,7 +198,6 @@ def test_ac540_relations_diagram_between_repositories(browser, repos):
         assert status == 200
         page = _open(browser.new_context(viewport={"width": 1400, "height": 900}), st.url, "#/dashboard")
         page.locator('[data-testid="step"][data-step="3"]').click()
-        page.locator('#nav a[data-nav="source"]').click()
         page.get_by_test_id("src-tab-repos").click()
         page.wait_for_selector('[data-testid="xr-diagram"] [data-edge]', timeout=60000)
         assert set(page.locator('[data-testid="xr-diagram"] [data-repo]').evaluate_all("e => e.map(x => x.dataset.repo)")) == {"std", "api", "shared"}

@@ -1,6 +1,6 @@
 // FR-1099 (repository group) and FR-1100 (relations between its repositories).
-// The header keeps FR-010's button (switch = replace the group with one repository); beside it, "Add repository"
-// opens the same OS folder dialog to add one more, and the list button shows the group with each one's state.
+// The header keeps FR-010's button (switch = replace the group with one repository); beside it, the "Repository list"
+// button opens the group with each one's state, where a repository is added (same OS folder dialog) or removed.
 // Only the list of paths is kept in the browser (localStorage `eabk-studio.repos`) and restored on the next start.
 import { t, onLang } from './i18n.js';
 import { store } from './store.js';
@@ -83,19 +83,14 @@ export function renderRepoListBtn() {
   const b = document.getElementById('repoListBtn');
   if (!b) return;
   const n = store.model?.meta?.repos?.length || 1;
-  b.replaceChildren(icon('repos', { size: 16 }), ' ' + n);
+  b.replaceChildren(icon('repos', { size: 16 }), ' ' + t('repos.listBtn'));
   b.setAttribute('aria-label', t('repos.list.aria', { n }));
   b.title = t('repos.list.aria', { n });
-  const add = document.getElementById('repoAddBtn');
-  add.replaceChildren(icon('plus', { size: 16 }));
-  add.setAttribute('aria-label', t('repos.add'));
-  add.title = t('repos.add');
   renderList();
 }
 
 export function initRepos(reloadModel) {
   reload = reloadModel;
-  document.getElementById('repoAddBtn').addEventListener('click', addRepository);
   document.getElementById('repoListBtn').addEventListener('click', openRepoList);
   onLang(renderRepoListBtn);
   store.on('model', renderRepoListBtn);

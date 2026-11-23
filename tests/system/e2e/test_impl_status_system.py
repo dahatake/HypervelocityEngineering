@@ -78,7 +78,8 @@ def test_impl_status_card_selection_opens_requirement_detail_and_links_views(pag
     card.click()
     expect(page.locator("#drawer")).to_contain_text(req_id)
     # selection is shared with other representations (map keeps the selection)
-    page.locator('[data-testid="step"][data-step="3"]').click()   # FR-1094: step 3 opens the map
+    page.locator('[data-testid="step"][data-step="3"]').click()
+    page.locator('#nav a[data-nav="map"]').click()
     expect(page.locator("#drawer")).to_contain_text(req_id)
 
 

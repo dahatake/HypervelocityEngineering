@@ -188,7 +188,8 @@ def test_selection_and_filter_survive_placement_map_and_table_switches(page):
     page.goto(page.url + "#/tables?tab=reqs&q=FR-001")
     expect(page.locator("#view")).to_contain_text("FR-001")
     page.get_by_text("FR-001", exact=True).first.click()
-    page.locator('[data-testid="step"][data-step="3"]').click()   # FR-1094: step 3 opens the map
+    page.locator('[data-testid="step"][data-step="3"]').click()
+    page.locator('#nav a[data-nav="map"]').click()
     expect(page.locator("#drawer")).to_contain_text("FR-001")
     expect(page.locator("#q")).to_have_value("FR-001")
     # FR-1041: 配置は図式（層×コンポーネント）へ統合。ナビの「図式」から旧配置の見方へ移る

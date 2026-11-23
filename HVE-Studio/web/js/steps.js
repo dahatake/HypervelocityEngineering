@@ -8,7 +8,7 @@ import { store } from './store.js';
 export const STEPS = [
   { n: 1, main: 'dashboard', items: [{ key: 'dashboard' }] },
   { n: 2, main: 'tables', items: [{ key: 'tables', href: '#/tables?tab=reqs' }, { key: 'entities' }, { key: 'integrations' }] },
-  { n: 3, main: 'map', items: [{ key: 'map' }, { key: 'diagrams' }, { key: 'source' }] },
+  { n: 3, main: 'source', items: [{ key: 'source', href: '#/floorplan' }, { key: 'map' }, { key: 'diagrams' }] },
   { n: 4, main: 'implstatus', items: [{ key: 'implstatus' }, { key: 'tables', href: '#/tables?tab=cases' }] },
   { n: 5, main: 'release', items: [{ key: 'release' }, { key: 'tables', href: '#/tables?tab=cases' }] },
   { n: 6, main: 'maintenance', items: [{ key: 'maintenance' }, { key: 'tables', href: '#/tables?tab=decisions' }] },

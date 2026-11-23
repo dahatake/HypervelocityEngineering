@@ -143,7 +143,7 @@
     "AC-444": "sha256:7a0a7b59545d11ae",
     "AC-457": "sha256:bcd423b094734a96",
     "AC-459": "sha256:815f681895907199",
-    "AC-514": "sha256:6b8cc873e1583307",
+    "AC-514": "sha256:e3c7b6d201b15f66",
     "AC-520": "sha256:b5acdcd412c884cb",
     "AC-528": "sha256:f3c9f21242b871e7",
     "AC-536": "sha256:8400de38ac01acc7"
@@ -4997,20 +4997,26 @@
       "ac_ids": [
         "AC-514"
       ],
-      "title": "PM work steps at the top: 6 numbered steps, default screen per step, all 9 nav items reachable, keyboard/command search, no role selector",
+      "title": "PM work steps: defaults, Impact tab order and switching, all nine items, keyboard and search, no role selector",
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_pm_steps_system.py -k ac514 -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "aa8deb38",
-      "last_run_at": "2026-11-20T13:28:54+09:00",
-      "evidence": "work/system-test/logs/system-test/E2E-235-202611201324.log",
+      "last_commit": "b27c5c08",
+      "last_run_at": "2026-11-20T18:10:39+09:00",
+      "evidence": "work/system-test/logs/system-test/E2E-235-202611201810.log",
       "history": [
         {
           "at": "2026-11-20T09:19:29+09:00",
           "by": "script",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-20T18:10:29+09:00",
+          "by": "script",
+          "change": "title: 'PM work steps at the top: 6 numbered steps, default screen per step, all 9 nav items reachable, keyboard/command search, no role selector' -> 'PM work steps: defaults, Impact tab order and switching, all nine items, keyboard and search, no role selector'",
+          "reason": "FR-1094 AC-514: verify the source-first Impact step, tab order and explicit switching"
         }
       ]
     },
