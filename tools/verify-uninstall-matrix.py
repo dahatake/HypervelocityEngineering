@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Verification matrix for tools/uninstall.py (toolkit maintenance; FR-1087 AC-475 AC-476 AC-478; not shipped).
 
-Each historical EABK version is installed with ITS OWN tools/install.py (from `git archive <commit>`) into a fresh git
+Each historical HVE version is installed with ITS OWN tools/install.py (from `git archive <commit>`) into a fresh git
 repository that already has committed user files. Variants:
   manifest         the installed state as is
   no-manifest      the manifest deleted (as if lost, or never written)
@@ -64,7 +64,7 @@ def baseline(name):
     (t / "AGENTS.md").write_bytes(b"# My project agents\n\nBe careful with the payments module.\n")
     (t / ".gitignore").write_bytes(b"node_modules/\n*.log\n")
     (t / "users-guide").mkdir()
-    (t / "users-guide" / "README.md").write_bytes(b"# Our own user guide (not EABK)\n")
+    (t / "users-guide" / "README.md").write_bytes(b"# Our own user guide (not HVE)\n")
     (t / "docs").mkdir()
     (t / "docs" / "architecture.md").write_bytes(b"# Architecture\n")
     (t / "app.py").write_bytes(b"print('hello')\n")

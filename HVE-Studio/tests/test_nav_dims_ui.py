@@ -86,7 +86,7 @@ def test_ac221_selection_kind_and_search_text_survive_dimension_switch(studio):
     toggle = page.get_by_test_id("dim-toggle")
     toggle.locator('[data-dim="3d"]').click()
     page.wait_for_function("() => document.querySelector('[data-testid=dim-toggle]')?.dataset.current === '3d'")
-    state = page.evaluate("() => window.eabkView.getState().diagram")
+    state = page.evaluate("() => window.hveView.getState().diagram")
     assert state["kind"] == "goals" and state["dim"] == "3d"
     assert "FR-001" in page.locator("#drawer").inner_text()
     assert page.locator("#q").input_value() == "FR-001"
@@ -100,7 +100,7 @@ def test_ac221_selection_kind_and_search_text_survive_dimension_switch(studio):
 def test_ac220_3d_view_has_canvas_and_table_alternative_with_same_ids(studio):
     page = _open(studio, "diagrams?kind=entities&dim=3d")
     page.wait_for_selector('[data-testid="dgm-3d-stage"] canvas')
-    ids = {e["id"] for e in page.evaluate("() => window.eabkView.getState().diagram.elements")}
+    ids = {e["id"] for e in page.evaluate("() => window.hveView.getState().diagram.elements")}
     page.locator("details.sz-alt summary").click()
     rows = set(page.locator("details.sz-alt tr[data-id]").evaluate_all("els => els.map(e => e.dataset.id)"))
     assert ids and rows == ids
@@ -146,7 +146,7 @@ def test_ac226_placement_alias_moves_to_layers_diagram(studio, old, needle):
     page = _open(studio, old)
     page.wait_for_function("() => location.hash.startsWith('#/diagrams')")
     assert "kind=layers" in page.evaluate("() => location.hash") and needle in page.evaluate("() => location.hash")
-    assert page.evaluate("() => window.eabkView.getState().diagram.kind") == "layers"
+    assert page.evaluate("() => window.hveView.getState().diagram.kind") == "layers"
     page.context.close()
 
 

@@ -38,10 +38,10 @@ def _open(studio, query="", reduced=False, lang="ja"):
     browser, url = studio
     ctx = browser.new_context(viewport={"width": 1400, "height": 900}, reduced_motion="reduce" if reduced else "no-preference")
     page = ctx.new_page()
-    page.add_init_script(f"localStorage.setItem('eabk-studio.lang','{lang}')")
+    page.add_init_script(f"localStorage.setItem('hve-studio.lang','{lang}')")
     page.goto(f"{url}/#/codegraph{query}")
     page.wait_for_selector(CANVAS, timeout=60000)
-    page.wait_for_function("() => window.eabkView?.getState().nodes > 0", timeout=60000)
+    page.wait_for_function("() => window.hveView?.getState().nodes > 0", timeout=60000)
     return page
 
 
@@ -53,7 +53,7 @@ def _settled(page):
 def test_ac502_api_and_screen_show_the_repository_graph(studio):
     page = _open(studio)
     _settled(page)
-    state = page.evaluate("() => window.eabkView.getState()")
+    state = page.evaluate("() => window.hveView.getState()")
     assert state["nodes"] > 100 and state["links"] > 100 and state["shown"] == state["nodes"]
     data = page.evaluate("async () => (await fetch('/api/codegraph')).json()")
     assert data["stats"]["nodes"] > 1000 and {"nodes", "edges", "files", "stats"} <= set(data)
@@ -82,15 +82,15 @@ def test_ac503_select_shows_callers_callees_and_deep_link(studio):
 def test_ac502_filters_change_what_is_drawn(studio):
     page = _open(studio)
     _settled(page)
-    base = page.evaluate("() => window.eabkView.getState()")
+    base = page.evaluate("() => window.hveView.getState()")
     page.locator('[data-testid="cg-guess"]').check()
-    page.wait_for_function("(n) => window.eabkView.getState().links > n", arg=base["links"])
+    page.wait_for_function("(n) => window.hveView.getState().links > n", arg=base["links"])
     page.locator('[data-testid="cg-guess"]').uncheck()
-    page.wait_for_function("(n) => window.eabkView.getState().links === n", arg=base["links"])
+    page.wait_for_function("(n) => window.hveView.getState().links === n", arg=base["links"])
     page.locator('[data-testid="cg-limit"]').evaluate("e => { e.value = '0'; e.dispatchEvent(new Event('input', { bubbles: true })); }")
-    page.wait_for_function("() => window.eabkView.getState().nodes <= 100")
+    page.wait_for_function("() => window.hveView.getState().nodes <= 100")
     page.locator('[data-testid="cg-limit"]').evaluate("e => { e.value = '3'; e.dispatchEvent(new Event('input', { bubbles: true })); }")
-    page.wait_for_function("() => window.eabkView.getState().nodes > 150")
+    page.wait_for_function("() => window.hveView.getState().nodes > 150")
     page.locator('[data-testid="cg-kind-method"]').uncheck()
     page.wait_for_function("() => document.querySelector('[data-testid=cg-list]').textContent.length > 0")
     assert not page.locator('.cg-list .dot').evaluate_all("els => els.length === 0")
@@ -105,11 +105,11 @@ def test_ac503_search_wheel_zoom_and_fit(studio):
     page.wait_for_function("() => document.querySelector('[data-testid=cg-list]').textContent.includes('codegraph_bytes')")
     page.locator('[data-testid="cg-search"]').press("Enter")
     page.wait_for_function("() => document.querySelector('[data-testid=cg-canvas]').dataset.selected.includes('codegraph_bytes')")
-    z0 = page.evaluate("() => window.eabkView.getState().zoom")
+    z0 = page.evaluate("() => window.hveView.getState().zoom")
     box = page.locator(CANVAS).bounding_box()
     page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
     page.mouse.wheel(0, -600)
-    page.wait_for_function("(z) => window.eabkView.getState().zoom > z", arg=z0)
+    page.wait_for_function("(z) => window.hveView.getState().zoom > z", arg=z0)
     page.locator('[data-testid="cg-fit"]').click()
     page.context.close()
 
@@ -117,7 +117,7 @@ def test_ac503_search_wheel_zoom_and_fit(studio):
 # FR-1091 AC-504: with reduced motion the layout is solved at once (settled, still) and the pause control stays usable.
 def test_ac504_reduced_motion_is_settled_at_once(studio):
     page = _open(studio, reduced=True)
-    assert page.evaluate("() => window.eabkView.getState().settled") is True
+    assert page.evaluate("() => window.hveView.getState().settled") is True
     page.locator('[data-testid="cg-pause"]').click()
     page.context.close()
 
@@ -127,7 +127,7 @@ def test_ac504_entry_points_and_english(studio):
     browser, url = studio
     ctx = browser.new_context(viewport={"width": 1400, "height": 900})
     page = ctx.new_page()
-    page.add_init_script("localStorage.setItem('eabk-studio.lang','en')")
+    page.add_init_script("localStorage.setItem('hve-studio.lang','en')")
     page.goto(f"{url}/#/source")
     page.wait_for_selector('[data-testid="src-tab-map"][aria-selected="true"]', timeout=60000)
     page.locator('[data-testid="src-tab-functions"]').click()

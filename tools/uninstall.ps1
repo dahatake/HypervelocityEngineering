@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Remove the Enterprise App Build Kit (EABK), installed by any version, from the current (or given) git repository.
+  Remove the Enterprise App Build Kit (HVE), installed by any version, from the current (or given) git repository.
 
 .DESCRIPTION
   Runs tools/uninstall.py with tools/uninstall-catalog.json (the content of every file every version shipped).

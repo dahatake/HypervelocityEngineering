@@ -7,7 +7,7 @@ WEB = Path(__file__).resolve().parents[1] / "web"
 
 def test_layout_module_saves_only_layout_id_and_falls_back_to_default():  # NFR-UX-002 AC-015
     js = (WEB / "js" / "layout.js").read_text(encoding="utf-8")
-    assert "eabk-studio.layout" in js
+    assert "hve-studio.layout" in js
     assert "LAYOUTS.includes(v) ? v : DEFAULT_LAYOUT" in js  # 不正値は既定
     assert js.count("localStorage.setItem") == 1 and "setItem(LAYOUT_KEY, id)" in js  # 保存は配置 ID だけ
 

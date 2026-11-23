@@ -7,7 +7,7 @@ This is a data-layer file that records, one item per integration, the app's inte
 ## 11.1 What you receive at installation
 
 - `python tools/install.py` creates the template `docs/integrations.md` (an explanation of the format and an empty index table) **only if it does not exist yet**. An existing catalog in the target is not overwritten, and its content does not change on update (rerun or `--force`).
-- The checks are built into the toolkit's `scripts/rdcheck.py` (CHK-28) and `scripts/next-id.py` (numbering of `INT`), and are updated by the same procedure as existing distributions (rerun). This chapter is also distributed to `EABK-docs/`. The behavior of `--no-ci` (do not install the workflow) is unchanged.
+- The checks are built into the toolkit's `scripts/rdcheck.py` (CHK-28) and `scripts/next-id.py` (numbering of `INT`), and are updated by the same procedure as existing distributions (rerun). This chapter is also distributed to `HVE-docs/`. The behavior of `--no-ci` (do not install the workflow) is unchanged.
 - The file name can be changed with `management_files.integrations` in `scripts/ebak.config.json` (default `docs/integrations.md`).
 
 ## 11.2 Format

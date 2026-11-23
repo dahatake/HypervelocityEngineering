@@ -30,7 +30,7 @@ def test_routes_mount_the_shared_semantic_zoom_shell():
     assert "mountShell" in js("map3d.js") and "create3d" in js("map3d.js")
     core = js("semzoom.js")
     assert "export const view" in core and 'data-testid\': \'semantic-zoom\'' in core
-    assert "window.eabkView" in core and "setScale" in core and "getState" in core
+    assert "window.hveView" in core and "setScale" in core and "getState" in core
     assert "PARAM-017" in core and "PARAM-018" in core  # 閾値は PARAM
 
 

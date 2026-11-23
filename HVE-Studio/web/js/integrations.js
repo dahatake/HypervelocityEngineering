@@ -81,6 +81,6 @@ export function mount(host) {
 function exportCsv(rows) {
   const q = (v) => '"' + String(cell(v)).replace(/"/g, '""') + '"';
   const csv = [COLS.map((k) => q(t('int.col.' + k))).join(','), ...rows.map((r) => COLS.map((k) => q(r[k])).join(','))].join('\r\n');
-  const a = el('a', { href: URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv' })), download: 'eabk-integrations.csv' });
+  const a = el('a', { href: URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv' })), download: 'hve-integrations.csv' });
   a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }

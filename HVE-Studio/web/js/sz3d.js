@@ -29,7 +29,7 @@ export function create3d(ctx) {
   const hasFx = (x) => fxList().includes(x);
   const nodeList = () => d.names.map((n) => ({ id: n, kind: 'entity', shape: shapeOf('entity') }));
   const hook = { nodes: nodeList, style: () => style, fx: () => [...fxList()], camera: () => (rig ? rig.camera() : null) };
-  window.__eabk3d = hook;
+  window.__hve3d = hook;
   function applyStyle() {
     if (!uiHost) return;
     uiHost.dataset.style = style; uiHost.dataset.fx = fxList().join(',') || 'none';
@@ -263,5 +263,5 @@ export function create3d(ctx) {
   }
 
   return { kind: '3d', el: canvas, draw, fit, toWorld, toScreen, pick, drawnEntities: () => drawn,
-    destroy() { cancelAnimationFrame(loop); loop = 0; if (window.__eabk3d === hook) delete window.__eabk3d; styleEl?.remove(); legendEl?.remove(); rig?.destroy(); rig?.el.remove(); offLang?.(); } };
+    destroy() { cancelAnimationFrame(loop); loop = 0; if (window.__hve3d === hook) delete window.__hve3d; styleEl?.remove(); legendEl?.remove(); rig?.destroy(); rig?.el.remove(); offLang?.(); } };
 }

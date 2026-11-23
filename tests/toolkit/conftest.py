@@ -96,7 +96,7 @@ SAMPLE_ID_REGISTRY = """# ID 台帳
 
 
 def run(cmd, cwd, input_text=None, check=False):
-    env = dict(os.environ, PYTHONUTF8="1", EABK_ALLOW_PRIMARY="1")
+    env = dict(os.environ, PYTHONUTF8="1", HVE_ALLOW_PRIMARY="1")
     proc = subprocess.run(cmd, cwd=str(cwd), input=input_text, capture_output=True, text=True,
                           encoding="utf-8", errors="replace", env=env)
     if check and proc.returncode != 0:
@@ -144,7 +144,7 @@ def _snapshot(key, build):
     import atexit
     import tempfile
     if key not in _SNAP:
-        base = Path(tempfile.mkdtemp(prefix="eabk-tk-snap-"))
+        base = Path(tempfile.mkdtemp(prefix="hve-tk-snap-"))
         atexit.register(lambda: shutil.rmtree(base, ignore_errors=True))
         _SNAP[key] = build(base / "app")
     return _SNAP[key]

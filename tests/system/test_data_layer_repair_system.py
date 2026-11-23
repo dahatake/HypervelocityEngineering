@@ -31,7 +31,7 @@ def out(r) -> str:
 
 @pytest.fixture
 def clean(tmp_path):
-    return d.make_clean_installed(tmp_path / "EABK data layer repair with spaces")
+    return d.make_clean_installed(tmp_path / "HVE data layer repair with spaces")
 
 
 # ============================================================================ FR-1046 AC-240 (check only)

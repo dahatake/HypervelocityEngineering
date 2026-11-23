@@ -2,7 +2,7 @@
 
 # HypervelocityEngineering — Enterprise App Build Kit Lite
 
-A toolkit that adds rules and checks to a repository developed with GitHub Copilot (VS Code, Copilot CLI, the GitHub Copilot app, or the cloud agent) to keep **the requirements definition, the catalog, and the System Tests consistent** (EABK Lite 0.6.0).
+A toolkit that adds rules and checks to a repository developed with GitHub Copilot (VS Code, Copilot CLI, the GitHub Copilot app, or the cloud agent) to keep **the requirements definition, the catalog, and the System Tests consistent** (HVE Lite 0.6.0).
 
 - You ask your usual Copilot (the default agent) **as you always do**. No special agent or command is needed.
 - Following the rules in the repository's `AGENTS.md`, every change that alters behavior updates the requirements definition, the catalog, and the tests in the same change.
@@ -11,7 +11,7 @@ A toolkit that adds rules and checks to a repository developed with GitHub Copil
 - The data layer can be browsed as diagrams, tables, and search in **HVE Studio** (a local, read-only viewer).
 - It also works for applications that already have source code and design documents (brownfield). Start with an inventory: `python scripts/adopt.py scan` ([Adopting an existing app](users-guide/10-adopting-existing-apps.en.md)).
 
-![The daily flow of EABK Lite](users-guide/images/fig-flow.en.svg)
+![The daily flow of HVE Lite](users-guide/images/fig-flow.en.svg)
 
 📖 **New here?** Read [Quickstart](#quickstart) → [User guide contents](users-guide/README.en.md) → [S9 Visual tour](users-guide/studio/09-visual-tour.en.md) to understand the whole picture and every screen with figures. The user guide index, the Studio index and S9 link back to this README with "← Repository README".
 
@@ -22,7 +22,7 @@ Background: each Engagement that the Microsoft Innovation Hub runs currently tak
 - **Information sharing with account teams is thin**, so customers sometimes get only a Copilot product explanation. How we differ from competitors, and the real value of AI and Copilot, do not reach the customer.
 - The Hub team's **scenarios and narratives** are published as videos on Viva Engage ("Hub Radio"), but few users watch them.
 
-The aim is to keep scenarios, narratives, requirements and decisions in one place as **managed data that both people and AI can read**, so the same procedure can be repeated any number of times. This toolkit (EABK Lite and HVE Studio) is the foundation for that: it checks "what was decided", "how far it has progressed" and "are there gaps or contradictions" with deterministic checks and diagrams. Engagement-specific features for the Hub are not part of this toolkit at present.
+The aim is to keep scenarios, narratives, requirements and decisions in one place as **managed data that both people and AI can read**, so the same procedure can be repeated any number of times. This toolkit (HVE Lite and HVE Studio) is the foundation for that: it checks "what was decided", "how far it has progressed" and "are there gaps or contradictions" with deterministic checks and diagrams. Engagement-specific features for the Hub are not part of this toolkit at present.
 
 ### Why Lite
 
@@ -64,7 +64,7 @@ When AI repeatedly does requirements definition, implementation, and testing, th
 - Contradictions between distant requirements are missed in the author's own self-review.
 - Instructions live only in prompts or personal memory, so behavior changes when the person, PC, or model changes.
 
-EABK Lite prevents these with five means.
+HVE Lite prevents these with five means.
 
 | Means | Description |
 |---|---|
@@ -109,7 +109,7 @@ tests/system/ledger.json      System Test ledger (persistent)
 work/            temporary files (in .gitignore). Audit results go to work/audit/<datetime>/
 ```
 
-EABK Lite has no hooks and does not add any preamble to requests automatically. The rules reach Copilot through the blocks in `AGENTS.md` and `copilot-instructions.md`, and verify and the CI checks confirm they are followed.
+HVE Lite has no hooks and does not add any preamble to requests automatically. The rules reach Copilot through the blocks in `AGENTS.md` and `copilot-instructions.md`, and verify and the CI checks confirm they are followed.
 
 ### Checks (verify and check profiles)
 
@@ -215,7 +215,7 @@ python tools/install.py --target /path/to/your-repo
 
 | Kind | Files | On re-run |
 |---|---|---|
-| Toolkit files | `.github/agents/rd-auditor.agent.md`, `.github/skills/` (`requirement-definition`, `rd-audit`, `adopt-existing`), `.github/workflows/ebak-verify.yml`, `scripts/*.py`, `verify.ps1`, `verify.sh`, `HVE-Studio/` (the viewer; Studio's tests are not installed), `EABK-docs/` (same content as this repository's `users-guide/`; the HVE Studio guide is `EABK-docs/studio/`; the target's own `users-guide/` is not touched) | Updated to the new version if unmodified. If modified locally, **left as is** (`KEEP-LOCAL`; `--force` overwrites) |
+| Toolkit files | `.github/agents/rd-auditor.agent.md`, `.github/skills/` (`requirement-definition`, `rd-audit`, `adopt-existing`), `.github/workflows/ebak-verify.yml`, `scripts/*.py`, `verify.ps1`, `verify.sh`, `HVE-Studio/` (the viewer; Studio's tests are not installed), `HVE-docs/` (same content as this repository's `users-guide/`; the HVE Studio guide is `HVE-docs/studio/`; the target's own `users-guide/` is not touched) | Updated to the new version if unmodified. If modified locally, **left as is** (`KEEP-LOCAL`; `--force` overwrites) |
 | Management data templates | `docs/requirements-definition.md`, `docs/catalog.md`, `docs/integrations.md` (integration catalog, optional), `docs/id-registry.md`, `tests/system/ledger.json` | Created **only if missing**. Existing files are never overwritten |
 | Display data | `.hve-studio/managed-data.json` | Created/synchronized with progress after installation/update. A disposable analysis snapshot, not an authoritative requirements migration. Normal uninstall preserves it; `--purge` removes it |
 | Settings | `scripts/ebak.config.json` | Created if missing. If present, only new keys are added; values you set are not changed |
@@ -290,7 +290,7 @@ python tools/uninstall.py --target /path/to/your-repo --purge            # also 
 
 `--purge` also removes management data, settings, `/work`, and more. Modified toolkit files and other items are kept by default (see the table below). `python tools/install.py --target ... --uninstall` / `--purge`, `install.ps1 -Uninstall`, and `install.sh --uninstall` use the same implementation.
 
-**It removes EABK installed by any version.** The uninstaller decides with `tools/uninstall-catalog.json`, a catalog of the content hashes of every file that any version of `tools/install.py` shipped (including the versions under the old name "hve"), collected from the git history. Only `uninstall.py` and the catalog are downloaded; no clone of the toolkit is needed. Even without a manifest it removes files of old versions (`hvelib.py`, `hve-verify.yml`, the conductor, etc.), the block markers of old versions (`hve-abk`, `hve-conductor`), the settings and manifests of old versions (`scripts/hve.config.json`, `.github/hve-toolkit.json`), and `*.hve-backup-*`.
+**It removes HVE installed by any version.** The uninstaller decides with `tools/uninstall-catalog.json`, a catalog of the content hashes of every file that any version of `tools/install.py` shipped (including the versions under the old name "hve"), collected from the git history. Only `uninstall.py` and the catalog are downloaded; no clone of the toolkit is needed. Even without a manifest it removes files of old versions (`hvelib.py`, `hve-verify.yml`, the conductor, etc.), the block markers of old versions (`hve-abk`, `hve-conductor`), the settings and manifests of old versions (`scripts/hve.config.json`, `.github/hve-toolkit.json`), and `*.hve-backup-*`.
 
 | Option (PowerShell) | Effect |
 |---|---|
@@ -311,7 +311,7 @@ python tools/uninstall.py --target /path/to/your-repo --purge            # also 
 | System Test code (other than the ledger in `tests/system/`), app code, other documents in `docs/` | Kept | Kept |
 
 - Removal happens in the git working tree. Check with `git status` before committing (`git restore` can undo it; `/work` is not tracked by git and cannot be restored). It refuses to run unless the target is the top of a git repository (`--allow-non-git` to continue).
-- Exit code: `0` = nothing of EABK remains in the chosen scope, `1` = something remains (listed under `RESIDUE`), `2` = error. Safe to run any number of times (the second run shows `changes=0`).
+- Exit code: `0` = nothing of HVE remains in the chosen scope, `1` = something remains (listed under `RESIDUE`), `2` = error. Safe to run any number of times (the second run shows `changes=0`).
 - After `--purge`, your files (CRLF line endings included) are byte for byte as before the install and `git status --porcelain --ignored` is empty. Installers before 0.6.0, however, rewrote a CRLF `AGENTS.md` / `.gitignore` as LF; that difference remains in `git status` (undo it with `git restore`).
 
 ### Why we use an installer instead of a plugin
@@ -358,7 +358,7 @@ So the customizations (`AGENTS.md`, `.github/`) and `scripts/` are placed direct
 
 For details, see [Daily workflow](users-guide/02-daily-workflow.en.md) and [Writing requests](users-guide/01-writing-requests.en.md).
 
-EABK Lite does not add a preamble to your requests automatically. If you want a standing preamble, put it in your own Copilot instructions.
+HVE Lite does not add a preamble to your requests automatically. If you want a standing preamble, put it in your own Copilot instructions.
 
 ### Adopting an existing app
 
@@ -393,7 +393,7 @@ Use `-Clean` in PowerShell and `--clean` with `install.sh`.
 
 How usage changed from 0.5.x:
 
-| 0.5.x | 0.6.0 (EABK Lite) |
+| 0.5.x | 0.6.0 (HVE Lite) |
 |---|---|
 | Asking conductor with `/build`, `<run_options>` | Ask the default agent as usual and approve in chat ([Recommended workflow](#recommended-workflow)) |
 | Hooks, the automatic preamble, per-role gates | Gone. Put assumptions you want every time in your own Copilot instructions |
@@ -407,7 +407,7 @@ For details, see [Version upgrades](users-guide/09-versioning.en.md) and [CHANGE
 
 ## HVE Studio (data-layer viewer)
 
-**HVE Studio** (Hypervelocity Engineering Studio, `HVE-Studio/`) is a local-only web app for browsing the data layer EABK manages (the requirements definition, the catalog, the System Test ledger, and the ID registry) through **diagrams, tables, and search**. It is part of the toolkit and is installed into the target repository.
+**HVE Studio** (Hypervelocity Engineering Studio, `HVE-Studio/`) is a local-only web app for browsing the data layer HVE manages (the requirements definition, the catalog, the System Test ledger, and the ID registry) through **diagrams, tables, and search**. It is part of the toolkit and is installed into the target repository.
 
 - **Browsing and analysis do not change originals**. Management records remain authoritative, supplemented with explicit source references, imports and TODOs. Studio listens only on `127.0.0.1`. Only confirmed maintenance changes the catalog; task edits use Studio-owned storage outside the repository.
 - It runs on the Python 3.9+ standard library alone (no extra installs). When data-layer files change, the screen reloads within seconds.
@@ -437,9 +437,9 @@ python HVE-Studio/studio.py --role pm    # opens the browser. --role is pm / arc
 
 On Windows you can also use `.\HVE-Studio\start.ps1 -Role pm`, and on macOS / Linux `./HVE-Studio/start.sh . 8765 --role pm`. Details are in [HVE-Studio/README.md](HVE-Studio/README.md); script options are in the [Scripts reference](users-guide/05-scripts-reference.en.md).
 
-### Using Studio without EABK (code mode)
+### Using Studio without HVE (code mode)
 
-Studio can also show a git repository without EABK (FR-1086). From a clone of this toolkit (HVE), pass the root of the target repository to `--repo`:
+Studio can also show a git repository without HVE (FR-1086). From a clone of this toolkit (HVE), pass the root of the target repository to `--repo`:
 
 ```bash
 python HVE-Studio/studio.py --repo <any-git-repo> --check   # mode: code (...) requirement-docs=… requirements=… linked-to-code=… code-files=… test-files=… components=…

@@ -19,7 +19,7 @@ def _page(studio, route, w, h, lang=None):
     page.goto(f"{url}/#/{route}")
     page.wait_for_load_state("networkidle")
     if lang == "en":
-        page.evaluate("() => localStorage.setItem('eabk-studio.lang','en')")
+        page.evaluate("() => localStorage.setItem('hve-studio.lang','en')")
         page.reload()
         page.wait_for_load_state("networkidle")
     return page
@@ -194,7 +194,7 @@ def test_ac352_tier_ids_are_unique_across_renderTiers_calls_in_same_millisecond(
     page.wait_for_selector(GROUP)
     res = page.evaluate("""async () => {
         const m = await import('/js/hier.js');
-        const hier = window.eabkStore && window.eabkStore.model ? window.eabkStore.model.hierarchy : null;
+        const hier = window.hveStore && window.hveStore.model ? window.hveStore.model.hierarchy : null;
         const sample = hier || {nodes: []};
         const realNow = Date.now; Date.now = () => 1700000000000;
         try {

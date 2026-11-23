@@ -31,7 +31,7 @@ REQ_BLOCK = re.compile(r"^#### ((?:FR|NFR-[A-Z0-9]+)-\d+) ", re.M)
 
 @pytest.fixture
 def repo(tmp_path):
-    return d.make_clean_installed(tmp_path / "EABK tiers with spaces")
+    return d.make_clean_installed(tmp_path / "HVE tiers with spaces")
 
 
 def txt(root, rel):

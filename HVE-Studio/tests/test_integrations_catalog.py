@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REPO = ROOT.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(REPO / "tests" / "system"))
-import eabk_model as m  # noqa: E402
+import hve_model as m  # noqa: E402
 from entity_repo import make_zoom  # noqa: E402
 
 CATALOG = """# 外部連携カタログ

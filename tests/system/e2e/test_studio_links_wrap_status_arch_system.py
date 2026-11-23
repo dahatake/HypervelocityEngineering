@@ -10,7 +10,7 @@ PROVISIONAL CONTRACT (仮置き。実装者が確認し、食い違えば CONFLI
   - 実装状態: [data-testid="impl-bar-segment"][data-scope][data-state][data-count]、
     [data-testid="impl-kanban-column"][data-state][data-count]、[data-testid="impl-kanban-card"][data-req]、
     該当/非該当は [data-match="true|false"]。適用中の表示は [data-testid="impl-filter-status"]。
-  - アーキテクチャ図: route #/map2d?view=arch / #/map3d?view=arch、window.eabkView.getState() が
+  - アーキテクチャ図: route #/map2d?view=arch / #/map3d?view=arch、window.hveView.getState() が
     {level, locations:[{kind,name,apps,data,links:[{to,direction}]}], entities, columns}。
     配置先の記載の仮置き表記: catalog の「配置先」節の箇条書き（_placement_section 参照。Q-014 の回答待ち）。
 """
@@ -55,7 +55,7 @@ def _placement_section():
     return (
         "\n## 配置先（仮置き表記）\n"
         "- 配置先: PC / フォルダ: data/orders / データ: 注文\n"
-        "- 配置先: ブラウザー / Local Storage: eabk.filters / データ: 絞り込み\n"
+        "- 配置先: ブラウザー / Local Storage: hve.filters / データ: 絞り込み\n"
         "- 配置先: Power Platform / 環境: 開発 / データ: 顧客\n"
         "- 配置先: Azure / サービス: Azure SQL / アプリ: 注文API（.NET MAUI on Windows） / データ: 商品\n"
         "- 通信: 注文API → Azure SQL（送信）\n"
@@ -230,8 +230,8 @@ def test_ac194_reclick_restores_all_views(page):
 
 
 def _state(page, scale):
-    page.evaluate("s => window.eabkView.setScale(s)", scale)
-    return page.evaluate("() => window.eabkView.getState()")
+    page.evaluate("s => window.hveView.setScale(s)", scale)
+    return page.evaluate("() => window.hveView.getState()")
 
 
 def _open_arch(browser, url, route):
@@ -248,7 +248,7 @@ def test_ac199_architecture_diagram_shows_locations_apps_data_and_links(browser,
     st = _state(page, 1)
     locs = {(l["kind"], l["name"]): l for l in st["locations"]}
     assert ("PC", "data/orders") in locs  # PC はフォルダ単位
-    assert any(k == "ブラウザー" and n == "eabk.filters" for k, n in locs)  # Local Storage のデータ名単位
+    assert any(k == "ブラウザー" and n == "hve.filters" for k, n in locs)  # Local Storage のデータ名単位
     assert ("Power Platform", "開発") in locs  # 環境単位
     azure = locs[("Azure", "Azure SQL")]  # サービス単位
     assert "商品" in azure["data"]

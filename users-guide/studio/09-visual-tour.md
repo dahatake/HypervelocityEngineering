@@ -10,7 +10,7 @@ HVE Studio を初めて開く方のために、**画面の構成と各画面の�
 
 Studio は「**見るだけ**」のアプリです。要求や実装を変えるときは、Studio ではなく Copilot のチャットに依頼します。全体の流れは次のとおりです。
 
-![EABK Lite の毎日の流れ。依頼 → 同じ変更で更新 → verify → CI。更新されたデータ層を Studio で見る。節目は rd-auditor で監査する](../images/fig-flow.svg)
+![HVE Lite の毎日の流れ。依頼 → 同じ変更で更新 → verify → CI。更新されたデータ層を Studio で見る。節目は rd-auditor で監査する](../images/fig-flow.svg)
 
 1. Copilot に、ふだんどおり依頼します。
 2. Copilot が、コードと同じ変更の中で、要求定義書・カタログ・テストを更新します。

@@ -62,8 +62,8 @@ def open_page(browser, url, route, locale="ja-JP"):
 
 def state(page, scale=None):
     if scale is not None:
-        page.evaluate("s => window.eabkView.setScale(s)", scale)
-    return page.evaluate("() => window.eabkView.getState()")
+        page.evaluate("s => window.hveView.setScale(s)", scale)
+    return page.evaluate("() => window.hveView.getState()")
 
 
 # FR-1089 AC-485 AC-486: the requested deep link remains intact while initial model loading is pending.
@@ -134,7 +134,7 @@ def test_ac176_overview_shows_cluster_counts_and_zooming_to_a_cluster_shows_enti
 def test_ac178_detail_lists_columns_and_references_can_be_followed(browser, zoom):
     page = open_page(browser, zoom[1], "map2d")
     state(page, 8)
-    page.evaluate("() => window.eabkView.select('注文')")
+    page.evaluate("() => window.hveView.select('注文')")
     side = page.locator('[data-testid="sz-side"]')
     row = side.locator('tr[data-col-row="customer_id"]')
     expect(row).to_contain_text("int")
@@ -144,7 +144,7 @@ def test_ac178_detail_lists_columns_and_references_can_be_followed(browser, zoom
     st = state(page)
     assert st["selected"] == "顧客" and st["column"] == "id"
     assert page.locator('[data-column][data-col-entity="顧客"][data-name="id"]').count() == 1
-    page.evaluate("() => window.eabkView.select('商品')")
+    page.evaluate("() => window.hveView.select('商品')")
     expect(side).to_contain_text("列未記載")
     expect(page.locator('[data-entity="商品"]')).to_contain_text("列未記載")
     page.context.close()
@@ -155,8 +155,8 @@ def test_ac178_detail_lists_columns_and_references_can_be_followed(browser, zoom
 def test_ac180_selection_and_level_are_kept_when_switching_between_2d_and_3d(browser, zoom, first, second):
     page = open_page(browser, zoom[1], first)
     state(page, 3)
-    page.evaluate("() => window.eabkView.select('顧客')")
-    page.evaluate("() => window.eabkView.setFilter('客')")
+    page.evaluate("() => window.hveView.select('顧客')")
+    page.evaluate("() => window.hveView.setFilter('客')")
     page.evaluate(f"() => {{ location.hash = '#/{second}'; }}")
     page.wait_for_selector(f'{SZ}[data-mode="{second}"][data-ready="true"]')
     st = state(page)
@@ -176,12 +176,12 @@ def test_ac184_operations_p95_within_100ms_and_omission_is_declared(browser, lar
     js = """async (op) => { const t0 = performance.now(); op(); await new Promise((r) => requestAnimationFrame(r)); return performance.now() - t0; }"""
     times = {"zoom": [], "pan": [], "select": []}
     for i in range(24):
-        times["zoom"].append(page.evaluate(f"() => ({js})(() => window.eabkView.setScale({2 + i * 0.5}))"))
-    page.evaluate("() => window.eabkView.setScale(3)")
+        times["zoom"].append(page.evaluate(f"() => ({js})(() => window.hveView.setScale({2 + i * 0.5}))"))
+    page.evaluate("() => window.hveView.setScale(3)")
     for i in range(24):
         times["pan"].append(page.evaluate(f"""() => ({js})(() => document.querySelector('[data-testid="sz-viewport"]').dispatchEvent(new KeyboardEvent('keydown', {{ key: ['ArrowRight','ArrowDown','ArrowLeft','ArrowUp'][{i} % 4], bubbles: true }})))"""))
     for i in range(24):
-        times["select"].append(page.evaluate(f"() => ({js})(() => window.eabkView.select('E{i * 11:04d}'))"))
+        times["select"].append(page.evaluate(f"() => ({js})(() => window.hveView.select('E{i * 11:04d}'))"))
     p95 = {k: sorted(v)[int(len(v) * 0.95) - 1] for k, v in times.items()}
     record_property("p95_ms", str(p95))
     print(f"[AC-184] {route}: p95 ms {p95} median {statistics.median(times['zoom']):.1f}")
@@ -192,7 +192,7 @@ def test_ac184_operations_p95_within_100ms_and_omission_is_declared(browser, lar
     note = page.locator('[data-testid="sz-note"]').inner_text()
     assert "300" in note and ("省略" in note or "5000" in note)
     # an omitted target can be shown again by selecting it
-    page.evaluate("() => window.eabkView.select('E0299')")
+    page.evaluate("() => window.hveView.select('E0299')")
     assert state(page)["selected"] == "E0299"
     page.context.close()
 
@@ -214,7 +214,7 @@ def test_ac185_everything_works_from_the_keyboard_and_state_is_announced(browser
     assert first
     page.keyboard.press("n")
     assert state(page)["selected"] != first
-    page.evaluate("() => window.eabkView.select('注文')")
+    page.evaluate("() => window.hveView.select('注文')")
     page.keyboard.press("3")
     page.keyboard.press(".")
     page.keyboard.press(".")  # id -> customer_id
@@ -245,7 +245,7 @@ def test_ac186_alternative_table_has_clusters_relations_and_columns(browser, zoo
     assert any("使用" in r for r in texts)
     cols = " ".join(r.inner_text() for r in alt.locator("[data-alt-col]").all())
     assert "customer_id" in cols and "顧客.id" in cols and "列未記載" in cols
-    page.evaluate("() => window.eabkView.setScale(2)")
+    page.evaluate("() => window.hveView.setScale(2)")
     if route == "map2d":
         edge = page.locator('[data-edge][data-kind="外部キー"]').first
         assert "◆" in edge.text_content()  # 色だけでなく印と語
@@ -264,8 +264,8 @@ def test_ac187_language_switch_changes_words_and_nothing_is_sent_or_written(brow
     page.wait_for_selector(f'{SZ}[data-ready="true"]')
     state(page, 2)
     expect(page.locator('[data-testid="sz-level"]')).to_contain_text("粒度: 中")
-    page.evaluate("() => window.eabkView.select('注文')")
-    page.evaluate("() => window.eabkView.setScale(8)")
+    page.evaluate("() => window.hveView.select('注文')")
+    page.evaluate("() => window.hveView.setScale(8)")
     expect(page.locator('[data-testid="sz-side"] thead')).to_contain_text("列名")
     page.locator('#lang [data-lang="en"]').click()
     expect(page.locator('[data-testid="sz-level"]')).to_contain_text("Level: Detail")

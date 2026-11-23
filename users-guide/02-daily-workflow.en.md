@@ -2,7 +2,7 @@
 
 # 2. Daily Workflow
 
-In EABK Lite, every change goes through the following five steps. All of them use only the usual Copilot, git and CI.
+In HVE Lite, every change goes through the following five steps. All of them use only the usual Copilot, git and CI.
 
 ```text
 1. Ask                     ask the usual Copilot (the default agent) in chat (chapter 1)

@@ -1,7 +1,7 @@
 // FR-1096..FR-1098, NFR-SEC-024, NFR-UX-019: the optional generative AI.
 // Nothing here talks to the server's AI endpoints until the user opens the settings or asks; with AI off or unset no
 // request reaches an AI provider, Azure Resource Manager or GitHub Copilot (AC-528).
-// Only non-secret settings are kept in the browser (localStorage `eabk-studio.ai`); keys go to the server once, when the
+// Only non-secret settings are kept in the browser (localStorage `hve-studio.ai`); keys go to the server once, when the
 // user saves them (OS vault) or uses them for this session (memory), and are never shown again (AC-521, AC-543).
 import { t, onLang, lang } from './i18n.js';
 import { store } from './store.js';
@@ -9,14 +9,14 @@ import { el, icon, toast } from './ui.js';
 import { xrefLink } from './xref.js';
 import { currentStep } from './steps.js';
 
-const KEY = 'eabk-studio.ai';
-const HDR = { 'Content-Type': 'application/json', 'X-EABK-Studio': '1' };
+const KEY = 'hve-studio.ai';
+const HDR = { 'Content-Type': 'application/json', 'X-HVE-Studio': '1' };
 const AUTHS = { azure: ['key', 'entra'], copilot: ['gh', 'byok'] };
 const MODELS = ['gpt-5', 'gpt-4.1', 'claude-sonnet-4.5'];
 const ID_RE = /(?:[A-Za-z0-9_.-]+:)?[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d{2,}/g;
 
 // FR-1101: the monthly cost cap. Only the month's totals are kept in the browser (never questions or answers).
-const USAGE_KEY = 'eabk-studio.ai-usage';
+const USAGE_KEY = 'hve-studio.ai-usage';
 export const DEFAULT_BUDGET_YEN = 100000;   // PARAM-070
 const monthNow = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
 export function loadUsage() {
@@ -52,7 +52,7 @@ function saveConfig(c) {
   const keep = ['provider', 'auth', 'endpoint', 'deployment', 'model', 'byokType', 'subscription', 'account', 'budgetYen', 'priceIn', 'priceOut'];
   const clean = Object.fromEntries(keep.filter((k) => c[k] != null && c[k] !== '').map((k) => [k, String(c[k])]));
   try { localStorage.setItem(KEY, JSON.stringify(clean)); } catch { /* the setting still applies to this page */ }
-  window.dispatchEvent(new Event('eabk-ai-config'));
+  window.dispatchEvent(new Event('hve-ai-config'));
 }
 export const aiConfigured = () => { const c = loadConfig(); return c.provider !== 'off' && AUTHS[c.provider]?.includes(c.auth); };
 const stateKey = () => (aiConfigured() ? (conn.state === 'unset' ? 'configured' : conn.state) : 'unset');
@@ -389,9 +389,9 @@ export function openAsk() {
   document.body.append(box);
   window.addEventListener('keydown', onKey);
   const onCfg = () => { if (!ctrl) draw(); };
-  window.addEventListener('eabk-ai-config', onCfg);
+  window.addEventListener('hve-ai-config', onCfg);
   const offL = onLang(draw);
-  const offLang = () => { offL(); window.removeEventListener('eabk-ai-config', onCfg); };
+  const offLang = () => { offL(); window.removeEventListener('hve-ai-config', onCfg); };
   draw();
   (aiConfigured() ? q : box).focus();
   panel = box;

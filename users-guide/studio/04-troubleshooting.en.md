@@ -8,7 +8,7 @@
 |---|---|
 | The browser doesn't open | Paste the URL shown in the terminal (`http://127.0.0.1:…`) into the browser by hand. |
 | `python` is not found | Install Python 3.9 or later, or try `py HVE-Studio/studio.py`. |
-| "EABK data layer not found" | Specify a local Git root (empty is fine) or a folder with management records using `--repo`. For Git acquisition errors, check the `git` command and OS file permissions. |
+| "HVE data layer not found" | Specify a local Git root (empty is fine) or a folder with management records using `--repo`. For Git acquisition errors, check the `git` command and OS file permissions. |
 | I can't tell which files are being read | Run `python HVE-Studio/studio.py --repo <repository> --check` for management and inventory counts and diagnostics, without launching. Exit 0 means management records or Git were readable; otherwise exit 1. Management paths follow `management_files` in `scripts/ebak.config.json`. |
 | Nothing shows on screen (count is 0) | Undeclared requirements or APIs have a count of zero; they are not guessed. Check coverage and diagnostics in Dashboard → Repository analysis & tasks. For declared management data, check the [column formats](08-data-reference.en.md) too. |
 | Tasks cannot be saved | Read the displayed reason and check storage permissions. `HVE_STUDIO_DATA_DIR` must be a writable directory outside the selected repository. New task input is retained on failure. |
@@ -18,15 +18,15 @@
 | GitHub issues, PRs or CI runs are missing | The GitHub line in "Repository analysis & tasks" shows the reason. Install the `gh` CLI, run `gh auth login`, then press "Refetch from GitHub". Non-GitHub remotes and `--no-remote` runs are not fetched. |
 | 3D doesn't display / is slow | Enable hardware acceleration in your browser. If it is slow, reduce what is shown with "Layers." |
 | APIs / tables are empty | The "APIs / events" and "Tables" tables in the catalog have no entries (this is not an error). |
-| "Implementation" differs from reality | "Implementation" is what the catalog states. Ask EABK's agent to update the catalog. |
-| Only some requirements appear | Requirements are read when written in the heading format `#### FR-001 Title`. For the format, see "Management data format" in the EABK core users-guide. |
+| "Implementation" differs from reality | "Implementation" is what the catalog states. Ask HVE's agent to update the catalog. |
+| Only some requirements appear | Requirements are read when written in the heading format `#### FR-001 Title`. For the format, see "Management data format" in the HVE core users-guide. |
 | The port is in use | The next number is chosen automatically. You can also specify one, like `--port 9000`. |
 
 ## Glossary
 
 | Term | Meaning |
 |---|---|
-| Data layer | The records EABK manages (requirements definition, catalog, System Test ledger, ID ledger) |
+| Data layer | The records HVE manages (requirements definition, catalog, System Test ledger, ID ledger) |
 | Goal (G-001) | What the business wants to do. Every requirement belongs to some goal |
 | Requirement (FR / NFR) | FR is a functional requirement; NFR is a non-functional requirement such as performance or safety |
 | Acceptance criterion (AC) | The condition under which a requirement can be said to be satisfied. Verification levels are system / integration / unit / manual |

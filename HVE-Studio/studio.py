@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""HVE Studio: local web viewer for the EABK data layer of any repository.
+"""HVE Studio: local web viewer for the HVE data layer of any repository.
 
-    python HVE-Studio/studio.py --repo <path-to-any-repo>   # with EABK: data layer; without: code mode
+    python HVE-Studio/studio.py --repo <path-to-any-repo>   # with HVE: data layer; without: code mode
 
 Only the Python standard library is needed. The server listens on 127.0.0.1.
 Normal viewing is read-only; an explicit maintenance confirmation can update
@@ -33,7 +33,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import ai  # noqa: E402
 import code_graph  # noqa: E402
-import eabk_model  # noqa: E402
+import hve_model  # noqa: E402
 import floorplan_scan  # noqa: E402
 import repo_scan  # noqa: E402
 import remote_github  # noqa: E402
@@ -44,8 +44,8 @@ import xrepo  # noqa: E402
 from task_state import TaskStore  # noqa: E402
 
 WEB = HERE / "web"
-# The toolkit source keeps the guide in users-guide/; installed repositories get it as EABK-docs/.
-GUIDE = next((d + "/studio/01-first-steps.md" for d in ("EABK-docs", "users-guide") if (HERE.parent / d / "studio" / "01-first-steps.md").exists()), "EABK-docs/studio/01-first-steps.md")
+# The toolkit source keeps the guide in users-guide/; installed repositories get it as HVE-docs/.
+GUIDE = next((d + "/studio/01-first-steps.md" for d in ("HVE-docs", "users-guide") if (HERE.parent / d / "studio" / "01-first-steps.md").exists()), "HVE-docs/studio/01-first-steps.md")
 MIME = {
     ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
     ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon",
@@ -113,8 +113,8 @@ class State:
         p = Path(raw).expanduser()
         if not raw or not p.is_dir():
             raise ValueError("not-a-directory")
-        root = eabk_model.find_root(p)
-        viewable = eabk_model.can_view(root)
+        root = hve_model.find_root(p)
+        viewable = hve_model.can_view(root)
         with self.lock:
             group = [self.root, *self.extra]
             if any(os.path.normcase(str(root.resolve())) == os.path.normcase(str(g.resolve())) for g in group):
@@ -148,7 +148,7 @@ class State:
         roots = self.group()
         names = multi_repo.repo_names([str(r) for r in roots])
         pairs = [(n, r) for n, r in zip(names, roots) if r.is_dir()]  # a repository that disappeared is reported by repos_status()
-        stamp = "|".join(str(r) + "#" + eabk_model.fingerprint(r) for _, r in pairs)
+        stamp = "|".join(str(r) + "#" + hve_model.fingerprint(r) for _, r in pairs)
         with self.lock:
             if self.xrepo and self.xrepo[0] == stamp:
                 return self.xrepo[1]
@@ -174,7 +174,7 @@ class State:
         with self.lock:
             root = self.root
         inv = repo_scan.inventory(root)
-        source = eabk_model.fingerprint(root, inv)
+        source = hve_model.fingerprint(root, inv)
         with self.lock:
             hit = self.code_graphs.get(str(root))
         if hit and hit[0] == source:
@@ -188,7 +188,7 @@ class State:
         with self.lock:
             root = self.root
         inv = repo_scan.inventory(root)
-        source = eabk_model.fingerprint(root, inv)
+        source = hve_model.fingerprint(root, inv)
         arch = root / "floorplan" / "architecture.json"
         stamp = source + "#" + (str(arch.stat().st_mtime_ns) if arch.is_file() else "")
         with self.lock:
@@ -242,7 +242,7 @@ class State:
 
     @staticmethod
     def _catalog_hash(root: Path) -> str:
-        catalog = root / eabk_model.load_config(root)["catalog"]
+        catalog = root / hve_model.load_config(root)["catalog"]
         return hashlib.sha256(catalog.read_bytes()).hexdigest() if catalog.is_file() else ""
 
     def set_root(self, root: Path) -> None:
@@ -264,7 +264,7 @@ class State:
         if inv is None:
             inv = repo_scan.inventory(root)
         if source is None:
-            source = eabk_model.fingerprint(root, inv)
+            source = hve_model.fingerprint(root, inv)
         state = source + "#" + managed_data.stamp(root)  # generated display data changes what is shown, not the source
         key = str(root)
         with self.build_lock:
@@ -307,7 +307,7 @@ class State:
 
         try:
             data_status, saved = managed_data.inspect(root, job["source"])
-            model = saved if saved is not None else eabk_model.build_model(
+            model = saved if saved is not None else hve_model.build_model(
                 root, progress=progress, inv=inv, source_fingerprint=job["source"], snapshot=snapshot)
             with self.build_lock:
                 job.update(model=model, dataStatus=data_status)
@@ -330,7 +330,7 @@ class State:
         """root's freshly built model, without Studio-side decoration (tasks, GitHub data). Do not mutate."""
         while True:
             inv = repo_scan.inventory(root)
-            source = eabk_model.fingerprint(root, inv)
+            source = hve_model.fingerprint(root, inv)
             job = self.build_for(root, inv, source)
             model = self.wait_build(job)
             if job["source"] == source:
@@ -358,7 +358,7 @@ class State:
             with self.lock:
                 root = self.root
                 inv = repo_scan.inventory(root)
-                source = eabk_model.fingerprint(root, inv)
+                source = hve_model.fingerprint(root, inv)
                 extras = list(self.extra)
                 fp = self._fingerprint(source) + self._extras_stamp(extras)
                 hit = self.cache.get(str(root))
@@ -398,7 +398,7 @@ class State:
     def _extras_stamp(extras: list[Path]) -> str:
         def one(e: Path) -> str:
             try:
-                return eabk_model.fingerprint(e) if e.is_dir() else "missing"
+                return hve_model.fingerprint(e) if e.is_dir() else "missing"
             except (repo_scan.ScanError, OSError, ValueError) as exc:
                 return "error:" + str(exc)
         return "".join("|" + str(e) + "#" + one(e) for e in extras)
@@ -487,13 +487,13 @@ class State:
         remote = self._remote(self.root)
         refreshed = self.remote.get(str(self.root), {}).get("_at", "")
         if source is None:
-            source = eabk_model.fingerprint(self.root)
+            source = hve_model.fingerprint(self.root)
         return source + "#" + managed_data.stamp(self.root) + "#" + str(stamp) + "#" + str(refreshed) + "#" + "|".join(
             str(remote.get(k)) for k in ("status", "fetchedAt", "loading"))
 
     @staticmethod
     def _catalog_update(root: Path, requirement_id: str) -> dict:
-        model = eabk_model.build_model(root)
+        model = hve_model.build_model(root)
         reqs = [item for item in model["reqs"] if item["id"] == requirement_id]
         features = [item for item in model["catalog"]["features"] if item["req"] == requirement_id]
         features = [item for item in features if not item.get("derived")]
@@ -595,7 +595,7 @@ class State:
             before = catalog.stat()
             temp_name = None
             try:
-                with tempfile.NamedTemporaryFile("wb", dir=catalog.parent, prefix=".eabk-studio-", delete=False) as handle:
+                with tempfile.NamedTemporaryFile("wb", dir=catalog.parent, prefix=".hve-studio-", delete=False) as handle:
                     temp_name = handle.name
                     handle.write(preview["updated"])
                     handle.flush()
@@ -615,7 +615,7 @@ class State:
                     if result.returncode:
                         raise MaintenanceError("verify-failure", (result.stdout + result.stderr).strip())
                 else:
-                    eabk_model.build_model(self.root)
+                    hve_model.build_model(self.root)
             except MaintenanceError:
                 catalog.write_bytes(current)
                 os.chmod(catalog, stat.S_IMODE(before.st_mode))
@@ -646,7 +646,7 @@ STATE: State
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "EABKStudio/" + eabk_model.STUDIO_VERSION
+    server_version = "HVEStudio/" + hve_model.STUDIO_VERSION
     DISCARD_SECONDS = 2.0  # upper bound for discarding an unread request body
     _unread = 0
 
@@ -770,7 +770,7 @@ class Handler(BaseHTTPRequestHandler):
             self._discard_body()
 
     def _post(self) -> None:
-        if not self.host_ok() or self.headers.get("X-EABK-Studio") != "1":
+        if not self.host_ok() or self.headers.get("X-HVE-Studio") != "1":
             return self.send_json({"error": "forbidden"}, HTTPStatus.FORBIDDEN)
         endpoint = urlparse(self.path).path
         if endpoint == "/api/repo/pick":
@@ -832,7 +832,7 @@ class Handler(BaseHTTPRequestHandler):
         p = Path(raw).expanduser()
         if not raw or not p.is_dir():
             return self.send_json({"error": "not-a-directory"}, HTTPStatus.BAD_REQUEST)
-        root = eabk_model.find_root(p)
+        root = hve_model.find_root(p)
         try:
             # FR-1089: the validating analysis is the shared background build, so its progress is visible
             # (GET /api/model/progress) and the browser's next model request reuses it instead of analyzing again.
@@ -933,9 +933,9 @@ def pick_folder(initial: str) -> str | None:
     """Open the OS folder dialog (tkinter in a subprocess so other requests are not blocked).
 
     Returns the selected path, "" on cancel, or None when no dialog can be opened.
-    EABK_STUDIO_PICK_PATH (tests) replaces the dialog; an empty value means cancel.
+    HVE_STUDIO_PICK_PATH (tests) replaces the dialog; an empty value means cancel.
     """
-    forced = os.environ.get("EABK_STUDIO_PICK_PATH")
+    forced = os.environ.get("HVE_STUDIO_PICK_PATH")
     if forced is not None:
         return forced.strip()
     try:
@@ -949,7 +949,7 @@ def pick_folder(initial: str) -> str | None:
 
 
 def format_report(report: dict) -> str:
-    lines = [f"HVE Studio {eabk_model.STUDIO_VERSION} --check", f"  repo: {report['root']}", "  data-layer files:"]
+    lines = [f"HVE Studio {hve_model.STUDIO_VERSION} --check", f"  repo: {report['root']}", "  data-layer files:"]
     for item in report["files"]:
         lines.append(f"    [{'found' if item['exists'] else 'missing':7}] {item['key']:<16} {item['path']}")
     if report["boundaryFiles"]:
@@ -962,7 +962,7 @@ def format_report(report: dict) -> str:
     lines += [f"    warning: {w}" for w in report["warnings"][:10]]
     if report.get("mode") == "code" and report.get("derivedFrom"):
         d = report["derivedFrom"]
-        lines.append(f"  mode: code (no EABK data layer; derived read-only from the repository) "
+        lines.append(f"  mode: code (no HVE data layer; derived read-only from the repository) "
                      f"requirement-docs={', '.join(d['requirementDocs']) or '-'} requirements={d['requirements']} "
                      f"linked-to-code={d['linkedRequirements']} code-files={d['codeFiles']} test-files={d['testFiles']} "
                      f"components={d['components']}")
@@ -977,15 +977,15 @@ def format_report(report: dict) -> str:
 
 
 def no_data_message(root) -> str:
-    return (f"no EABK data layer in {root} (docs/requirements-definition.md, docs/catalog.md or tests/system/ledger.json), "
+    return (f"no HVE data layer in {root} (docs/requirements-definition.md, docs/catalog.md or tests/system/ledger.json), "
             f"and not a local Git repository. "
             f"Pass a repository with --repo, or see {GUIDE}")
 
 
 def main(argv=None) -> int:
     global STATE
-    ap = argparse.ArgumentParser(description="HVE Studio (Hypervelocity Engineering Studio) - viewer for the EABK data layer (or, without EABK, for the code and PRD)")
-    ap.add_argument("--repo", default=None, help="repository to view, with or without EABK (default: current directory)")
+    ap = argparse.ArgumentParser(description="HVE Studio (Hypervelocity Engineering Studio) - viewer for the HVE data layer (or, without HVE, for the code and PRD)")
+    ap.add_argument("--repo", default=None, help="repository to view, with or without HVE (default: current directory)")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-open", action="store_true", help="do not open the browser")
 
@@ -1002,10 +1002,10 @@ def main(argv=None) -> int:
                     help="do not read GitHub issues, pull requests and Actions runs through the local GitHub CLI (gh)")
     args = ap.parse_args(argv)
     if args.repo is not None:
-        root = eabk_model.find_root(Path(args.repo))
+        root = hve_model.find_root(Path(args.repo))
     else:
-        cwd_root = eabk_model.find_root(Path.cwd())
-        root = cwd_root if eabk_model.can_view(cwd_root) else eabk_model.find_root(HERE.parent)
+        cwd_root = hve_model.find_root(Path.cwd())
+        root = cwd_root if hve_model.can_view(cwd_root) else hve_model.find_root(HERE.parent)
     if args.sync_data or args.delete_data or args.data_status:
         try:
             if args.sync_data:
@@ -1021,14 +1021,14 @@ def main(argv=None) -> int:
             return 1
     if args.check:
         try:
-            report = eabk_model.data_layer_report(root)
+            report = hve_model.data_layer_report(root)
         except (repo_scan.ScanError, OSError) as exc:
             print(f"repository analysis failed: {exc}", file=sys.stderr)
             return 1
         print(format_report(report))
         return 0 if report["ok"] else 1
     try:
-        viewable = eabk_model.can_view(root)
+        viewable = hve_model.can_view(root)
     except (repo_scan.ScanError, OSError) as exc:
         print(f"repository analysis failed: {exc}", file=sys.stderr)
         return 1
@@ -1049,7 +1049,7 @@ def main(argv=None) -> int:
         print("no free port", file=sys.stderr)
         return 1
     url = f"http://127.0.0.1:{srv.server_address[1]}/"
-    print(f"HVE Studio {eabk_model.STUDIO_VERSION}\n  repo: {root}\n  url : {url}\n  (Ctrl+C to stop)")
+    print(f"HVE Studio {hve_model.STUDIO_VERSION}\n  repo: {root}\n  url : {url}\n  (Ctrl+C to stop)")
     if not args.no_open:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
     try:

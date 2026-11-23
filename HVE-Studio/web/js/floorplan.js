@@ -360,7 +360,7 @@ export function mount(host) {
   const offLang = onLang(() => { if (S.g) { S.index = null; const nt = sourceTabs('functions'); tabsEl?.replaceWith(nt); tabsEl = nt; pathEl?.setAttribute('aria-label', t('fp.crumbs')); renderPath(); renderHeader(); renderPanel(); draw({ keepCamera: true }); } });
   const view = { mode: 'floorplan', getState: () => ({ view: S.view, selected: S.sel, answer: !!S.answer, cards: board?.cards?.size || 0, technical: S.technical, flow: S.flow ? S.flow.i : null, health: S.g?.health.summary || null, ready: !!board?.cards }),
     go: (v, o) => go(v, o), select: (id) => select(id), reveal, ask };
-  window.eabkView = view;
+  window.hveView = view;
 
   const apply = async () => {
     const u = readUrl();
@@ -374,6 +374,6 @@ export function mount(host) {
   });
   return {
     onHash: () => { if (S.g && board) apply(); },
-    destroy() { destroyed = true; document.removeEventListener('keydown', onKey); document.removeEventListener('pointerdown', onClickAway); offLang(); board?.destroy(); hideTip(); if (window.eabkView === view) window.eabkView = undefined; },
+    destroy() { destroyed = true; document.removeEventListener('keydown', onKey); document.removeEventListener('pointerdown', onClickAway); offLang(); board?.destroy(); hideTip(); if (window.hveView === view) window.hveView = undefined; },
   };
 }

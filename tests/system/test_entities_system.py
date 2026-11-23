@@ -156,7 +156,7 @@ def test_ac168_other_repo_runs_without_error_and_has_no_repo_specific_names(tmp_
         r = run_entities(repo, cmd)
         assert r.returncode == 0, f"{cmd}\n{r.stdout}\n{r.stderr}"
         assert "Traceback" not in r.stderr
-        for foreign in ("run 清掃", "EABK run", "データ層", "正常完了 run"):
+        for foreign in ("run 清掃", "HVE run", "データ層", "正常完了 run"):
             assert foreign not in r.stdout, f"{cmd} がこのリポジトリ固有の名前を表示した: {foreign}"
     assert "エンティティなし" in run_entities(repo, "list").stdout
 

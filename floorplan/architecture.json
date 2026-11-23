@@ -21,7 +21,7 @@
 
     { "id": "server", "label": "Studio server", "kind": "service", "summary": "A small local server that reads a repository and answers the screens. It only listens on this computer and never changes your files unless you confirm.",
       "paths": ["HVE-Studio/studio.py", "HVE-Studio/remote_github.py", "HVE-Studio/task_state.py"] },
-    { "id": "server.model", "parent": "server", "label": "Reads the requirements", "kind": "data", "summary": "Reads the requirement documents, catalog and test ledger and builds one model of them.", "paths": ["HVE-Studio/eabk_model.py", "HVE-Studio/repo_scan.py", "HVE-Studio/managed_data.py"] },
+    { "id": "server.model", "parent": "server", "label": "Reads the requirements", "kind": "data", "summary": "Reads the requirement documents, catalog and test ledger and builds one model of them.", "paths": ["HVE-Studio/hve_model.py", "HVE-Studio/repo_scan.py", "HVE-Studio/managed_data.py"] },
     { "id": "server.code", "parent": "server", "label": "Reads the code", "kind": "feature", "summary": "Finds the functions, endpoints and imports in the source, and checks it for common mistakes.",
       "paths": ["HVE-Studio/code_graph.py", "HVE-Studio/floorplan_*.py"] },
 
@@ -47,7 +47,7 @@
     { "from": "toolkit", "to": "server.model", "kind": "config", "label": "shares the document rules" }
   ],
   "annotations": [
-    { "path": "HVE-Studio/eabk_model.py", "note": "The largest file: reads every kind of document and builds the model all screens use.", "tags": ["hotspot"] },
+    { "path": "HVE-Studio/hve_model.py", "note": "The largest file: reads every kind of document and builds the model all screens use.", "tags": ["hotspot"] },
     { "path": "HVE-Studio/web/js/i18n.js", "note": "Every visible word, in Japanese and English. Add words here, never in the screens.", "tags": ["hotspot"] }
   ],
   "flows": [

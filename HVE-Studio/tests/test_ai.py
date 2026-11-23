@@ -23,7 +23,7 @@ import entity_repo  # noqa: E402
 
 KEY = "sk-TEST-SECRET-4711"
 CANARY = "CANARY_7f3e_DO_NOT_SEND"
-HDR = {"X-EABK-Studio": "1", "Content-Type": "application/json"}
+HDR = {"X-HVE-Studio": "1", "Content-Type": "application/json"}
 
 
 class Fake:

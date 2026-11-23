@@ -14,7 +14,7 @@ PROVISIONAL CONTRACT (仮置き。実装者が確認し、食い違えば CONFLI
     画面一覧の正本は #nav a[href^="#/"]。管理データの項目を並べない画面は a に data-no-items を付ける（対象外）。
   - 実装状態の層ごとの内訳: tier-group 内の [data-testid="tier-status-breakdown"]（本文に状態名と件数）。
   - マップに RPG 専用の城・街・住人・会話ウィンドウは表示されない（AC-347）。
-  - 言語: localStorage 'eabk-studio.lang' = 'ja' | 'en'。
+  - 言語: localStorage 'hve-studio.lang' = 'ja' | 'en'。
   - 未分類: 名称「未分類」（英語表示では「Unclassified」）。
 """
 import json
@@ -147,12 +147,12 @@ def test_ac345_map2d_requirement_areas_match_area_fields_and_not_flat(page):
 
 
 # FR-1063 AC-345: マップ本体（キャンバス）の要求の列の点が領域ごとにまとまりフラットでなく、開閉で下位の点が現れる／隠れる
-# 仮置き契約: window.eabkView.getState().map2d.points = [{id, kind, division, area, x, y, visible}]（画面座標。隅のパネルでは通らない）
+# 仮置き契約: window.hveView.getState().map2d.points = [{id, kind, division, area, x, y, visible}]（画面座標。隅のパネルでは通らない）
 def test_ac345_map2d_body_points_cluster_by_area_and_toggle_shows_hides(page):
     _go(page, "map2d")
     _expand_all(page)
     page.wait_for_timeout(500)
-    pts = page.evaluate("""() => ((window.eabkView.getState().map2d || {}).points || [])
+    pts = page.evaluate("""() => ((window.hveView.getState().map2d || {}).points || [])
         .filter(p => p.kind === '要求' || p.kind === 'requirements').filter(p => p.visible)""")
     assert len(pts) >= 4, f"マップ本体に要求の点がない（getState().map2d.points）: {len(pts)}"
     by = {}
@@ -177,7 +177,7 @@ def test_ac345_map2d_body_points_cluster_by_area_and_toggle_shows_hides(page):
             break
     path = json.loads(g.get_attribute("data-tier-path"))
     path = [_DIVISION_NAMES.get(path[1].strip().lower(), path[1]), path[-1]]
-    count_js = """(path) => ((window.eabkView.getState().map2d || {}).points || [])
+    count_js = """(path) => ((window.hveView.getState().map2d || {}).points || [])
         .filter(p => p.visible && p.division === path[0] && p.area === path[1]).length"""
     tg = g.locator('[data-testid="tier-toggle"]').first
     if tg.get_attribute("aria-expanded") != "true":
@@ -323,7 +323,7 @@ def test_ac350_all_screens_show_identical_tier_names_order_and_counts(page):
             page.wait_for_load_state("networkidle")
         if dim == "rpg":
             page.wait_for_selector('[data-testid="rpg-view"]')
-            page.evaluate("() => window.eabkView.openTierDialog && window.eabkView.openTierDialog()")
+            page.evaluate("() => window.hveView.openTierDialog && window.hveView.openTierDialog()")
             page.locator('[data-testid="rpg-dialog"]').wait_for(timeout=5000)
         else:
             page.wait_for_selector(GROUP, state="attached", timeout=10000)
@@ -403,7 +403,7 @@ def test_ac352_kind_not_conveyed_by_color_alone(page):
 def test_ac352_tier_names_switch_with_language(browser, tmp_path, lang, unclassified):
     proc, url = _serve(make_zoom(tmp_path / f"lang-{lang}"))
     ctx = browser.new_context()
-    ctx.add_init_script(f"localStorage.setItem('eabk-studio.lang','{lang}')")
+    ctx.add_init_script(f"localStorage.setItem('hve-studio.lang','{lang}')")
     p = ctx.new_page()
     p.goto(url + "#/tables")
     p.wait_for_load_state("networkidle")

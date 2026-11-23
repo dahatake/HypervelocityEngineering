@@ -766,7 +766,7 @@ def _decode(data: bytes, charset: Optional[str]) -> str:
 def fetch_url(url: str, timeout: float) -> Tuple[str, str]:
     """GET only.  -> (text, content_type).  Never cached or written anywhere."""
     deadline = time.monotonic() + timeout
-    req = urllib.request.Request(url, method="GET", headers={"User-Agent": "eabk-entities/1", "Accept": "*/*"})
+    req = urllib.request.Request(url, method="GET", headers={"User-Agent": "hve-entities/1", "Accept": "*/*"})
     opener = urllib.request.build_opener(_SafeRedirect())
     try:
         resp = opener.open(req, timeout=timeout)
@@ -1046,10 +1046,10 @@ def load_enterprise(root: Path, cfg: dict, timeout: float) -> dict:
         return {"state": "unusable", "display": display, "reason": str(exc), "names": []}
 
 
-def reconcile(eabk: List[Tuple[str, str]], ent: List[Tuple[str, str]], threshold: float) -> dict:
-    """eabk / ent: [(name, position)].  -> matched, eabk_only, ent_only, fuzzy (lists of tuples)."""
+def reconcile(hve: List[Tuple[str, str]], ent: List[Tuple[str, str]], threshold: float) -> dict:
+    """hve / ent: [(name, position)].  -> matched, hve_only, ent_only, fuzzy (lists of tuples)."""
     matched, fuzzy = [], []
-    e_left = sorted(eabk)
+    e_left = sorted(hve)
     c_left = list(ent)
     for e in list(e_left):
         hit = next((c for c in c_left if c[0] == e[0]), None)
@@ -1083,7 +1083,7 @@ def reconcile(eabk: List[Tuple[str, str]], ent: List[Tuple[str, str]], threshold
     return {
         "matched": matched,
         "fuzzy": sorted(fuzzy, key=lambda p: p[0][0]),
-        "eabk_only": [e for e in e_left if e not in used_e],
+        "hve_only": [e for e in e_left if e not in used_e],
         "ent_only": [c for c in c_left if c not in used_c],
     }
 
@@ -1092,9 +1092,9 @@ def run_check(root: Path, cfg: dict) -> dict:
     model = derive(root, cfg)
     thr, tmo = params(root, cfg)
     src = load_enterprise(root, cfg, tmo)
-    eabk = [(e["name"], f"{e['position']['file']}:{e['position']['line']}") for e in model["entities"]]
-    res = reconcile(eabk, src["names"], thr) if src["state"] == "ok" else None
-    return {"model": model, "source": src, "result": res, "eabk_count": len(eabk)}
+    hve = [(e["name"], f"{e['position']['file']}:{e['position']['line']}") for e in model["entities"]]
+    res = reconcile(hve, src["names"], thr) if src["state"] == "ok" else None
+    return {"model": model, "source": src, "result": res, "hve_count": len(hve)}
 
 
 def render_check(rep: dict) -> str:
@@ -1105,16 +1105,16 @@ def render_check(rep: dict) -> str:
         return "企業データカタログ: 利用しない\n"
     if src["state"] == "unusable":
         return f"企業データカタログ: 照合不能（{src['display']}）\n理由: {src['reason']}\n"
-    out = [f"企業データカタログ: {src['display']}（{len(src['names'])} 件）／エンティティ: {rep['eabk_count']} 件"]
+    out = [f"企業データカタログ: {src['display']}（{len(src['names'])} 件）／エンティティ: {rep['hve_count']} 件"]
 
     def sec(title: str, rows: List[str]) -> None:
         out.append(f"{title}: {len(rows)} 件")
         out.extend(f"  - {r}" for r in rows)
 
-    sec("一致", [f"{e[0]} ⇔ {c[0]}（EABK: {e[1]}／企業カタログ: {c[1]}）" for e, c in res["matched"]])
-    sec("EABK のみ（企業カタログにない）", [f"{e[0]}（EABK: {e[1]}）" for e in res["eabk_only"]])
-    sec("企業カタログのみ（EABK にない）", [f"{c[0]}（企業カタログ: {c[1]}）" for c in res["ent_only"]])
-    sec("名称の揺れ候補（確定した一致ではない）", [f"{e[0]} ≈ {c[0]}（EABK: {e[1]}／企業カタログ: {c[1]}）" for e, c in res["fuzzy"]])
+    sec("一致", [f"{e[0]} ⇔ {c[0]}（HVE: {e[1]}／企業カタログ: {c[1]}）" for e, c in res["matched"]])
+    sec("HVE のみ（企業カタログにない）", [f"{e[0]}（HVE: {e[1]}）" for e in res["hve_only"]])
+    sec("企業カタログのみ（HVE にない）", [f"{c[0]}（企業カタログ: {c[1]}）" for c in res["ent_only"]])
+    sec("名称の揺れ候補（確定した一致ではない）", [f"{e[0]} ≈ {c[0]}（HVE: {e[1]}／企業カタログ: {c[1]}）" for e, c in res["fuzzy"]])
     return "\n".join(out) + "\n"
 
 
@@ -1142,7 +1142,7 @@ def build_todos(root: Path, cfg: dict, rep: dict) -> List[dict]:
     if rep["source"]["state"] != "ok":
         todos = [(n, R_UNCHECKED, "") for n in ents]
     else:
-        eo = {e[0] for e in res["eabk_only"]}
+        eo = {e[0] for e in res["hve_only"]}
         fz = {e[0]: c[0] for e, c in res["fuzzy"]}
         for n in ents:
             if n in fz:
@@ -1168,7 +1168,7 @@ def _todo_text(name: str, reason: str, cand: str) -> dict:
         opts = "A: 企業データカタログへの登録を依頼する／B: 企業データカタログの別名に合わせて用語表を直す／C: 対象外とする（理由を回答）"
     else:
         q = f"エンティティ「{name}」は企業データカタログの「{cand}」と名称が揺れている可能性があります（理由: {reason}）。同じものか"
-        opts = "A: EABK の名前を企業データカタログに合わせる／B: 企業データカタログ側の名前を直す依頼をする／C: 別のものとして扱う（理由を回答）"
+        opts = "A: HVE の名前を企業データカタログに合わせる／B: 企業データカタログ側の名前を直す依頼をする／C: 別のものとして扱う（理由を回答）"
     return {"question": q, "options": opts, "importance": "中", "recommended": "A"}
 
 
@@ -1226,7 +1226,7 @@ def main(argv=None) -> int:
         else:
             print(render_check(rep), end="")
         res = rep["result"]
-        bad = rep["source"]["state"] == "unusable" or bool(res and (res["eabk_only"] or res["ent_only"] or res["fuzzy"]))
+        bad = rep["source"]["state"] == "unusable" or bool(res and (res["hve_only"] or res["ent_only"] or res["fuzzy"]))
         return 1 if args.strict and bad else 0
     todos = build_todos(root, cfg, rep)
     print(json.dumps(todos, ensure_ascii=False, indent=2) if args.json else render_todo(rep, todos), end="" if not args.json else "\n")

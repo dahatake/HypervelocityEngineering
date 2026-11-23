@@ -2,7 +2,7 @@
 
 # 8. Adoption steps and roadmap
 
-EABK Lite (0.6.0) keeps only the rules (AGENTS.md), the data layer, deterministic checks (`verify.py` and CI), and milestone audits (rd-auditor). This chapter covers the steps for bringing it into a team, and the verification to do next to confirm the effect of Lite.
+HVE Lite (0.6.0) keeps only the rules (AGENTS.md), the data layer, deterministic checks (`verify.py` and CI), and milestone audits (rd-auditor). This chapter covers the steps for bringing it into a team, and the verification to do next to confirm the effect of Lite.
 
 ## 8.1 Adoption steps
 
@@ -33,9 +33,9 @@ For each contradiction, list the commit that introduced it, the prompt that prod
 | # | Verification | What is measured | Result that would change the conclusion |
 |---|---|---|---|
 | R1 | An A/B comparison that sends the same 5 feature requests, **with the model fixed**, to the 0.5.x orchestration (multi-stage workers and parallel execution) and to Lite (rules + CI only) | Tokens, time, test passes, requirements definition updates, CI check results | Lite's update rate of the requirements definition or traceability rate is clearly lower than 0.5.x |
-| R2 | Add **only the CI checks (`ebak-verify`)** to a repository that does not use EABK, and operate it for 2 weeks | Number and content of CI failures, time spent fixing them | Zero detections (the checks are not needed), or mostly false positives (revisit the choice of lite CHKs) |
+| R2 | Add **only the CI checks (`ebak-verify`)** to a repository that does not use HVE, and operate it for 2 weeks | Number and content of CI failures, time spent fixing them | Zero detections (the checks are not needed), or mostly false positives (revisit the choice of lite CHKs) |
 | R3 | Have another person on another PC (without personal memory or personal instructions) add 3 features | Whether the requirements definition, catalog, and System Tests were updated in the same change, and whether IDs collided | They are not updated despite the rules (rewrite the rules or strengthen the CI checks) |
-| R4 | **Done (code mode, FR-1086)**: Prototype an intake (adapter) in HVE Studio for a PRD not in the requirements definition format (such as `PRD.md`) | Number of requirements and tests that can be shown, and the effort | Result: `python HVE-Studio/studio.py --repo <any-git-repo>` shows a repository without a data layer, read-only. On `C:\GitHub\VideoCreator`, 103 requirements came from `docs/PRD.md` and 56 were linked to code or tests ([README](../README.en.md#using-studio-without-eabk-code-mode)) |
+| R4 | **Done (code mode, FR-1086)**: Prototype an intake (adapter) in HVE Studio for a PRD not in the requirements definition format (such as `PRD.md`) | Number of requirements and tests that can be shown, and the effort | Result: `python HVE-Studio/studio.py --repo <any-git-repo>` shows a repository without a data layer, read-only. On `C:\GitHub\VideoCreator`, 103 requirements came from `docs/PRD.md` and 56 were linked to code or tests ([README](../README.en.md#using-studio-without-hve-code-mode)) |
 
 Results are reflected in the CHANGELOG and in the version decisions of [9](09-versioning.en.md). The lite check set (`checks.lite_checks`) is revisited based on the result of R2 ([6](06-quality-gates.en.md)).
 

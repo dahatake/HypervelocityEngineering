@@ -80,7 +80,7 @@ def test_ac295_legacy_keys_do_not_start_special_mode_and_leave_search_usable(stu
     assert page.locator(f'{HDR} [data-dim="rpg"]').count() == 0
     assert page.locator('.rpg, [data-testid^="rpg-"]').count() == 0
     assert page.evaluate("() => window.__audioStarts") == 0
-    assert page.evaluate("() => window.eabkView.getState().rpg") is None
+    assert page.evaluate("() => window.hveView.getState().rpg") is None
     page.locator("#q").fill("requirements")
     assert page.locator("#q").input_value() == "requirements"
     assert page.locator("#results").inner_text()
@@ -101,7 +101,7 @@ def test_ac370_ac373_selected_is_kept_apart_from_current_and_zoom_state_is_share
 def test_ac373_zoom_level_is_restored_after_zoomless_screen(studio):
     page = _open(studio, "map2d")
     page.wait_for_selector('[data-testid="semantic-zoom"][data-ready="true"]')
-    page.evaluate("() => window.eabkView.setScale(3)")
+    page.evaluate("() => window.hveView.setScale(3)")
     before = page.locator('[data-testid="semantic-zoom"]').get_attribute("data-level")
     page.evaluate("() => { location.hash = '#/tables'; }")   # a screen without zoom (step 2 since FR-1094)
     page.wait_for_selector('#nav a[data-nav="tables"].on')

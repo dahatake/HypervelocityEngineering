@@ -29,7 +29,7 @@ RDC = ["scripts/rdcheck.py"]
 
 @pytest.fixture
 def repo(tmp_path):
-    return d.make_clean_installed(tmp_path / "EABK hierarchy with spaces")
+    return d.make_clean_installed(tmp_path / "HVE hierarchy with spaces")
 
 
 def txt(root, rel):

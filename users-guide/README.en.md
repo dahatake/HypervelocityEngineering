@@ -1,23 +1,23 @@
 [日本語](README.md) | **English**
 
-# EABK Lite User Guide
+# HVE Lite User Guide
 
-EABK Lite (Enterprise App Build Kit Lite, 0.6.0) and **HVE Studio** are a single application. This folder, `users-guide/`, is its one and only user guide. For the overview, installation, Quickstart, and terminology, read the top-level [README.en.md](../README.en.md) first.
+HVE Lite (Enterprise App Build Kit Lite, 0.6.0) and **HVE Studio** are a single application. This folder, `users-guide/`, is its one and only user guide. For the overview, installation, Quickstart, and terminology, read the top-level [README.en.md](../README.en.md) first.
 
-EABK Lite consists only of **rules (AGENTS.md) + the data layer (the requirements definition, the catalog, the System Test ledger, the ID ledger) + deterministic checks (`verify.py` and CI's `ebak-verify`) + milestone audits (rd-auditor)**. You make requests to your usual Copilot (the default agent) as usual. In a change that alters behavior, the rules in AGENTS.md have the requirements definition, catalog, and tests updated within the same change, and when you push, CI runs the same checks.
+HVE Lite consists only of **rules (AGENTS.md) + the data layer (the requirements definition, the catalog, the System Test ledger, the ID ledger) + deterministic checks (`verify.py` and CI's `ebak-verify`) + milestone audits (rd-auditor)**. You make requests to your usual Copilot (the default agent) as usual. In a change that alters behavior, the rules in AGENTS.md have the requirements definition, catalog, and tests updated within the same change, and when you push, CI runs the same checks.
 
 | Part | Audience | Chapter labels | Location |
 |---|---|---|---|
-| Part 1 | **EABK Lite core**: how to write requests, the daily workflow, managed data formats and checks, milestone audits | 1–11 | Directly in this folder |
+| Part 1 | **HVE Lite core**: how to write requests, the daily workflow, managed data formats and checks, milestone audits | 1–11 | Directly in this folder |
 | Part 2 | **HVE Studio**: a local-only viewer for browsing the managed data (the data layer) through diagrams, tables, and search | S1–S9 | [studio/](studio/README.en.md) |
 
 The two parts are connected by the same data layer. Copilot (or a person) writes the data layer within a change, and Studio reads it. To change requirements or the implementation, make the request in Copilot chat, not in Studio.
 
-![The daily flow of EABK Lite: request → one change updates the code and the data layer → verify → push and CI → see it in Studio; rd-auditor audits at milestones](images/fig-flow.en.svg)
+![The daily flow of HVE Lite: request → one change updates the code and the data layer → verify → push and CI → see it in Studio; rd-auditor audits at milestones](images/fig-flow.en.svg)
 
 > **First time here?** Go [README → Quickstart](../README.en.md#quickstart), then [S9 Visual tour](studio/09-visual-tour.en.md) (figures for every screen). Back to the top: [← Repository README](../README.en.md).
 
-## Part 1: EABK Lite core
+## Part 1: HVE Lite core
 
 | # | Document | When to read it |
 |---|---|---|
@@ -87,6 +87,6 @@ In every case, first read "Introduction", "Installation", and "Quickstart" in [R
 ## Conventions used in this guide
 
 - Chapter numbers are `1`–`11` in Part 1 and `S1`–`S9` in Part 2. Sections follow the chapter number, as in `4.4` and `S8.5.2`. Use these labels when referring to them from other guides.
-- In the distribution source repository the folder is `users-guide/`. In a repository where you installed with `tools/install.py`, it is placed in `EABK-docs/` (the `users-guide/` of the target repository is not touched). Links within the guide are relative paths based on the distribution source's layout.
-- Real screenshots are in `studio/images/*.png`, their capture conditions are in [studio/screen-images.json](studio/screen-images.json), and recapturing is done with `studio/capture-screens.py`. The explanatory figures are SVG with a Japanese version (`fig-*.svg`) and an English version (`fig-*.en.svg`): `studio/images/` for Studio and `images/` for EABK core. Diagrams for EABK core are in `images/`.
+- In the distribution source repository the folder is `users-guide/`. In a repository where you installed with `tools/install.py`, it is placed in `HVE-docs/` (the `users-guide/` of the target repository is not touched). Links within the guide are relative paths based on the distribution source's layout.
+- Real screenshots are in `studio/images/*.png`, their capture conditions are in [studio/screen-images.json](studio/screen-images.json), and recapturing is done with `studio/capture-screens.py`. The explanatory figures are SVG with a Japanese version (`fig-*.svg`) and an English version (`fig-*.en.svg`): `studio/images/` for Studio and `images/` for HVE core. Diagrams for HVE core are in `images/`.
 - When you add or rename a file, update `MANAGED` in `tools/install.py` accordingly (there is no removal list for older versions; use `--clean`) ([9](09-versioning.en.md)).

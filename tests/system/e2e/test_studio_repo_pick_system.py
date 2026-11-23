@@ -4,8 +4,8 @@ Expected values come only from the acceptance criteria in docs/requirements-defi
 implementation is NOT the oracle.
 
 CONTRACT (design premise handed to the implementer; not derived from the implementation):
-  - POST /api/repo/pick: Host must be localhost/127.0.0.1/::1 and header X-EABK-Studio: 1 (else 403).
-    The OS dialog is opened server-side.  If env EABK_STUDIO_PICK_PATH is set, its value is returned as the
+  - POST /api/repo/pick: Host must be localhost/127.0.0.1/::1 and header X-HVE-Studio: 1 (else 403).
+    The OS dialog is opened server-side.  If env HVE_STUDIO_PICK_PATH is set, its value is returned as the
     selection instead of opening the dialog (test hook; empty string = cancel).
     Response {"path": "<selected>"} / cancel {"path": ""} / dialog impossible: 501 {"error":"picker-unavailable"}.
   - Screen: #repoBtn (data-testid="repo-pick", with a folder icon) click -> /api/repo/pick; if path is
@@ -29,7 +29,7 @@ from entity_repo import make_other, make_standard
 
 ROOT = Path(__file__).resolve().parents[3]
 STUDIO = ROOT / "HVE-Studio" / "studio.py"
-HDR = {"X-EABK-Studio": "1", "Content-Type": "application/json"}
+HDR = {"X-HVE-Studio": "1", "Content-Type": "application/json"}
 
 
 def _serve(repo, pick=None):
@@ -37,9 +37,9 @@ def _serve(repo, pick=None):
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
     env = dict(os.environ)
-    env.pop("EABK_STUDIO_PICK_PATH", None)
+    env.pop("HVE_STUDIO_PICK_PATH", None)
     if pick is not None:
-        env["EABK_STUDIO_PICK_PATH"] = pick
+        env["HVE_STUDIO_PICK_PATH"] = pick
     proc = subprocess.Popen(
         [sys.executable, str(STUDIO), "--repo", str(repo), "--port", str(port), "--no-open"],
         cwd=repo, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
@@ -231,7 +231,7 @@ def test_ac336_pick_without_identification_header_is_rejected_and_repo_unchanged
     st = make_studio("b")
     status, _ = st.post("/api/repo/pick")
     assert status == 403
-    status, _ = st.post("/api/repo/pick", headers={"X-EABK-Studio": "0"})
+    status, _ = st.post("/api/repo/pick", headers={"X-HVE-Studio": "0"})
     assert status == 403
     assert st.repo() == "std"
 

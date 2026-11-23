@@ -69,8 +69,8 @@ def _chrome(page):
 def test_ac479_studio_brand_titles_and_saved_preferences(browser, zurl):
     ctx = browser.new_context(viewport={"width": 1280, "height": 800})
     ctx.add_init_script(
-        "localStorage.setItem('eabk-studio.lang', 'en');"
-        "localStorage.setItem('eabk-studio.theme', 'dark');"
+        "localStorage.setItem('hve-studio.lang', 'en');"
+        "localStorage.setItem('hve-studio.theme', 'dark');"
     )
     page = ctx.new_page()
     try:
@@ -84,11 +84,11 @@ def test_ac479_studio_brand_titles_and_saved_preferences(browser, zurl):
         for word in ("JA", "EN"):
             _pick(page, word).click()
             page.wait_for_function("document.title.startsWith('HVE Studio · ')")
-            assert "EABK Studio" not in page.title()
+            assert "HVE Studio" not in page.title()
         page.reload()
         page.wait_for_load_state("networkidle")
         assert page.title().startswith("HVE Studio · ")
-        assert page.evaluate("localStorage.getItem('eabk-studio.theme')") == "dark"
+        assert page.evaluate("localStorage.getItem('hve-studio.theme')") == "dark"
     finally:
         ctx.close()
 

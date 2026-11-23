@@ -40,7 +40,7 @@ DEFAULT_CONFIG: dict = {
     "verify": {"commands": [], "timeout_sec": 1800},
     "system_test": {"jobs": "auto", "serial_patterns": ["default_port"]},
     "checks": {
-        # EABK Lite: "lite" reports only LITE_CHECKS (structure and traceability); "full" reports every CHK.
+        # HVE Lite: "lite" reports only LITE_CHECKS (structure and traceability); "full" reports every CHK.
         "profile": "lite",
         "lite_checks": ["CHK-01", "CHK-02", "CHK-03", "CHK-05", "CHK-09", "CHK-12", "CHK-17", "CHK-19", "CHK-24"],
         "ambiguous_words": [
@@ -50,8 +50,8 @@ DEFAULT_CONFIG: dict = {
         ],
         "unit_pattern": r"(?<![A-Za-z0-9\-.])\d+(?:[.,]\d+)?\s*(?:ミリ秒|秒|分|時間|日間|日|週間|週|か月|ヶ月|カ月|年|件|回|%|％|ms|MB|GB|KB|TB|円|人|文字|px|行)",
         "id_scan_exclude": [
-            "docs/**", "work/**", ".github/**", "scripts/**", "tools/**", "users-guide/**", "EABK-docs/**", "HVE-Studio/**",
-            "EABK-Studio/**",  # left as orphaned files by an update from before the rename (removed by --clean)
+            "docs/**", "work/**", ".github/**", "scripts/**", "tools/**", "users-guide/**", "HVE-docs/**", "HVE-Studio/**",
+            "HVE-Studio/**",  # left as orphaned files by an update from before the rename (removed by --clean)
             "tests/toolkit/**", "templates/**", "node_modules/**", "**/node_modules/**", ".git/**",
             "**/*.lock", "**/package-lock.json", "AGENTS.md", "README.md", "CHANGELOG.md", "**/*.svg",
             # GitHub Spec Kit artifacts use their own FR-/SC- numbering

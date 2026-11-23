@@ -21,7 +21,7 @@ def test_sample_passes_with_warnings(sample):
 
 
 def test_removed_run_and_strict_options_are_rejected(sample):
-    # FR-1085 AC-474: EABK Lite has no runs and one knob (the profile); --run / --strict / --strict-ledger are gone
+    # FR-1085 AC-474: HVE Lite has no runs and one knob (the profile); --run / --strict / --strict-ledger are gone
     for opt in ("--run", "--strict", "--strict-ledger"):
         args = [opt, "current"] if opt == "--run" else [opt]
         assert sample.py("rdcheck.py", "check", "--base", "none", *args).returncode == 2, opt

@@ -4,7 +4,7 @@
 
 This chapter gives the procedure for using this toolkit with an app that already has source code, design documents, and tests, and the rationale for the approach chosen. Unlike new development (building from requirements), **there is no source of truth for requirements yet**, so you prepare the data layer (the requirements definition, the catalog, and the System Test ledger) first.
 
-> To just look around before adopting, you can use HVE Studio's code mode without installing the toolkit. From an HVE clone, `python HVE-Studio/studio.py --repo <existing repository>` shows, read-only, the requirement IDs in `docs/PRD.md` and the like, the code and tests that mention them, and the components ([README](../README.en.md#using-studio-without-eabk-code-mode)).
+> To just look around before adopting, you can use HVE Studio's code mode without installing the toolkit. From an HVE clone, `python HVE-Studio/studio.py --repo <existing repository>` shows, read-only, the requirement IDs in `docs/PRD.md` and the like, the code and tests that mention them, and the components ([README](../README.en.md#using-studio-without-hve-code-mode)).
 
 ## 10.1 Summary (the shortest way to use it)
 
@@ -47,7 +47,7 @@ The user's initial assumption was to "do Adaption / Analytics / Rebuild first, t
 
 | Approach (source) | Key points | Adopted? | Reason |
 |---|---|---|---|
-| Taxonomy of reverse engineering (Chikofsky & Cross, 1990, *IEEE Software*) | Treats "redocumentation" and "design recovery", which recover more abstract representations (design, requirements) from an existing system, separately from modification (reengineering) | **Adopted** (layers 1 and 2) | Separating recovery from modification means the implementation need not change before approval. It points the same direction as EABK's "requirements are the source of truth" |
+| Taxonomy of reverse engineering (Chikofsky & Cross, 1990, *IEEE Software*) | Treats "redocumentation" and "design recovery", which recover more abstract representations (design, requirements) from an existing system, separately from modification (reengineering) | **Adopted** (layers 1 and 2) | Separating recovery from modification means the implementation need not change before approval. It points the same direction as HVE's "requirements are the source of truth" |
 | Characterization tests (Feathers, *Working Effectively with Legacy Code*, 2004) / approval tests (golden master) | Record current behavior rather than correctness, and detect unintended differences caused by changes | **Adopted** (layer 3) | An existing app has no ACs, so System Tests cannot be created first. The recorded current state can serve as the expected value. Also consistent with Hyrum's Law (observable behavior will be depended on by someone) |
 | Strangler Fig (Fowler) | Let old and new coexist and replace incrementally, one feature cluster at a time | **Adopted** (the policy for change requests) | Same shape as changing one cluster at a time and verifying each time with `verify.py` and CI. The boundary of a pinned "cluster" becomes the unit of one request (one pull request) |
 | Hotspot analysis (Tornhill, *Your Code as a Crime Scene*, 2015) | Defects and changes concentrate where change frequency × complexity is high | **Adopted** (order of collection) | Do not collect everything at once (cost and errors grow), but start from where the value is highest. `scan` orders by churn × √lines |
@@ -80,7 +80,7 @@ The user's initial assumption was to "do Adaption / Analytics / Rebuild first, t
 
 - Statements in design documents are sources (category: design document). Statements in code are sources (category: code). A requirement for which **both** can be cited is the strongest hypothesis.
 - Disagreements become a conflict or a question sheet. Never silently pick one.
-- Keep existing IDs in the source and do not replace them with EABK IDs (FR, AC) (the correspondence can be traced in the source field).
+- Keep existing IDs in the source and do not replace them with HVE IDs (FR, AC) (the correspondence can be traced in the source field).
 
 ## 10.5 Operation
 

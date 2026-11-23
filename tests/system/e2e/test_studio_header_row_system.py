@@ -150,7 +150,7 @@ def test_ac391_all_visible_in_english_on_other_screen(browser, zurl, width):
     ctx = browser.new_context(viewport={"width": width, "height": 800})
     page = ctx.new_page()
     page.goto(zurl.split("#")[0] + "#/dashboard")
-    page.evaluate("() => localStorage.setItem('eabk-studio.lang','en')")
+    page.evaluate("() => localStorage.setItem('hve-studio.lang','en')")
     page.reload()
     page.wait_for_load_state("networkidle")
     page.wait_for_selector("header.top")

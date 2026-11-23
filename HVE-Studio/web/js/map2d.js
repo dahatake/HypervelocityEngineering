@@ -554,8 +554,8 @@ function mountGraph(host) {
       return { mode: 'map2d', map2d: { points, tiers: JSON.parse(canvas.dataset.tiers || '[]') } };
     },
   };
-  window.eabkView = viewApi;
-  return { destroy() { if (window.eabkView === viewApi) window.eabkView = undefined; dead = true; cancelAnimationFrame(raf); stopTour(); ro.disconnect(); offs.forEach((f) => f()); hideTip(); } };
+  window.hveView = viewApi;
+  return { destroy() { if (window.hveView === viewApi) window.hveView = undefined; dead = true; cancelAnimationFrame(raf); stopTour(); ro.disconnect(); offs.forEach((f) => f()); hideTip(); } };
 }
 
 // FR-1027..FR-1029: when the model has entity relations or columns, this route opens the entity view (semantic zoom) first;

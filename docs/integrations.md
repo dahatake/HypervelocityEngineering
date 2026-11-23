@@ -21,7 +21,7 @@ Studio が読み取る連携。INT-001 はローカルのファイル、INT-002 
 - 可用性・SLA: 外部 SLA なし。ローカルファイルと Git が利用可能であることが前提。
 - レート制限: 外部 API を呼ばないため該当なし。
 - エラー・再試行・冪等性: 読取り失敗・非対応・除外を診断に記録。Git の取得失敗は明示的なエラー。再読込で再試行し、タスク ID は出典・本文・同文の出現順から決定する。
-- 契約・バージョン: Git の ls-files（--recurse-submodules・--ignored --directory を含む）、submodule status、log の出力、既存 EABK の管理データ、UTF-8 の対応テキスト。依存関係は package.json と requirements*.txt、import は Python と JS/TS の静的ローカルパスに限定。
+- 契約・バージョン: Git の ls-files（--recurse-submodules・--ignored --directory を含む）、submodule status、log の出力、既存 HVE の管理データ、UTF-8 の対応テキスト。依存関係は package.json と requirements*.txt、import は Python と JS/TS の静的ローカルパスに限定。
 - 変更通知: ファイルのパス・サイズ・更新時刻と Git の参照を更新検知に使用。
 - 監視: --check と「リポジトリ分析・タスク管理」で件数・出典・解析診断を確認。
 - データ保持: 解析モデルはメモリー内のみ。タスクの編集結果は Studio の専用保存先に保持し、Studio 作成タスクの削除・取込状態のリセットを利用者が明示操作する。

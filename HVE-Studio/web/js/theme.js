@@ -4,7 +4,7 @@
 (function () {
   var root = document.documentElement;
   var mq = window.matchMedia('(prefers-color-scheme: dark)');
-  var KEY = 'eabk-studio.theme';
+  var KEY = 'hve-studio.theme';
   var CHOICES = ['light', 'dark', 'system'];
   var choice = 'system';
   try { var saved = window.localStorage.getItem(KEY); if (CHOICES.indexOf(saved) >= 0) choice = saved; } catch (e) { /* 保存不可でも system で続行 */ }
@@ -17,7 +17,7 @@
   }
   var onOs = function () { if (choice === 'system') apply(); };
   if (mq.addEventListener) mq.addEventListener('change', onOs); else if (mq.addListener) mq.addListener(onOs);
-  window.eabkTheme = {
+  window.hveTheme = {
     choices: ['light', 'dark', 'system'],
     get: function () { return choice; },
     resolved: resolved,

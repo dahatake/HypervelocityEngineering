@@ -3,7 +3,7 @@
 # S8 Data Reference (Which Feature Reads Which Data)
 
 This is a list of **which file, which section, column, or field** each HVE Studio screen and feature reads, and **how it calculates** what it displays. Use it when you want to check the basis of a number or diagram ("What is this 62% a percentage of?").
-The content was verified against the implementation (`HVE-Studio/eabk_model.py`, `studio.py`, `web/js/*.js`).
+The content was verified against the implementation (`HVE-Studio/hve_model.py`, `studio.py`, `web/js/*.js`).
 
 - Management records remain authoritative. Local Git inventory, explicit requirement references, imports, TODO comments and additional requirement documents supplement them. Repository code is not executed.
 - In a git repository without a data layer, Studio derives a read-only model in code mode ("Code mode" after S8.1).
@@ -67,7 +67,7 @@ Lifecycle/browser tests in `HVE-Studio/tests/test_managed_data.py` and `test_man
 
 ## S8.2 Items Extracted from the Requirements Definition
 
-From `docs/requirements-definition.md` and `docs/requirements/*.md`, Studio extracts items in the following formats (code blocks are ignored). The formats follow the [management data format](../03-requirements-format.en.md) of EABK itself.
+From `docs/requirements-definition.md` and `docs/requirements/*.md`, Studio extracts items in the following formats (code blocks are ignored). The formats follow the [management data format](../03-requirements-format.en.md) of HVE itself.
 
 | What is extracted | Format | Model field |
 |---|---|---|
@@ -365,7 +365,7 @@ The only original file written is **`docs/catalog.md`**, when you press `確認�
 
 1. Preview: shows before and after and issues a token (the file is not changed).
 2. Run: confirms that the file's contents have not changed since Studio started (or since the previous application). If they have, it stops with `preview-conflict` (after updating the catalog by another means, restart Studio).
-3. Writes a temporary file (`.eabk-studio-*`) in the same folder and replaces the original with it, then runs `python scripts/verify.py --docs-only` (if `scripts/verify.py` does not exist, only the read-only checks run).
+3. Writes a temporary file (`.hve-studio-*`) in the same folder and replaces the original with it, then runs `python scripts/verify.py --docs-only` (if `scripts/verify.py` does not exist, only the read-only checks run).
 4. On failure (a check fails, the write fails, or a file outside the target points to the same entity), it **restores the original bytes, timestamps, and permissions** and shows an error.
 
 ## S8.10 HTTP API (`127.0.0.1` Only)
@@ -379,10 +379,10 @@ The only original file written is **`docs/catalog.md`**, when you press `確認�
 | `GET /api/data` | Generated-file presence, absolute path, synchronization state and operation progress/error |
 | `POST /api/data/sync` | Start synchronization; body `{"repo": "<current absolute path>"}`; returns 202 |
 | `POST /api/data/delete` | Start deletion; same body plus `"confirm": true`; returns 202. Same Studio header required for both POSTs |
-| `POST /api/repo` | Switches the target repository (body `{"path": …}`). Requires `X-EABK-Studio: 1` |
+| `POST /api/repo` | Switches the target repository (body `{"path": …}`). Requires `X-HVE-Studio: 1` |
 | `POST /api/maintenance/preview` | Body `{"id": "<requirement ID>"}`. Requires the same header |
 | `POST /api/maintenance/apply` | Body `{"token": …}`. Requires the same header |
 
 - It listens on `127.0.0.1` (default port 8765; if in use, it tries the next numbers up to 20 times). Requests whose `Host` header is anything other than `127.0.0.1`, `localhost`, or `::1` are rejected with 403.
-- A POST without the header `X-EABK-Studio: 1` gets 403 (to prevent submissions from other sites). The body is limited to 8 KB.
+- A POST without the header `X-HVE-Studio: 1` gets 403 (to prevent submissions from other sites). The body is limited to 8 KB.
 - Nothing is sent to external servers (no fonts, CDNs, or analytics are used; three.js for 3D is bundled).

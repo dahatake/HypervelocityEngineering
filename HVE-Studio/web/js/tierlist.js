@@ -1,5 +1,5 @@
 // FR-1063 AC-348 AC-349: 一覧・表・実装状態・ダッシュボードなどの画面で、行・項目を FR-1062 の上位層（種類→区分→領域）の見出しの下にまとめる薄い橋渡し。
-// 階層の導出は model.hierarchy（eabk_model.py 1 か所）、見出し・件数・開閉・キーボード・JA/EN は hier.js の renderTiers に任せ、ここでは再実装しない。
+// 階層の導出は model.hierarchy（hve_model.py 1 か所）、見出し・件数・開閉・キーボード・JA/EN は hier.js の renderTiers に任せ、ここでは再実装しない。
 // 開閉の状態は一覧系の画面のあいだで共有し、画面を切り替えても保たれる（NFR-UX-006）。
 import { renderTiers, UNCLASSIFIED } from './hier.js';
 import { store } from './store.js';

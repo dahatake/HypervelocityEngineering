@@ -4,7 +4,7 @@ import { el } from './ui.js';
 import { t, onLang } from './i18n.js';
 import { xrefLink } from './xref.js';
 
-const HDR = { 'Content-Type': 'application/json', 'X-EABK-Studio': '1' };
+const HDR = { 'Content-Type': 'application/json', 'X-HVE-Studio': '1' };
 const STATES = ['todo', 'doing', 'done'];
 const PAGE_SIZE = 100;
 const COLUMNS = {

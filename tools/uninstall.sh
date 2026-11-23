@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Remove the Enterprise App Build Kit (EABK), installed by any version, from the current (or given) git repository.
+# Remove the Enterprise App Build Kit (HVE), installed by any version, from the current (or given) git repository.
 #
 #   curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.sh | bash -s -- --purge --dry-run
 #   curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.sh | bash -s -- --purge

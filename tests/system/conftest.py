@@ -1,6 +1,6 @@
 """Fixtures for destructive system tests.
 
-Every test installs EABK into a disposable Git repository.  Nothing below may
+Every test installs HVE into a disposable Git repository.  Nothing below may
 point clean-work.py at the source checkout.
 """
 from __future__ import annotations
@@ -19,7 +19,7 @@ SOURCE = Path(__file__).resolve().parents[2]
 
 
 def run(args, cwd: Path, check: bool = True):
-    env = dict(os.environ, PYTHONUTF8="1", EABK_ALLOW_PRIMARY="1")
+    env = dict(os.environ, PYTHONUTF8="1", HVE_ALLOW_PRIMARY="1")
     result = subprocess.run(
         [str(a) for a in args],
         cwd=cwd,
@@ -41,7 +41,7 @@ def _build_installed(repo: Path) -> None:
     repo.mkdir()
     run(["git", "init", "-q", "-b", "main"], repo)
     run(["git", "config", "user.email", "system-test@example.invalid"], repo)
-    run(["git", "config", "user.name", "EABK System Test"], repo)
+    run(["git", "config", "user.name", "HVE System Test"], repo)
     run(["git", "config", "commit.gpgsign", "false"], repo)
     (repo / "README.md").write_text("disposable repository\n", encoding="utf-8")
     run(["git", "add", "-A"], repo)
@@ -51,13 +51,13 @@ def _build_installed(repo: Path) -> None:
         repo,
     )
     run(["git", "add", "-A"], repo)
-    run(["git", "commit", "-q", "-m", "install EABK"], repo)
+    run(["git", "commit", "-q", "-m", "install HVE"], repo)
 
 
 @pytest.fixture
 def installed_repo(tmp_path: Path) -> Path:
     # install は 1 プロセスに 1 回だけ行い、各テストにはそのコピーを渡す（分離は同じ）
-    return snapshots.clone("installed", _build_installed, tmp_path / "EABK system test repository with spaces")
+    return snapshots.clone("installed", _build_installed, tmp_path / "HVE system test repository with spaces")
 
 
 @pytest.fixture(scope="session")

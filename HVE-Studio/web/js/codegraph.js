@@ -564,13 +564,13 @@ export function mount(host) {
 
   const view = { mode: 'codegraph', select: (id) => select(id), getState: () => ({ dim: 'codegraph', nodes: sims.length, links: links.length, selected: sel, settled: alpha <= ALPHA_MIN,
     zoom: cam.z, shown: stats.shown, guess: ui.guess }) };
-  window.eabkView = view;
+  window.hveView = view;
   const offLang = onLang(() => { if (data) { render(); build(); } });
   load().then(() => { if (data && !destroyed) { render(); build(); if (sel) select(sel); } });
   return {
     destroy() {
       destroyed = true; cancelAnimationFrame(raf); ro?.disconnect(); offLang(); hideTip();
-      if (window.eabkView === view) window.eabkView = undefined;
+      if (window.hveView === view) window.hveView = undefined;
     },
   };
 }

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 520" width="1100" height="520" role="img" aria-labelledby="t d" font-family="Segoe UI, Meiryo, Yu Gothic UI, sans-serif">
-<title id="t">EABK Lite の毎日の流れ</title>
+<title id="t">HVE Lite の毎日の流れ</title>
 <desc id="d">依頼から Copilot の変更、verify、CI、Studio、節目の監査までの流れ</desc>
 <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#667"/></marker></defs>
 <rect width="1100" height="520" fill="#fafafa"/>

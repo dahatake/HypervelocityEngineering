@@ -29,8 +29,8 @@ export function mount(host) {
     page.replaceChildren(el('h1', {}, t('graph.map.title')), gv.el);
   };
   const view = { mode: 'map-graph', getState: () => ({ dim: 'graph', graph: traceGraph() }) };
-  window.eabkView = view;
+  window.hveView = view;
   render();
   const offs = [onLang(render), store.on('model', render)];
-  return { destroy() { offs.forEach((f) => f()); gv?.destroy(); if (window.eabkView === view) window.eabkView = undefined; } };
+  return { destroy() { offs.forEach((f) => f()); gv?.destroy(); if (window.hveView === view) window.hveView = undefined; } };
 }

@@ -26,7 +26,7 @@ def test_visible_presence_progress_sync_and_immediate_cleanup(data_server, data_
 
     monkeypatch.setattr(managed_data, "sync", blocked_sync)
     context = shared_browser.new_context(viewport={"width": width, "height": 900}, reduced_motion="reduce")
-    context.add_init_script(f"localStorage.setItem('eabk-studio.lang', '{language}')")
+    context.add_init_script(f"localStorage.setItem('hve-studio.lang', '{language}')")
     page = context.new_page()
     try:
         page.goto(url + "/#/tables")

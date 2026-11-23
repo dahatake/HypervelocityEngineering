@@ -2,7 +2,7 @@
 
 # 1. Writing Requests
 
-EABK Lite has no dedicated agent and no request format. You ask the usual Copilot (the default agent) in chat, as you normally would. This is the same in VS Code, the GitHub Copilot app and the Copilot CLI.
+HVE Lite has no dedicated agent and no request format. You ask the usual Copilot (the default agent) in chat, as you normally would. This is the same in VS Code, the GitHub Copilot app and the Copilot CLI.
 
 Copilot follows the rules that the installer wrote into `AGENTS.md` and `.github/copilot-instructions.md`. In a change that alters behavior, it updates the requirements definition, the catalog and the tests in the same change, and finally brings `python scripts/verify.py` to exit 0. The rules live in the repository, so you do not need to copy them into personal custom instructions or memory.
 
@@ -21,7 +21,7 @@ The following rules apply without being written in every request (a summary of t
 | Check before finishing | Bring `python scripts/verify.py` to exit 0. After a push, CI `ebak-verify` runs the same checks |
 | Temporary files go to /work | Logs, evidence and working notes go to `/work` (not tracked by git) |
 
-EABK Lite does not add a preamble to your prompts automatically. If you want a standing preamble, put it in your own Copilot instructions ([4. Customization](04-customization.en.md)).
+HVE Lite does not add a preamble to your prompts automatically. If you want a standing preamble, put it in your own Copilot instructions ([4. Customization](04-customization.en.md)).
 
 ## 1.2 What to write in a request
 

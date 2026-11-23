@@ -49,7 +49,7 @@ REQUIRED = {
     "diagrams": [("図式の種別", ("text", "状態遷移図")), ("ノード", ("svg", "g")), ("関係", ("svg", "path, line")),
                  ("根拠ID", ("re", r"G-00\d"))],
     "placement": [("ファイルまたはディレクトリ", ("text", "HVE-Studio")), ("配置関係", ("sel", "#view table tr")), *DRAWER[1:]],
-    "source": [("管理データID", ("re", r"FR-001")), ("対応する実装ファイル", ("text", "eabk_model.py")), *DRAWER[1:]],
+    "source": [("管理データID", ("re", r"FR-001")), ("対応する実装ファイル", ("text", "hve_model.py")), *DRAWER[1:]],
     "tables": [("対象種別", ("text", "受入基準")), ("検索", ("sel", "#view input")), ("絞込み", ("text", "決定状態:")),
                ("行一覧", ("sel", "#view table tbody tr")), *DRAWER[1:]],
     "structure": [("現状対理想構造", ("text", "全データ層の現状対理想構造"))],

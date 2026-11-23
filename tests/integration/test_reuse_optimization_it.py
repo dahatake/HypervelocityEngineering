@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 SOURCE = Path(__file__).resolve().parents[2]
-_spec = importlib.util.spec_from_file_location("eabk_toolkit_fixtures", SOURCE / "tests" / "toolkit" / "conftest.py")
+_spec = importlib.util.spec_from_file_location("hve_toolkit_fixtures", SOURCE / "tests" / "toolkit" / "conftest.py")
 _fx = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_fx)
 empty_repo, repo, sample = _fx.empty_repo, _fx.repo, _fx.sample  # pytest fixtures
@@ -77,7 +77,7 @@ def test_role_docs_require_reuse_and_are_distributed():
     for rel, words in docs.items():
         text = (SOURCE / rel).read_text(encoding="utf-8")
         assert all(w in text for w in words), rel
-    spec = importlib.util.spec_from_file_location("eabk_install", SOURCE / "tools" / "install.py")
+    spec = importlib.util.spec_from_file_location("hve_install", SOURCE / "tools" / "install.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     for rel in [*docs, "scripts/rdcheck.py", "scripts/ledger.py"]:

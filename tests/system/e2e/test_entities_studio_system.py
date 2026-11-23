@@ -111,6 +111,6 @@ def test_ac157_missing_items_are_marked_none_or_unwritten(std_page):
 def test_ac168_zero_entities_shows_guidance_without_error_or_repo_specific_names(other_page):
     body = other_page.locator("body")
     expect(body).to_contain_text("エンティティなし")
-    for foreign in ("run 清掃", "EABK run", "データ層", "正常完了 run"):
+    for foreign in ("run 清掃", "HVE run", "データ層", "正常完了 run"):
         expect(body).not_to_contain_text(foreign)
     expect(body).not_to_contain_text("Traceback")

@@ -155,7 +155,7 @@ def main_inproc(r: Repo, capsys, *args):
 
 
 def child(code: str, cwd: Path, **kw):
-    env = dict(os.environ, PYTHONUTF8="1", EABK_ALLOW_PRIMARY="1")
+    env = dict(os.environ, PYTHONUTF8="1", HVE_ALLOW_PRIMARY="1")
     return subprocess.Popen([sys.executable, "-c", code], cwd=str(cwd), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True, encoding="utf-8", errors="replace", env=env, **kw)
 
@@ -428,7 +428,7 @@ def test_ac249_not_converged_stops_after_param_rounds_and_keeps_repairs(template
 # NFR-REL-003 AC-250: two applies started together - one writes, the other re-checks the result and has nothing to do
 def test_ac250_two_concurrent_applies_do_not_mix(template, tmp_path):
     r = planted(template, tmp_path)
-    env = dict(os.environ, PYTHONUTF8="1", EABK_ALLOW_PRIMARY="1")
+    env = dict(os.environ, PYTHONUTF8="1", HVE_ALLOW_PRIMARY="1")
     cmd = [sys.executable, str(r.path / "scripts" / "rdfix.py"), *APPLY]
     ps = [subprocess.Popen(cmd, cwd=str(r.path), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                            encoding="utf-8", errors="replace", env=env) for _ in range(2)]

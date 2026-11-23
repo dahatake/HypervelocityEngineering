@@ -6,7 +6,7 @@ This chapter covers how Enterprise App Build Kit versions are assigned, the proc
 
 ## 9.1 Versioning rules
 
-- Versions follow [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`). The current version is **0.6.0** (EABK Lite).
+- Versions follow [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`). The current version is **0.6.0** (HVE Lite).
 - The source of truth for the version is `TOOLKIT_VERSION` in `scripts/ebaklib.py`. The installer (`tools/install.py`) and the record in `.github/ebak-toolkit.json` all read it from there. Do not copy the version anywhere else.
 - Write the change history in [CHANGELOG.md](../CHANGELOG.md) at the repository root.
 - Until 1.0.0, a MINOR update may include incompatible changes.
@@ -30,7 +30,7 @@ This chapter covers how Enterprise App Build Kit versions are assigned, the proc
    ```
    `TOOLKIT_VERSION` is rewritten, and a heading for the new version is inserted under `[Unreleased]` in `CHANGELOG.md`. Running it with no argument only displays the current version.
 4. In `CHANGELOG.md`, move what you wrote under `[Unreleased]` to below the new version's heading.
-5. If you added, renamed, or removed distributed files, update `MANAGED` and `TEMPLATES` in `tools/install.py`, and this `users-guide/`, accordingly. List every file in `users-guide/` in `MANAGED`; in the target repository they are saved to `EABK-docs/` (the target's own `users-guide/` is not edited).
+5. If you added, renamed, or removed distributed files, update `MANAGED` and `TEMPLATES` in `tools/install.py`, and this `users-guide/`, accordingly. List every file in `users-guide/` in `MANAGED`; in the target repository they are saved to `HVE-docs/` (the target's own `users-guide/` is not edited).
 6. Check the version, commit, and tag.
    ```bash
    python tools/install.py --version     # e.g. 0.4.0

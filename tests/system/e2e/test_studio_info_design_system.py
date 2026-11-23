@@ -135,7 +135,7 @@ def test_ac280_kinds_are_grouped_under_four_headings(page):
 ])
 def test_ac281_screen_name_is_unified(browser, studio_url, lang, word, banned):
     ctx = browser.new_context()
-    ctx.add_init_script(f"localStorage.setItem('eabk-studio.lang','{lang}')")
+    ctx.add_init_script(f"localStorage.setItem('hve-studio.lang','{lang}')")
     p = ctx.new_page()
     p.goto(studio_url + "#/tables")
     p.wait_for_load_state("networkidle")

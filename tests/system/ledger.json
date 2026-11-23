@@ -2,11 +2,11 @@
   "version": 1,
   "ac_digests": {
     "AC-057": "sha256:3436b89e7a1c9fc2",
-    "AC-058": "sha256:e587799f79f261d0",
+    "AC-058": "sha256:f661bcd5e58c95e7",
     "AC-060": "sha256:23ffebb28e9b6044",
     "AC-064": "sha256:4648377e243469b5",
     "AC-066": "sha256:20490fd4702a0b1d",
-    "AC-067": "sha256:708fcd3688603262",
+    "AC-067": "sha256:5db35e17894fbbb3",
     "AC-068": "sha256:44de9279f7071257",
     "AC-001": "sha256:ec444f1d50fc8ae7",
     "AC-002": "sha256:dc97819966b31970",
@@ -42,7 +42,7 @@
     "AC-107": "sha256:c879802e05db1e1f",
     "AC-108": "sha256:8bb717e1dbef090b",
     "AC-109": "sha256:b41d71a8926e59ae",
-    "AC-110": "sha256:282f54a74c9198f2",
+    "AC-110": "sha256:931f46bae93ee7c0",
     "AC-111": "sha256:70bbdfa7fa058260",
     "AC-112": "sha256:92996c1826c2b30d",
     "AC-113": "sha256:bc06c52f2dce258e",
@@ -115,15 +115,15 @@
     "AC-348": "sha256:fd5b0127bf5a188d",
     "AC-349": "sha256:bb116d4768266c6a",
     "AC-381": "sha256:a6d18d0933b99944",
-    "AC-382": "sha256:aaf7a015a6bc3bac",
-    "AC-385": "sha256:284205320fdb9857",
+    "AC-382": "sha256:899791a5e24d28bd",
+    "AC-385": "sha256:6ec8b01a267a30f9",
     "AC-386": "sha256:bdb03394adb93269",
     "AC-388": "sha256:7728776935bc85da",
     "AC-367": "sha256:a0b919e2a103d7e4",
     "AC-368": "sha256:eb8470201c75fd66",
     "AC-371": "sha256:e948ded3b2f78715",
-    "AC-374": "sha256:b3ba18b98270e523",
-    "AC-375": "sha256:28cd6902163bdc30",
+    "AC-374": "sha256:89bb7b709279c7f2",
+    "AC-375": "sha256:972d6bcc722ea4b8",
     "AC-378": "sha256:b07b61041fac5559",
     "AC-379": "sha256:879df9efc754b69f",
     "AC-391": "sha256:f05be0c42a870ec2",
@@ -146,7 +146,7 @@
     "AC-514": "sha256:e3c7b6d201b15f66",
     "AC-520": "sha256:b5acdcd412c884cb",
     "AC-528": "sha256:f3c9f21242b871e7",
-    "AC-536": "sha256:8400de38ac01acc7"
+    "AC-536": "sha256:d0874c95fe4804ad"
   },
   "cases": [
     {
@@ -1004,9 +1004,9 @@
         },
         {
           "at": "2026-11-08T09:28:33+09:00",
-          "by": "eabk-lite",
+          "by": "hve-lite",
           "change": "blocked",
-          "reason": "0.6.0 EABK Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/EABKUnnesessaryAnalyticsRepor.md §7）"
+          "reason": "0.6.0 HVE Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/HVEUnnesessaryAnalyticsRepor.md §7）"
         }
       ]
     },
@@ -1041,9 +1041,9 @@
         },
         {
           "at": "2026-11-08T09:28:33+09:00",
-          "by": "eabk-lite",
+          "by": "hve-lite",
           "change": "blocked",
-          "reason": "0.6.0 EABK Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/EABKUnnesessaryAnalyticsRepor.md §7）"
+          "reason": "0.6.0 HVE Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/HVEUnnesessaryAnalyticsRepor.md §7）"
         }
       ]
     },
@@ -1072,9 +1072,9 @@
         },
         {
           "at": "2026-11-08T09:28:33+09:00",
-          "by": "eabk-lite",
+          "by": "hve-lite",
           "change": "blocked",
-          "reason": "0.6.0 EABK Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/EABKUnnesessaryAnalyticsRepor.md §7）"
+          "reason": "0.6.0 HVE Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/HVEUnnesessaryAnalyticsRepor.md §7）"
         }
       ]
     },
@@ -1103,9 +1103,9 @@
         },
         {
           "at": "2026-11-08T09:28:34+09:00",
-          "by": "eabk-lite",
+          "by": "hve-lite",
           "change": "blocked",
-          "reason": "0.6.0 EABK Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/EABKUnnesessaryAnalyticsRepor.md §7）"
+          "reason": "0.6.0 HVE Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/HVEUnnesessaryAnalyticsRepor.md §7）"
         }
       ]
     },
@@ -1142,9 +1142,9 @@
         },
         {
           "at": "2026-11-08T09:28:34+09:00",
-          "by": "eabk-lite",
+          "by": "hve-lite",
           "change": "blocked",
-          "reason": "0.6.0 EABK Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/EABKUnnesessaryAnalyticsRepor.md §7）"
+          "reason": "0.6.0 HVE Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/HVEUnnesessaryAnalyticsRepor.md §7）"
         }
       ]
     },
@@ -1179,9 +1179,9 @@
         },
         {
           "at": "2026-11-08T09:28:34+09:00",
-          "by": "eabk-lite",
+          "by": "hve-lite",
           "change": "blocked",
-          "reason": "0.6.0 EABK Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/EABKUnnesessaryAnalyticsRepor.md §7）"
+          "reason": "0.6.0 HVE Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/HVEUnnesessaryAnalyticsRepor.md §7）"
         }
       ],
       "merged_into": "E2E-033"
@@ -1217,9 +1217,9 @@
         },
         {
           "at": "2026-11-08T09:28:35+09:00",
-          "by": "eabk-lite",
+          "by": "hve-lite",
           "change": "blocked",
-          "reason": "0.6.0 EABK Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/EABKUnnesessaryAnalyticsRepor.md §7）"
+          "reason": "0.6.0 HVE Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/HVEUnnesessaryAnalyticsRepor.md §7）"
         }
       ],
       "merged_into": "E2E-033"
@@ -1363,9 +1363,9 @@
         },
         {
           "at": "2026-11-08T09:28:35+09:00",
-          "by": "eabk-lite",
+          "by": "hve-lite",
           "change": "blocked",
-          "reason": "0.6.0 EABK Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/EABKUnnesessaryAnalyticsRepor.md §7）"
+          "reason": "0.6.0 HVE Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/HVEUnnesessaryAnalyticsRepor.md §7）"
         }
       ]
     },
@@ -3018,9 +3018,9 @@
         },
         {
           "at": "2026-11-08T12:30:51+09:00",
-          "by": "eabk-lite",
+          "by": "hve-lite",
           "change": "blocked",
-          "reason": "0.6.0 EABK Lite: 自動修復のワークフロー ebak-data-layer.yml を撤去（検査は ebak-verify、修復は手元で同じ変更に含める）。FR-1017/1018/1019・NFR-SEC-004・NFR-OPS-006 を廃止"
+          "reason": "0.6.0 HVE Lite: 自動修復のワークフロー ebak-data-layer.yml を撤去（検査は ebak-verify、修復は手元で同じ変更に含める）。FR-1017/1018/1019・NFR-SEC-004・NFR-OPS-006 を廃止"
         }
       ]
     },
@@ -3061,9 +3061,9 @@
         },
         {
           "at": "2026-11-08T12:30:51+09:00",
-          "by": "eabk-lite",
+          "by": "hve-lite",
           "change": "blocked",
-          "reason": "0.6.0 EABK Lite: 自動修復のワークフロー ebak-data-layer.yml を撤去（検査は ebak-verify、修復は手元で同じ変更に含める）。FR-1017/1018/1019・NFR-SEC-004・NFR-OPS-006 を廃止"
+          "reason": "0.6.0 HVE Lite: 自動修復のワークフロー ebak-data-layer.yml を撤去（検査は ebak-verify、修復は手元で同じ変更に含める）。FR-1017/1018/1019・NFR-SEC-004・NFR-OPS-006 を廃止"
         }
       ]
     },
@@ -3112,9 +3112,9 @@
         },
         {
           "at": "2026-11-08T12:30:52+09:00",
-          "by": "eabk-lite",
+          "by": "hve-lite",
           "change": "blocked",
-          "reason": "0.6.0 EABK Lite: 自動修復のワークフロー ebak-data-layer.yml を撤去（検査は ebak-verify、修復は手元で同じ変更に含める）。FR-1017/1018/1019・NFR-SEC-004・NFR-OPS-006 を廃止"
+          "reason": "0.6.0 HVE Lite: 自動修復のワークフロー ebak-data-layer.yml を撤去（検査は ebak-verify、修復は手元で同じ変更に含める）。FR-1017/1018/1019・NFR-SEC-004・NFR-OPS-006 を廃止"
         }
       ]
     },
@@ -3250,9 +3250,9 @@
         },
         {
           "at": "2026-11-08T12:30:52+09:00",
-          "by": "eabk-lite",
+          "by": "hve-lite",
           "change": "blocked",
-          "reason": "0.6.0 EABK Lite: 自動修復のワークフロー ebak-data-layer.yml を撤去（検査は ebak-verify、修復は手元で同じ変更に含める）。FR-1017/1018/1019・NFR-SEC-004・NFR-OPS-006 を廃止"
+          "reason": "0.6.0 HVE Lite: 自動修復のワークフロー ebak-data-layer.yml を撤去（検査は ebak-verify、修復は手元で同じ変更に含める）。FR-1017/1018/1019・NFR-SEC-004・NFR-OPS-006 を廃止"
         }
       ]
     },
@@ -3344,9 +3344,9 @@
         },
         {
           "at": "2026-11-08T12:30:52+09:00",
-          "by": "eabk-lite",
+          "by": "hve-lite",
           "change": "blocked",
-          "reason": "0.6.0 EABK Lite: 自動修復のワークフロー ebak-data-layer.yml を撤去（検査は ebak-verify、修復は手元で同じ変更に含める）。FR-1017/1018/1019・NFR-SEC-004・NFR-OPS-006 を廃止"
+          "reason": "0.6.0 HVE Lite: 自動修復のワークフロー ebak-data-layer.yml を撤去（検査は ebak-verify、修復は手元で同じ変更に含める）。FR-1017/1018/1019・NFR-SEC-004・NFR-OPS-006 を廃止"
         }
       ]
     },
@@ -3431,9 +3431,9 @@
         },
         {
           "at": "2026-11-08T12:30:53+09:00",
-          "by": "eabk-lite",
+          "by": "hve-lite",
           "change": "blocked",
-          "reason": "0.6.0 EABK Lite: 自動修復のワークフロー ebak-data-layer.yml を撤去（検査は ebak-verify、修復は手元で同じ変更に含める）。FR-1017/1018/1019・NFR-SEC-004・NFR-OPS-006 を廃止"
+          "reason": "0.6.0 HVE Lite: 自動修復のワークフロー ebak-data-layer.yml を撤去（検査は ebak-verify、修復は手元で同じ変更に含める）。FR-1017/1018/1019・NFR-SEC-004・NFR-OPS-006 を廃止"
         }
       ]
     },
@@ -3889,9 +3889,9 @@
         },
         {
           "at": "2026-11-08T09:28:35+09:00",
-          "by": "eabk-lite",
+          "by": "hve-lite",
           "change": "blocked",
-          "reason": "0.6.0 EABK Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/EABKUnnesessaryAnalyticsRepor.md §7）"
+          "reason": "0.6.0 HVE Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/HVEUnnesessaryAnalyticsRepor.md §7）"
         }
       ]
     },
@@ -4618,9 +4618,9 @@
         },
         {
           "at": "2026-11-08T09:28:35+09:00",
-          "by": "eabk-lite",
+          "by": "hve-lite",
           "change": "blocked",
-          "reason": "0.6.0 EABK Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/EABKUnnesessaryAnalyticsRepor.md §7）"
+          "reason": "0.6.0 HVE Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/HVEUnnesessaryAnalyticsRepor.md §7）"
         }
       ]
     },
@@ -4649,9 +4649,9 @@
         },
         {
           "at": "2026-11-08T09:28:36+09:00",
-          "by": "eabk-lite",
+          "by": "hve-lite",
           "change": "blocked",
-          "reason": "0.6.0 EABK Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/EABKUnnesessaryAnalyticsRepor.md §7）"
+          "reason": "0.6.0 HVE Lite: conductor・worktree の run・/build・watch・並行 run の所有をやめたため、対象の機能とテストを撤去（work/HVEUnnesessaryAnalyticsRepor.md §7）"
         }
       ]
     },
@@ -4952,15 +4952,15 @@
         },
         {
           "at": "2026-11-08T09:29:29+09:00",
-          "by": "eabk-lite",
+          "by": "hve-lite",
           "change": "title: '定型文の自動付与（付与・無効化・/build template 除外・既定文の配布・書き換え反映）' -> '定型文の自動付与（付与・無効化・既定文の配布・書き換え反映）'",
-          "reason": "0.6.0 EABK Lite: /build を廃止したため AC-455（/build template 除外）の assert を外した"
+          "reason": "0.6.0 HVE Lite: /build を廃止したため AC-455（/build template 除外）の assert を外した"
         },
         {
           "at": "2026-11-08T10:57:40+09:00",
-          "by": "eabk-lite",
+          "by": "hve-lite",
           "change": "blocked",
-          "reason": "0.6.0 EABK Lite: hook（scripts/hooks/gate.py）を削除し、定型文の自動付与（FR-1081）を廃止したため、テストを撤去"
+          "reason": "0.6.0 HVE Lite: hook（scripts/hooks/gate.py）を削除し、定型文の自動付与（FR-1081）を廃止したため、テストを撤去"
         }
       ]
     },

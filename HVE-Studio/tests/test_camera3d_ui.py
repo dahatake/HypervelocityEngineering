@@ -105,7 +105,7 @@ def _open(studio, init=None, reduced=False, wait_nodes=True):
     page.goto(f"{url}/#/map3d")
     page.wait_for_load_state("networkidle")
     if wait_nodes:
-        page.wait_for_function("() => window.__eabk3d && window.__eabk3d.nodes().length > 0", timeout=20000)
+        page.wait_for_function("() => window.__hve3d && window.__hve3d.nodes().length > 0", timeout=20000)
     return page
 
 
@@ -142,9 +142,9 @@ _STEADY_FRAMES = "(() => { const f = window.requestAnimationFrame.bind(window); 
 def test_ac387_stop_keeps_selection_and_zoom_and_no_keyboard_trap(studio):
     page = _open(studio, init=_STEADY_FRAMES)
     _pick(page, "product")
-    assert page.evaluate("() => window.__eabk3d.camera().auto") is True
+    assert page.evaluate("() => window.__hve3d.camera().auto") is True
     page.keyboard.press("Escape")
-    assert page.evaluate("() => window.__eabk3d.camera().auto") is False
+    assert page.evaluate("() => window.__hve3d.camera().auto") is False
     _pick(page, "product")
     page.locator('[data-testid="camera-stop"]').click()
     assert page.locator("[data-camera-auto]").first.get_attribute("data-camera-auto") == "false"
@@ -157,7 +157,7 @@ def test_ac387_stop_keeps_selection_and_zoom_and_no_keyboard_trap(studio):
     # reduced motion: the resume control is hidden, nothing moves (FR-1071 AC-385)
     page2 = _open(studio, reduced=True)
     _pick(page2, "game")
-    assert page2.evaluate("() => window.__eabk3d.camera()") ["movement"] == "Static"
+    assert page2.evaluate("() => window.__hve3d.camera()") ["movement"] == "Static"
 
 
 # NFR-UX-015 AC-389: when frames stay slow the camera falls back to Static, says so, and keeps the chosen preset (nothing stored).
@@ -165,8 +165,8 @@ def test_ac389_slow_frames_degrade_to_static_without_changing_choice(studio):
     page = _open(studio)
     _pick(page, "anime")
     page.evaluate("() => { const f = window.requestAnimationFrame.bind(window); window.requestAnimationFrame = (cb) => f((ts) => { cb(ts); const e = performance.now() + 45; while (performance.now() < e) {} }); }")
-    page.wait_for_function("() => window.__eabk3d.camera().degraded === true", timeout=30000)
-    cam = page.evaluate("() => window.__eabk3d.camera()")
+    page.wait_for_function("() => window.__hve3d.camera().degraded === true", timeout=30000)
+    cam = page.evaluate("() => window.__hve3d.camera()")
     assert cam["preset"] == "anime" and cam["movement"] == "Static" and cam["auto"] is False
     assert page.locator('[data-camera-auto="false"]').count() >= 1
     assert "重い" in page.locator(".cam-note").first.inner_text()

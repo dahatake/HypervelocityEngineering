@@ -29,7 +29,7 @@ def _rmtree(path: Path) -> None:
 def _base() -> Path:
     global _ROOT
     if _ROOT is None:
-        _ROOT = Path(tempfile.mkdtemp(prefix="eabk-st-snap-"))
+        _ROOT = Path(tempfile.mkdtemp(prefix="hve-st-snap-"))
         atexit.register(lambda: _rmtree(_ROOT) if _ROOT and _ROOT.exists() else None)
     return _ROOT
 

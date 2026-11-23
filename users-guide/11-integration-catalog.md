@@ -7,7 +7,7 @@
 ## 11.1 インストールで受け取るもの
 
 - `python tools/install.py` で、雛形 `docs/integrations.md`（書式の説明と空の索引表）が、**まだないときに限り**作られます。すでにある導入先のカタログは上書きされず、更新（再実行・`--force`）でも内容は変わりません。
-- 検査は toolkit の `scripts/rdcheck.py`（CHK-28）と `scripts/next-id.py`（`INT` の採番）に入っていて、既存の配布と同じ手順（再実行）で更新されます。この章も `EABK-docs/` に配布されます。`--no-ci` の挙動（workflow を入れない）は変わりません。
+- 検査は toolkit の `scripts/rdcheck.py`（CHK-28）と `scripts/next-id.py`（`INT` の採番）に入っていて、既存の配布と同じ手順（再実行）で更新されます。この章も `HVE-docs/` に配布されます。`--no-ci` の挙動（workflow を入れない）は変わりません。
 - ファイル名は `scripts/ebak.config.json` の `management_files.integrations` で変えられます（既定は `docs/integrations.md`）。
 
 ## 11.2 書式

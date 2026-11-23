@@ -1,4 +1,4 @@
-// Requirement-engineering diagrams drawn only from the EABK data layer:
+// Requirement-engineering diagrams drawn only from the HVE data layer:
 // context diagram, goal tree, state-transition diagrams, entity relation diagram, component diagram.
 import { t, onLang } from './i18n.js';
 import { store } from './store.js';
@@ -420,7 +420,7 @@ function componentDiagram(m) {
 }
 
 // ---------------------------------------------------------------- dimension-neutral graph (FR-1040 AC-220)
-// The same elements / relations feed the 3D scene and are published through window.eabkView.getState().diagram,
+// The same elements / relations feed the 3D scene and are published through window.hveView.getState().diagram,
 // so 2D and 3D are compared on one source: the managed data.
 const LAYER_CAP = 48;
 export function graphOf(k, m) {
@@ -496,7 +496,7 @@ export function mount(host) {
   let current = null, erLink = null, three = null, gv = null, renderToken = 0;
   const diagramState = () => ({ ...graphOf(kind, store.model), dim });
   const view = { mode: 'diagrams', getState: () => ({ diagram: diagramState() }), setDim: (d) => setDim(d) };
-  window.eabkView = view;
+  window.hveView = view;
   const dimsFor = () => (kind in GRAPH_KINDS ? ['2d', '3d', 'graph'] : ['2d', '3d']);
   const setDim = (d) => { if (!dimsFor().includes(d)) return; wanted = d; if (d === dim) { publishDim({ dims: dimsFor(), current: dim, selected: wanted }); return; } dim = dimState.diagrams = d; render(); };
   let wanted = dim;   // what the user chose; differs from `dim` only when 3D could not be drawn (AC-370)
@@ -582,6 +582,6 @@ export function mount(host) {
   const refresh = () => { applyDim(body); if (erLink) erLink(); three?.setSelected?.(store.selected); };
   const offs = [store.on('select', refresh), store.on('hover', refresh), store.on('model', render), onLang(render), offDim];
   body.addEventListener('click', (e) => { if (e.target === body || e.target.tagName === 'svg') store.clear(); });
-  return { destroy() { offs.forEach((f) => f()); three?.destroy?.(); gv?.destroy(); vz.destroy(); embedded?.destroy?.(); hideTip(); if (window.eabkView === view) window.eabkView = undefined; } };
+  return { destroy() { offs.forEach((f) => f()); three?.destroy?.(); gv?.destroy(); vz.destroy(); embedded?.destroy?.(); hideTip(); if (window.hveView === view) window.hveView = undefined; } };
 }
 

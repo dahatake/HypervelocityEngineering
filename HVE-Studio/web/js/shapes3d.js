@@ -74,7 +74,7 @@ export const SHAPE_PARTS = {
 // ---- 演出スタイル（保存はスタイル名だけ。使えない保存先ではエラーにせず既定で動く）
 export const STYLES = ['engineering', 'entertainment'];
 export const DEFAULT_STYLE = 'engineering';
-export const STYLE_KEY = 'eabk-studio.style3d';
+export const STYLE_KEY = 'hve-studio.style3d';
 export const FX_BY_STYLE = { engineering: [], entertainment: ['glow', 'float', 'particles'] };
 export const normStyle = (v) => (STYLES.includes(v) ? v : DEFAULT_STYLE);
 export function loadStyle() { try { return normStyle(window.localStorage.getItem(STYLE_KEY)); } catch (e) { return DEFAULT_STYLE; } }

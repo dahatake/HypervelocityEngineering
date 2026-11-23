@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import eabk_model as m  # noqa: E402
+import hve_model as m  # noqa: E402
 
 BLOCK = [
     (1, "- 要求: テスト"),

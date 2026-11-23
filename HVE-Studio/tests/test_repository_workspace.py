@@ -101,7 +101,7 @@ def test_acceptance_criteria_tables(tmp_path, managed):
                      "| ID | 対応要求 | 操作／合格条件 |\n|---|---|---|\n| AC-001 | FR-001 | 重複 |\n| AC-002 | FR-001、FR-404 | 表の基準 |\n\n"
                      "| AC | 自動テスト |\n|---|---|\n| AC-003 | test_a.py |\n")
     model = m.build_model(root)
-    assert model["meta"]["mode"] == ("eabk" if managed else "code")
+    assert model["meta"]["mode"] == ("hve" if managed else "code")
     acs = next(r for r in model["reqs"] if r["id"] == "FR-001")["acs"]
     assert [a["id"] for a in acs] == ["AC-001", "AC-002"]
     assert acs[0]["text"] == "箇条書き" and acs[1]["text"] == "表の基準" and acs[1]["line"] == 8 and acs[1]["file"] == doc
@@ -140,7 +140,7 @@ def test_ledger_only_and_nested_repository_selection(tmp_path):
     write(inner, "tests/system/ledger.json", '{"cases":[]}')
     assert m.find_root(inner) == inner
     model = m.build_model(inner)
-    assert model["meta"]["mode"] == "eabk" and "error" not in model["meta"]
+    assert model["meta"]["mode"] == "hve" and "error" not in model["meta"]
 
 
 # FR-1088 AC-481: changes to code, untracked files, deletions and configuration invalidate the cache.
@@ -327,7 +327,7 @@ def api(tmp_path):
 
 def post(url, payload, headers=None):
     req = urllib.request.Request(url, data=json.dumps(payload).encode(),
-                                 headers=headers if headers is not None else {"X-EABK-Studio": "1"}, method="POST")
+                                 headers=headers if headers is not None else {"X-HVE-Studio": "1"}, method="POST")
     try:
         with urllib.request.urlopen(req) as response:
             return response.status, json.loads(response.read())
@@ -362,7 +362,7 @@ def test_repository_switch_analysis_failure_preserves_root(api, tmp_path, monkey
     assert studio.STATE.root == root
 
 
-# FR-1088 AC-482: the real browser can create, transition, reload and filter tasks without EABK.
+# FR-1088 AC-482: the real browser can create, transition, reload and filter tasks without HVE.
 def test_workspace_browser_persists_tasks_and_keeps_drafts(api, shared_browser, tmp_path, monkeypatch):
     url, root = api
     context = shared_browser.new_context(viewport={"width": 320, "height": 844}, locale="en-US")
@@ -394,12 +394,12 @@ def test_workspace_browser_persists_tasks_and_keeps_drafts(api, shared_browser, 
         page.get_by_role("button", name="JA", exact=True).click()
         assert page.get_by_label("新しいタスクの題名").input_value() == "Unsent draft"
         other = init_repo(tmp_path / "other")
-        monkeypatch.setenv("EABK_STUDIO_PICK_PATH", str(other))
+        monkeypatch.setenv("HVE_STUDIO_PICK_PATH", str(other))
         page.locator("#repoBtn").click()
         page.wait_for_function("(repo) => document.querySelector('#repoBtn')?.title === repo", arg=str(other))
         assert page.locator('[data-task-id^="local:"]').count() == 0
         assert page.get_by_label("新しいタスクの題名").input_value() == ""
-        monkeypatch.setenv("EABK_STUDIO_PICK_PATH", str(root))
+        monkeypatch.setenv("HVE_STUDIO_PICK_PATH", str(root))
         page.locator("#repoBtn").click()
         row.wait_for()
         assert row.get_by_label("題名", exact=True).input_value() == "Ship release"

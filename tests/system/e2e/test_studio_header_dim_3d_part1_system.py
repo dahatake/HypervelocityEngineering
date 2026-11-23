@@ -9,8 +9,8 @@ PROVISIONAL CONTRACT (仮置き。実装者が確認し、食い違えば CONFLI
     非対応のボタンは disabled。理由は、ボタンの title / aria-description / data-reason、または
     [data-testid="header-dim-reason"] の本文のどれかに空でない文字で出る。
   - 画面: #/dashboard #/map2d #/map3d #/entities #/tables #/integrations #/implstatus（#nav a[href^="#/"] が正本）。
-  - ズーム: [data-testid="semantic-zoom"][data-scale][data-level=overview|mid|detail], window.eabkView.setScale/getState。
-  - 3D: window.__eabk3d.nodes() => [{id, kind, shape}]。凡例 [data-testid="legend-3d"] の行は [data-kind]（種別名）。
+  - ズーム: [data-testid="semantic-zoom"][data-scale][data-level=overview|mid|detail], window.hveView.setScale/getState。
+  - 3D: window.__hve3d.nodes() => [{id, kind, shape}]。凡例 [data-testid="legend-3d"] の行は [data-kind]（種別名）。
     3D の根要素は [data-style=engineering|entertainment]、有効な演出は data-fx（空白またはカンマ区切り）。
   - 演出スタイル切替: [data-testid="style-toggle"][data-current=engineering|entertainment]、ボタンは [data-style-value]。
 """
@@ -128,10 +128,10 @@ def test_ac368_entities_screen_follows_header_mode(pg):
         assert _reason(pg, btn3)  # 対応しないなら理由が必要
         return
     btn3.click()
-    pg.wait_for_function("() => window.__eabk3d !== undefined || document.querySelector('[data-testid=\"header-dim-toggle\"]').dataset.current !== '3d'")
+    pg.wait_for_function("() => window.__hve3d !== undefined || document.querySelector('[data-testid=\"header-dim-toggle\"]').dataset.current !== '3d'")
     _skip_if_3d_unavailable(pg)
     assert _cur(pg) == "3d"
-    assert pg.evaluate("() => !!window.__eabk3d")
+    assert pg.evaluate("() => !!window.__hve3d")
     pg.locator(f'{HDR} [data-dim="2d"]').click()
     expect(pg.locator(HDR)).to_have_attribute("data-current", "2d")
 
@@ -143,9 +143,9 @@ def test_ac368_entities_screen_follows_header_mode(pg):
 def test_ac371_header_switch_keeps_zoom_level_and_selection(pg, route, scale, level):
     _go(pg, route)
     pg.wait_for_selector('[data-testid="semantic-zoom"][data-ready="true"]')
-    pg.evaluate("s => window.eabkView.setScale(s)", scale)
+    pg.evaluate("s => window.hveView.setScale(s)", scale)
     pg.wait_for_function("l => document.querySelector('[data-testid=\"semantic-zoom\"]').dataset.level === l", arg=level)
-    before = pg.evaluate("() => window.eabkView.getState()")
+    before = pg.evaluate("() => window.hveView.getState()")
     target = "注文"
     assert target in before["entities"]
     for to in ("3d", "2d"):
@@ -153,7 +153,7 @@ def test_ac371_header_switch_keeps_zoom_level_and_selection(pg, route, scale, le
         pg.wait_for_selector('[data-testid="semantic-zoom"][data-ready="true"]')
         _skip_if_3d_unavailable(pg)
         assert pg.locator('[data-testid="semantic-zoom"]').get_attribute("data-level") == level, (to, level)
-        st = pg.evaluate("() => window.eabkView.getState()")
+        st = pg.evaluate("() => window.hveView.getState()")
         assert target in st["entities"], f"{to} 切替後に対象 {target} が画面内にない"
 
 
@@ -161,20 +161,20 @@ def test_ac371_header_switch_keeps_zoom_level_and_selection(pg, route, scale, le
 def test_ac371_overview_level_stays_overview_and_entities_not_lost_after_switch(pg):
     _go(pg, "map2d")
     pg.wait_for_selector('[data-testid="semantic-zoom"][data-ready="true"]')
-    pg.evaluate("() => window.eabkView.setScale(1)")
+    pg.evaluate("() => window.hveView.setScale(1)")
     pg.locator(f'{HDR} [data-dim="3d"]').click()
     pg.wait_for_selector('[data-testid="semantic-zoom"][data-ready="true"]')
     _skip_if_3d_unavailable(pg)
     assert pg.locator('[data-testid="semantic-zoom"]').get_attribute("data-level") == "overview"
-    covered = {e for c in pg.evaluate("() => window.eabkView.getState()")["clusters"] for e in c["entities"]}
+    covered = {e for c in pg.evaluate("() => window.hveView.getState()")["clusters"] for e in c["entities"]}
     assert covered == {"注文", "顧客", "商品", "在庫"}
 
 
 # ============================================================================ AC-374 / AC-375
 def _open3d(pg3):
     _go(pg3, "map3d")
-    pg3.wait_for_function("() => window.__eabk3d && window.__eabk3d.nodes().length > 0", timeout=15000)
-    return pg3.evaluate("() => window.__eabk3d.nodes()")
+    pg3.wait_for_function("() => window.__hve3d && window.__hve3d.nodes().length > 0", timeout=15000)
+    return pg3.evaluate("() => window.__hve3d.nodes()")
 
 
 # FR-1068 AC-374: 3D のノードが {id, kind, shape} を返し、2 種類以上の種別が異なる shape を持つ
@@ -277,7 +277,7 @@ def test_ac379_engineering_has_no_fx_and_entertainment_has_two_or_more(pg3):
 # FR-1069 AC-379: どちらのスタイルでも要素・関係・ラベルの内容は同じ
 def test_ac379_content_is_identical_in_both_styles(pg3):
     def snap():
-        nodes = sorted((n["id"], n["kind"]) for n in pg3.evaluate("() => window.__eabk3d.nodes()"))
+        nodes = sorted((n["id"], n["kind"]) for n in pg3.evaluate("() => window.__hve3d.nodes()"))
         legend = sorted(pg3.locator('[data-testid="legend-3d"] [data-kind]').evaluate_all("els => els.map(e => e.dataset.kind)"))
         return nodes, legend
     _open3d(pg3)

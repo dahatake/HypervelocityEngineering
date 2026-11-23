@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""uninstall.py - remove the Enterprise App Build Kit (EABK), installed by any version, from a git repository.
+"""uninstall.py - remove the Enterprise App Build Kit (HVE), installed by any version, from a git repository.
 
 Standard library only (Python 3.9+). Needs tools/uninstall-catalog.json next to it (or --catalog); the one-command
 wrappers tools/uninstall.ps1 / tools/uninstall.sh download both files, so it works in any repository:
 
   python tools/uninstall.py --target <repo> [--dry-run]   # remove the toolkit files, blocks and manifests
   python tools/uninstall.py --target <repo> --purge        # also the management data, config, /work, appended lines,
-                                                           # backups: nothing of EABK remains
+                                                           # backups: nothing of HVE remains
   python tools/uninstall.py --target <repo> --runs         # also the worktrees and merged run/* branches of the old
                                                            # conductor (otherwise only reported)
 
@@ -486,7 +486,7 @@ def main(argv=None) -> int:
     print(f"\nEnterprise App Build Kit (catalog {cat.get('toolkit_version')}, {cat.get('installer_versions')} installer versions): "
           f"{mode} {target}  changes={len(changes)}")
     if not u.actions:
-        print("EABK の痕跡はありません。")
+        print("HVE の痕跡はありません。")
     if not args.purge:
         print("残したもの: 管理データ（docs/*・台帳）・設定・/work・.gitignore と .gitattributes の追記・バックアップ（すべて消すには --purge）")
     if any(k in ("RUN-WORKTREE", "RUN-BRANCH") for k, _ in u.actions):
@@ -496,7 +496,7 @@ def main(argv=None) -> int:
     if args.dry_run:
         return 0
     if u.residue:
-        print(f"\nRESIDUE: EABK の痕跡が {len(u.residue)} 件残っています（変更されたファイルなど。内容を確かめて手で削除するか、--force）:")
+        print(f"\nRESIDUE: HVE の痕跡が {len(u.residue)} 件残っています（変更されたファイルなど。内容を確かめて手で削除するか、--force）:")
         for r in u.residue:
             print(f"  {r}")
         return 1

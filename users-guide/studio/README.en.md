@@ -2,9 +2,9 @@
 
 # HVE Studio User Guide (Part 2)
 
-The full name is **Hypervelocity Engineering Studio**, formerly EABK Studio. The folder moved from `EABK-Studio/` to `HVE-Studio/`, and the root launchers from `start-eabk-studio.*` to `start-hve-studio.*`. Saved display settings keep working. In a repository updated from an older version, the installer reports the leftover `EABK-Studio/` as orphaned files; `--clean` removes them.
+The full name is **Hypervelocity Engineering Studio**, formerly HVE Studio. The folder moved from `HVE-Studio/` to `HVE-Studio/`, and the root launchers from `start-hve-studio.*` to `start-hve-studio.*`. Saved display settings keep working. In a repository updated from an older version, the installer reports the leftover `HVE-Studio/` as orphaned files; `--clean` removes them.
 
-This folder is Part 2 of the [EABK User Guide](../README.en.md) (EABK itself is chapters 1–11 in Part 1; the chapters in this part are S1–S9). HVE Studio is an app that runs only on your own computer and lets you browse the "record of requirements, catalog, and tests" managed by EABK (the data layer) through **diagrams, tables, and search**. Even if you can't read code, you can see "what we decided to build," "how far it has been built," and "where each component, piece of data, and API lives."
+This folder is Part 2 of the [HVE User Guide](../README.en.md) (HVE itself is chapters 1–11 in Part 1; the chapters in this part are S1–S9). HVE Studio is an app that runs only on your own computer and lets you browse the "record of requirements, catalog, and tests" managed by HVE (the data layer) through **diagrams, tables, and search**. Even if you can't read code, you can see "what we decided to build," "how far it has been built," and "where each component, piece of data, and API lives."
 
 > **New here? Start with [S9 Visual tour](09-visual-tour.en.md).** It explains the layout and each screen, one at a time, with figures. The yellow **"New here?"** button at the top right of the screen also starts a tour of the current screen.
 >
@@ -34,7 +34,7 @@ You can also switch roles at any time with the `Product Manager`, `Architect`, a
 | S8 | [08-data-reference.en.md](08-data-reference.en.md) | Which screen reads what from which file, and how it calculates |
 | S4 | [04-troubleshooting.en.md](04-troubleshooting.en.md) | When things don't work (`--check`) and glossary |
 
-This guide lives in `users-guide/studio/` in the distribution source, and in `EABK-docs/studio/` in a repository where EABK was installed with `tools/install.py`. Technical specifications are in [HVE-Studio/README.md](../../HVE-Studio/README.md). The images are examples made by reading the data of the repository that built the tool itself (capture conditions are in [screen-images.json](screen-images.json); re-capture with `capture-screens.py`).
+This guide lives in `users-guide/studio/` in the distribution source, and in `HVE-docs/studio/` in a repository where HVE was installed with `tools/install.py`. Technical specifications are in [HVE-Studio/README.md](../../HVE-Studio/README.md). The images are examples made by reading the data of the repository that built the tool itself (capture conditions are in [screen-images.json](screen-images.json); re-capture with `capture-screens.py`).
 
 ## Things to know first
 

@@ -1,4 +1,4 @@
-"""HVE Studio: reads the EABK data layer of any repository and builds one model.
+"""HVE Studio: reads the HVE data layer of any repository and builds one model.
 
 Declared management data remains authoritative. Local Git files supplement it
 with a read-only inventory, explicit references and task sources.
@@ -29,7 +29,7 @@ DEFAULT_FILES = {
 }
 CONFIG_CANDIDATES = ("scripts/ebak.config.json", "scripts/hve.config.json")
 
-# Short numbers (FR-01, NFR-11) appear in PRDs of repositories without EABK; "FR-10xx" placeholders are not IDs.
+# Short numbers (FR-01, NFR-11) appear in PRDs of repositories without HVE; "FR-10xx" placeholders are not IDs.
 REQ_ID = r"(?:FR-\d+(?![A-Za-z0-9])|FR-[A-Z][A-Z0-9_-]*|NFR-[A-Z0-9]+-\d{2,}|NFR-\d+(?![A-Za-z0-9]))"
 AC_ID = r"AC-(?:\d+|[A-Z][A-Z0-9_-]*)"
 AC_TABLE_KEYS = {"AC", "ACID", "AC-ID", "受入基準ID", "受入基準", "ID"}
@@ -318,7 +318,7 @@ def find_root(start: Path) -> Path:
     return start
 
 
-# ------------------------------------------------------------------ code mode (a repository without EABK)
+# ------------------------------------------------------------------ code mode (a repository without HVE)
 # Explicit requirement definitions and references supplement, but never override, management records.
 CODE_EXTS = repo_scan.SOURCE_EXTS
 SKIP_DIRS = repo_scan.SKIP_DIRS
@@ -474,7 +474,7 @@ def data_layer_report(root: Path) -> dict:
     return {
         "root": str(root),
         "ok": not model["meta"].get("error"),
-        "mode": model["meta"].get("mode", "eabk"),
+        "mode": model["meta"].get("mode", "hve"),
         "derivedFrom": model["meta"].get("derivedFrom"),
         "files": entries,
         "boundaryFiles": len(list(rdir.glob("*.md"))) if rdir.is_dir() else 0,
@@ -911,7 +911,7 @@ def build_entities(root: Path, warnings: list[str]) -> dict:
             sd = sys.dont_write_bytecode
             sys.dont_write_bytecode = True
             try:
-                spec = importlib.util.spec_from_file_location("eabk_entities_" + str(abs(hash(str(path)))), path)
+                spec = importlib.util.spec_from_file_location("hve_entities_" + str(abs(hash(str(path)))), path)
                 mod = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(mod)
                 cfg = mod.h.load_config(root)
@@ -1182,7 +1182,7 @@ def build_model(root: Path, progress=None, inv: repo_scan.Inventory | None = Non
             docs.append(parse_document(p, f"{files['requirements_dir']}/{p.name}"))
     cat_doc = parse_document(cat_path, files["catalog"]) if cat_path.is_file() else None
     model["meta"]["files"] = {k: (v if (root / v).exists() else None) for k, v in files.items()}
-    model["meta"]["mode"] = "eabk"
+    model["meta"]["mode"] = "hve"
     reqs: OrderedDict[str, dict] = OrderedDict()
     derived = synthesize_from_code(root, scan) if scan is not None else None
     if not has_data_layer(root):

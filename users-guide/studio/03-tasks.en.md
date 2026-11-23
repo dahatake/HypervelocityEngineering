@@ -19,7 +19,7 @@ In the goal tree (Diagrams), look at the colors of each goal's requirements. Cli
 
 ## I want to find everything that's "stalled"
 - Click "BLOCKED requirements" on the Dashboard → they are highlighted on the map.
-- In the "Questionnaire" table, filter for questions whose status is "Unanswered." Once the answers are decided, the stalled requirements can move forward (ask EABK's agent to record the answers).
+- In the "Questionnaire" table, filter for questions whose status is "Unanswered." Once the answers are decided, the stalled requirements can move forward (ask HVE's agent to record the answers).
 - In the "Audit findings" table, check the unresolved findings.
 
 ## I want to see what's awaiting approval (AI proposals)

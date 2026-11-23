@@ -6,7 +6,7 @@ Enterprise App Build Kit の版の付け方と、版を上げる手順（配布�
 
 ## 9.1 版の規則
 
-- 版は [Semantic Versioning](https://semver.org/lang/ja/)（`MAJOR.MINOR.PATCH`）に従います。現在の版は **0.6.0**（EABK Lite）です。
+- 版は [Semantic Versioning](https://semver.org/lang/ja/)（`MAJOR.MINOR.PATCH`）に従います。現在の版は **0.6.0**（HVE Lite）です。
 - 版の正本は `scripts/ebaklib.py` の `TOOLKIT_VERSION` です。インストーラ（`tools/install.py`）と `.github/ebak-toolkit.json` の記録は、すべてここから読みます。ほかの場所に版を書き写しません。
 - 変更履歴は、リポジトリ直下の [CHANGELOG.md](../CHANGELOG.md) に書きます。
 - 1.0.0 になるまでは、MINOR の更新で互換性のない変更が入ることがあります。
@@ -30,7 +30,7 @@ Enterprise App Build Kit の版の付け方と、版を上げる手順（配布�
    ```
    `TOOLKIT_VERSION` が書き換わり、`CHANGELOG.md` の `[Unreleased]` の下に新しい版の見出しが入ります。引数なしで実行すると、現在の版を表示するだけです。
 4. `CHANGELOG.md` で、`[Unreleased]` に書いた内容を新しい版の見出しの下へ移します。
-5. 配布物（ファイル）を追加・改名・削除した場合は、`tools/install.py` の `MANAGED`・`TEMPLATES` と、この `users-guide/` を合わせて直します。`users-guide/` の全ファイルは `MANAGED` に列挙し、導入先では `EABK-docs/` に保存されます（導入先の `users-guide/` は編集しません）。
+5. 配布物（ファイル）を追加・改名・削除した場合は、`tools/install.py` の `MANAGED`・`TEMPLATES` と、この `users-guide/` を合わせて直します。`users-guide/` の全ファイルは `MANAGED` に列挙し、導入先では `HVE-docs/` に保存されます（導入先の `users-guide/` は編集しません）。
 6. 版を確認し、commit してタグを付けます。
    ```bash
    python tools/install.py --version     # 例: 0.4.0

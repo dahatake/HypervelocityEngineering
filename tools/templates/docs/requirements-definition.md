@@ -2,7 +2,7 @@
 
 <!--
 この文書は、このアプリの要求の唯一の正本です。振る舞いを変える人が、同じ変更の中で更新します（手順は skill `requirement-definition`）。
-書式の規則は EABK-docs/03-requirements-format.md と .github/skills/requirement-definition/SKILL.md を参照します。
+書式の規則は HVE-docs/03-requirements-format.md と .github/skills/requirement-definition/SKILL.md を参照します。
 ID（FR・NFR・AC・Q・PARAM）は `python scripts/next-id.py <種別>` でだけ採番します（複数の人・PC で並行しても重複させないため）。
 -->
 

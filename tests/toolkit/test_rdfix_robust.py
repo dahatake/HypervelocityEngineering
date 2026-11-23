@@ -291,7 +291,7 @@ def test_clean_data_layer_one_inspection_zero_writes(template, tmp_path, monkeyp
     assert snapshot(r) == before
 
 
-# NFR-PERF-005 AC-254（EABK 本体の管理データでの 3 回の中央値）
+# NFR-PERF-005 AC-254（HVE 本体の管理データでの 3 回の中央値）
 def test_check_of_this_repository_median_within_limit():
     times = []
     for _ in range(3):

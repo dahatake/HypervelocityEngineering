@@ -81,10 +81,10 @@ def _open(studio, lang=None, init=None, reduced=False):
     page.goto(f"{url}/#/map3d")
     page.wait_for_load_state("networkidle")
     if lang:
-        page.evaluate("l => localStorage.setItem('eabk-studio.lang', l)", lang)
+        page.evaluate("l => localStorage.setItem('hve-studio.lang', l)", lang)
         page.reload()
         page.wait_for_load_state("networkidle")
-    page.wait_for_function("() => window.__eabk3d && window.__eabk3d.nodes().length > 0", timeout=20000)
+    page.wait_for_function("() => window.__hve3d && window.__hve3d.nodes().length > 0", timeout=20000)
     return page
 
 
@@ -126,14 +126,14 @@ def test_ac377_unknown_kind_uses_default_shape_and_other_label(studio, lang, oth
 def test_ac380_style_persists_stores_only_name_and_keeps_state(studio):
     page = _open(studio, reduced=True)   # 自動回転なし・初回の飛行が終わってから比べる
     page.wait_for_timeout(3000)
-    before = page.evaluate("() => JSON.stringify(window.eabkView.getState().map3d.points.map(p => [p.id, Math.round(p.x), Math.round(p.y)]))")
+    before = page.evaluate("() => JSON.stringify(window.hveView.getState().map3d.points.map(p => [p.id, Math.round(p.x), Math.round(p.y)]))")
     page.locator('[data-testid="style-toggle"] [data-style-value="entertainment"]').click()
-    after = page.evaluate("() => JSON.stringify(window.eabkView.getState().map3d.points.map(p => [p.id, Math.round(p.x), Math.round(p.y)]))")
+    after = page.evaluate("() => JSON.stringify(window.hveView.getState().map3d.points.map(p => [p.id, Math.round(p.x), Math.round(p.y)]))")
     assert after == before, "switching style must not move the camera or rebuild the scene"
     stored = page.evaluate("() => Object.entries(localStorage).filter(([k]) => /style3d/.test(k))")
-    assert stored == [["eabk-studio.style3d", "entertainment"]]
+    assert stored == [["hve-studio.style3d", "entertainment"]]
     page.reload()
-    page.wait_for_function("() => window.__eabk3d && window.__eabk3d.nodes().length > 0", timeout=20000)
+    page.wait_for_function("() => window.__hve3d && window.__hve3d.nodes().length > 0", timeout=20000)
     assert page.locator('[data-testid="style-toggle"]').get_attribute("data-current") == "entertainment"
     page.context.close()
 
@@ -141,8 +141,8 @@ def test_ac380_style_persists_stores_only_name_and_keeps_state(studio):
 # FR-1069 AC-380: where storage is unavailable the view still works with Software Engineering and no error.
 def test_ac380_storage_unavailable_falls_back_to_engineering(studio):
     init = ("const g = Storage.prototype.getItem, s = Storage.prototype.setItem;"
-            "Storage.prototype.getItem = function (k) { if (k === 'eabk-studio.style3d') throw new Error('denied'); return g.call(this, k); };"
-            "Storage.prototype.setItem = function (k, v) { if (k === 'eabk-studio.style3d') throw new Error('denied'); return s.call(this, k, v); };")
+            "Storage.prototype.getItem = function (k) { if (k === 'hve-studio.style3d') throw new Error('denied'); return g.call(this, k); };"
+            "Storage.prototype.setItem = function (k, v) { if (k === 'hve-studio.style3d') throw new Error('denied'); return s.call(this, k, v); };")
     page = _open(studio, init=init)
     assert page.locator('[data-testid="style-toggle"]').get_attribute("data-current") == "engineering"
     page.locator('[data-testid="style-toggle"] [data-style-value="entertainment"]').click()
@@ -154,4 +154,4 @@ def test_ac380_storage_unavailable_falls_back_to_engineering(studio):
 def test_canvas_entity_3d_has_hook_legend_and_style_toggle():
     from test_links_wrap_status_ui import studio as _unused  # noqa: F401  (fixture module is imported for make_zoom)
     src = (WEB / "js" / "sz3d.js").read_text(encoding="utf-8")
-    assert "window.__eabk3d" in src and "shapes3d.js" in src and "SHAPE_OF" not in src
+    assert "window.__hve3d" in src and "shapes3d.js" in src and "SHAPE_OF" not in src

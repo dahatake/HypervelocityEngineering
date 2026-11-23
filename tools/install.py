@@ -10,7 +10,7 @@ From a local clone:
   python tools/install.py --target <repo> --purge        # uninstall + remove docs, ledger, config, /work, appended lines
   (one command: tools/uninstall.ps1 / tools/uninstall.sh, same options as install.ps1 / install.sh)
 
-What it does (idempotent) - EABK Lite: rules + data layer + deterministic checks, no orchestration:
+What it does (idempotent) - HVE Lite: rules + data layer + deterministic checks, no orchestration:
   * copies the managed files (.github/agents/rd-auditor, .github/skills, .github/workflows/ebak-verify.yml (check only),
     scripts/*, HVE-Studio/ = the data-layer viewer with its guides
     and screenshots) and updates them on re-run unless you modified them locally;
@@ -99,7 +99,7 @@ MANAGED = [
     "users-guide/images/fig-flow.en.svg",
     "users-guide/images/fig-quickstart.svg",
     "users-guide/images/fig-quickstart.en.svg",
-    "HVE-Studio/eabk_model.py",
+    "HVE-Studio/hve_model.py",
     "HVE-Studio/managed_data.py",
     "HVE-Studio/repo_scan.py",
     "HVE-Studio/code_graph.py",
@@ -223,8 +223,8 @@ MANAGED = [
     "users-guide/studio/images/structure.png",
     "users-guide/studio/images/tables.png",
 ]
-# The source's users-guide/ is installed as EABK-docs/ in the target (the target's own users-guide/ is never touched).
-GUIDE_SRC, GUIDE_DEST = "users-guide/", "EABK-docs/"
+# The source's users-guide/ is installed as HVE-docs/ in the target (the target's own users-guide/ is never touched).
+GUIDE_SRC, GUIDE_DEST = "users-guide/", "HVE-docs/"
 
 
 def dest_of(rel: str) -> str:
@@ -729,10 +729,10 @@ def main(argv=None) -> int:
     print("  2. scripts/ebak.config.json の verify.commands に、ビルド・静的検査・テストのコマンドを登録します")
     print("  3. いつもの Copilot（既定のエージェント）に、ふだんどおり依頼します。AGENTS.md の規則に従って、")
     print("     要求定義書・カタログ・テストが同じ変更の中で更新され、push すると CI の ebak-verify が同じ検査をします")
-    print("     （節目には custom agent `rd-auditor` に意味の監査を頼めます。手順: EABK-docs/06-quality-gates.md）")
+    print("     （節目には custom agent `rd-auditor` に意味の監査を頼めます。手順: HVE-docs/06-quality-gates.md）")
     print("  4. （任意）要求・カタログ・試験を図と表で見るには、HVE Studio を起動します（読み取り専用。画面上部の作業ステップに沿って使います）:")
     print("     python HVE-Studio/studio.py --check            # データ層が読めるか確認")
-    print("     python HVE-Studio/studio.py                    # ブラウザーが開きます。ガイド: EABK-docs/studio/README.md")
+    print("     python HVE-Studio/studio.py                    # ブラウザーが開きます。ガイド: HVE-docs/studio/README.md")
     return 0
 
 

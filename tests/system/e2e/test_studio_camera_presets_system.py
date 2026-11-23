@@ -8,7 +8,7 @@ PROVISIONAL CONTRACT (仮置き。実装者が確認し、食い違えば CONFLI
   - プリセット選択 [data-testid="camera-presets"]、各項目 [data-preset=<id>]（button/option/radio のいずれでも可。クリックで選択）。
     現在値は [data-camera-preset] 属性（camera-presets 自身か 3D 領域のどちらか。ページ内で最初の要素を読む）。
   - 詳細表示 [data-testid="camera-detail"] に data-shot / data-angle / data-movement / data-motion。
-  - window.__eabk3d.camera() は {preset, shot, angle, movement, motion} を返す（movement は "Static" 等の語彙）。
+  - window.__hve3d.camera() は {preset, shot, angle, movement, motion} を返す（movement は "Static" 等の語彙）。
   - 自動動作の状態は [data-camera-auto="true|false"]（ページ内で最初の要素）。動きの軽減は [data-reduced-motion="true"]。
   - 「自動に戻す」操作の hook は AC にないため、このファイルでは「同じプリセットを再度選ぶ」だけを使う。
   - 3D の描画先は canvas。手動操作は canvas 上のドラッグ・ホイール、およびキー（矢印）。
@@ -62,7 +62,7 @@ def _auto(page):
 
 
 def _camera(page):
-    return page.evaluate("() => window.__eabk3d.camera()")
+    return page.evaluate("() => window.__hve3d.camera()")
 
 
 def _pick(page, preset):

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""adopt.py - bring an existing application (code, design documents, tests) under EABK.
+"""adopt.py - bring an existing application (code, design documents, tests) under HVE.
 
 Three layers, each with a different trust level (see users-guide/10-adopting-existing-apps.md):
   1. Facts       `scan`    deterministic inventory of the repository (no LLM). docs/baseline/inventory.{json,md}
@@ -63,7 +63,7 @@ ENTRY_NAMES = {"main.py", "__main__.py", "app.py", "wsgi.py", "asgi.py", "manage
 SKIP_DIRS = {"node_modules", "vendor", "dist", "build", "target", "bin", "obj", "__pycache__", ".venv", "venv",
              ".git", "site-packages", ".idea", ".vscode", "coverage"}
 GENERIC_DIRS = {"src", "lib", "app", "apps", "main", "java", "source", "pkg", "internal", "cmd", "packages", "services"}
-TOOLKIT_PREFIXES = ("scripts/hooks/", "tools/templates/", ".github/agents/", ".github/skills/", ".github/hooks/", ".github/workflows/ebak-", "HVE-Studio/", "EABK-Studio/",
+TOOLKIT_PREFIXES = ("scripts/hooks/", "tools/templates/", ".github/agents/", ".github/skills/", ".github/hooks/", ".github/workflows/ebak-", "HVE-Studio/", "HVE-Studio/",
                     "tests/system/", "tests/toolkit/", "work/", f"{BASELINE}/")
 TOOLKIT_FILES = {"AGENTS.md", ".github/copilot-instructions.md", ".github/ebak-toolkit.json", "docs/catalog.md",
                  "docs/id-registry.md", "docs/requirements-definition.md"}
@@ -529,7 +529,7 @@ def cmd_request(root: Path, a) -> int:
         print("NOTHING 回収していないまとまりがありません")
         return 0
     design = [f["path"] for f in inv["files"] if f["role"] == "design"][:30]
-    L = ["<request>", "skill `adopt-existing` に従い、既存のアプリを EABK の管理下に入れてください（逆生成の要求の仮説・出典と証跡・現状の挙動の固定）。",
+    L = ["<request>", "skill `adopt-existing` に従い、既存のアプリを HVE の管理下に入れてください（逆生成の要求の仮説・出典と証跡・現状の挙動の固定）。",
          "新機能・変更・リファクタリングはしません。コードを変更せず、要求の決定状態は必ず「承認待ち」（出自: 逆生成）にします。",
          "今回回収するまとまり（変更の多さ × 規模の順。`docs/baseline/inventory.md` に根拠があります）:"]
     for c in todo:

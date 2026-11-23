@@ -1,11 +1,11 @@
 # HVE Studio
 
-正式名称は **Hypervelocity Engineering Studio** です。旧名は EABK Studio です。フォルダーは `EABK-Studio/` から `HVE-Studio/` に、ルートの起動スクリプトは `start-eabk-studio.*` から `start-hve-studio.*` に変わりました。ブラウザーに保存した表示設定は引き続き使えます。
+正式名称は **Hypervelocity Engineering Studio** です。旧名は HVE Studio です。フォルダーは `HVE-Studio/` から `HVE-Studio/` に、ルートの起動スクリプトは `start-hve-studio.*` から `start-hve-studio.*` に変わりました。ブラウザーに保存した表示設定は引き続き使えます。
 
-EABK Lite のデータ層（要求定義書・カタログ・System Test の台帳・ID 台帳）を、Product Manager の作業の順番（作業ステップ）に沿って見て回る、ローカル専用の Web アプリです。
-EABK を入れた**どのリポジトリでも**動きます（このリポジトリに依存しません）。EABK を使っていない git リポジトリも、コードと PRD から読み取りだけで導出して表示します（下の「EABK なしで使う（コードのモード）」）。UI は日本語・英語を右上の `JA | EN` で切り替えます。
+HVE Lite のデータ層（要求定義書・カタログ・System Test の台帳・ID 台帳）を、Product Manager の作業の順番（作業ステップ）に沿って見て回る、ローカル専用の Web アプリです。
+HVE を入れた**どのリポジトリでも**動きます（このリポジトリに依存しません）。HVE を使っていない git リポジトリも、コードと PRD から読み取りだけで導出して表示します（下の「HVE なしで使う（コードのモード）」）。UI は日本語・英語を右上の `JA | EN` で切り替えます。
 
-*A local-only web app that lets a product manager explore the EABK Lite data layer (requirements, catalog, system-test ledger, ID registry) of **any** repository with EABK; a git repository without EABK is shown in read-only "code mode", derived from its code and PRD. The UI switches between Japanese and English with the `JA | EN` button.*
+*A local-only web app that lets a product manager explore the HVE Lite data layer (requirements, catalog, system-test ledger, ID registry) of **any** repository with HVE; a git repository without HVE is shown in read-only "code mode", derived from its code and PRD. The UI switches between Japanese and English with the `JA | EN` button.*
 
 > 初めての方は、目的に合うガイドから読んでください: [Product Manager](../users-guide/studio/05-product-manager.md)・[Architect](../users-guide/studio/06-architect.md)・[Software Engineer](../users-guide/studio/07-software-engineer.md)（索引は [users-guide/studio/README.md](../users-guide/studio/README.md)）。各画面が読むデータの一覧は [08-data-reference.md](../users-guide/studio/08-data-reference.md) です。`tools/install.py` で他のリポジトリへ入れると、これらのガイドも一緒に入ります。
 
@@ -22,7 +22,7 @@ python HVE-Studio/studio.py --check                           # データ層が�
 
 | オプション | 意味 |
 |---|---|
-| `--repo PATH` | 対象リポジトリ。EABK は不要です。親へたどって最寄りの Git または管理データのルートを使い、入れ子の Git では親の管理データへ移動しません。省略時は、現在のフォルダーにデータ層があるか Git ならそこ、それ以外は Studio 自身のリポジトリです |
+| `--repo PATH` | 対象リポジトリ。HVE は不要です。親へたどって最寄りの Git または管理データのルートを使い、入れ子の Git では親の管理データへ移動しません。省略時は、現在のフォルダーにデータ層があるか Git ならそこ、それ以外は Studio 自身のリポジトリです |
 | `--port N` | 待ち受けポート（既定 8765。使用中なら次の番号） |
 | `--no-open` | ブラウザーを自動で開かない |
 | `--no-remote` | GitHub の Issue・PR・Actions を gh で読まない（INT-002）。生成 AI の設定（INT-003・INT-004）には影響しません |
@@ -104,17 +104,17 @@ python HVE-Studio/studio.py --repo C:\path\to\your-repo --data-status
 python HVE-Studio/studio.py --repo C:\path\to\your-repo --delete-data
 ```
 
-- 保存先は対象の `.hve-studio/managed-data.json`。既存の要求文書・ソース・テストなどの解析結果で、**EABK の要求正本や合格した試験の自動作成ではありません**。原本・隣接ファイルは変更・削除しません。
+- 保存先は対象の `.hve-studio/managed-data.json`。既存の要求文書・ソース・テストなどの解析結果で、**HVE の要求正本や合格した試験の自動作成ではありません**。原本・隣接ファイルは変更・削除しません。
 - `tools/install.py` の実際の導入・更新の最後にも、進捗を表示して同期します。`--skip-verify`・`--no-repair` でも同期し、`--dry-run`・`--check` は作成しません。同期失敗は exit 1 で知らせ、導入済み toolkit は残します。
 - 起動・閲覧・リポジトリ切替だけでは作成しません。参照だけの対象には、Studio をそのリポジトリへインストールせず、外から `--repo` で指定できます。
 - 原本が変われば「再同期が必要」と表示し、古い生成データでなく現在の原本を表示します。削除後も閲覧を続けられます。GitHub の取得結果と Studio 側のタスク編集は生成ファイルに含めません。
 - 外来・編集済みのファイルやリンクは上書き・削除せず、理由を表示します。中断後の `.hve-studio/.operation-lock` が残った場合は、他の同期が動作していないことと内容を確認してから、そのロックだけを手動で除いて再試行してください。
 
-*Installation and explicit CLI/UI actions create a disposable `.hve-studio/managed-data.json` snapshot with real progress. The global banner always shows its presence, path and state. Delete removes only an intact Studio-owned snapshot, not requirements or code; browsing continues from live sources. Viewing alone creates nothing. This is not a migration into approved EABK requirements.*
+*Installation and explicit CLI/UI actions create a disposable `.hve-studio/managed-data.json` snapshot with real progress. The global banner always shows its presence, path and state. Delete removes only an intact Studio-owned snapshot, not requirements or code; browsing continues from live sources. Viewing alone creates nothing. This is not a migration into approved HVE requirements.*
 
-### EABK なしで使う（コードのモード） / Without EABK (code mode)
+### HVE なしで使う（コードのモード） / Without HVE (code mode)
 
-EABK を入れていない git リポジトリも見られます（FR-1086）。HVE を clone したフォルダーから実行します。
+HVE を入れていない git リポジトリも見られます（FR-1086）。HVE を clone したフォルダーから実行します。
 
 ```powershell
 python HVE-Studio/studio.py --repo C:\path\to\any-git-repo --check   # mode: code (...) の行で、導出できた件数を確認
@@ -154,7 +154,7 @@ python HVE-Studio/studio.py --repo C:\path\to\any-git-repo
 | ② 実装状態 | 承認済みの要求ごとの未着手・実装登録済み・試験 pass 済み（目的別・優先度別・かんばん・一覧表） |
 | ③ マップ | 目的 → 要求 → データ・共通部品・API・テーブル → ソースファイル → 試験ケースのつながりをたどる関係のグラフ。**2D / 3D / Graph を切替アイコンで選べます**（2D: 鳥観図からズーム、ツアー、ミニマップ、色の切替。3D: 層にした立体図、ドラッグで回転、ホイールでズーム、ツアー、自動回転。Graph: 関係の図）。。旧「2D マップ」「3D マップ」で、`#/map2d`・`#/map3d` は別名として残ります |
 | ④ 図式 | コンテキスト図・目的ツリー・状態遷移図・データ関連図・コンポーネント図・実装配置図（層 × コンポーネント、データ × コンポーネント、置き場、実行環境の見方を含む）。**どの図も 2D / 3D を切替アイコンで選べます**（`#/diagrams?kind=<ctx\|goals\|states\|entities\|components\|layers>&dim=<2d\|3d>`）。旧「配置」の `#/placement` は別名として残り、実装配置図へ移動します |
-| ⑤ エンティティ | `#/entities`。行をエンティティ、列を要求と利用シナリオにした対応表（作成・参照・更新・削除を記号と語で表示。絞り込み・並べ替え・CSV・テキスト表示）。見出しを選ぶと `#/entities?entity=<名前>` の詳細（説明・状態と遷移の条件・使う要求・利用シナリオ・管理テーブル・使うコンポーネント／API／共通部品・出典の位置）。エンティティが 0 件のリポジトリでは「エンティティなし」と案内します。導出は `scripts/entities.py` を再利用します。下部の「関係と列（意味的ズーム）」とマップ（関係か列があるとき最初に表示）で、倍率に応じてクラスター → エンティティと関係線 → 列の一覧（型・キー・参照先）に切り替わります（`semzoom.js`・`sz2d.js`・`sz3d.js`。可視範囲だけを描画。`window.eabkView.setScale / getState` を公開） |
+| ⑤ エンティティ | `#/entities`。行をエンティティ、列を要求と利用シナリオにした対応表（作成・参照・更新・削除を記号と語で表示。絞り込み・並べ替え・CSV・テキスト表示）。見出しを選ぶと `#/entities?entity=<名前>` の詳細（説明・状態と遷移の条件・使う要求・利用シナリオ・管理テーブル・使うコンポーネント／API／共通部品・出典の位置）。エンティティが 0 件のリポジトリでは「エンティティなし」と案内します。導出は `scripts/entities.py` を再利用します。下部の「関係と列（意味的ズーム）」とマップ（関係か列があるとき最初に表示）で、倍率に応じてクラスター → エンティティと関係線 → 列の一覧（型・キー・参照先）に切り替わります（`semzoom.js`・`sz2d.js`・`sz3d.js`。可視範囲だけを描画。`window.hveView.setScale / getState` を公開） |
 | ⑥ 外部連携 | 外部のアプリ・データとの連携（連携先・方向・方式・データ分類）の一覧と詳細。一覧と詳細の表示は FR-1042 で実装します（現在は項目の居場所と案内だけです） |
 | ⑦ ソースコード構造 | カタログに書かれたパスのツリーマップ。ファイルを選ぶと結び付く要求・部品・テスト。「関数どうしの関係を見る」から **フロアプラン**（`#/floorplan`、FR-1092）を開けます。Floorplan（Brewline のデモ）と同じ形の地図で、部品・ファイル・エンドポイントをカードにし、「使っているもの｜この中｜使われているもの」の 3 列と直交線で示します（配置は同梱の ELK）。ダブルクリックで中へ、Backspace・パンくず・ブラウザーの戻るで戻り、場所は `#/floorplan?v=&s=` で共有できます。右クリックメニュー、`/`・Ctrl+K の検索、F・+・−・P・Esc があり、ズームで説明が消えて題名が大きくなります。Health（秘密・CORS・認証確認の見つからないデータ変更エンドポイント・大きなファイル・使われないファイル。調べた範囲の件数つきで、「問題ではない」は保存）、Recent work（git の未コミットと直近のコミット）、Screens（画面ごとの裏側）、Flows と Start here（ナレーションつき）、質問欄（AI ではなく地図の線をたどって答える）があります。部品の境界は、`floorplan/architecture.json`（Floorplan と同じスキーマ）があれば読み、なければフォルダーから自動で分けます。コードは実行せず読み取りだけです（`GET /api/floorplan`）。HTML への書き出しと、AI による説明・質問は対象外です。もう一つの **ネットワーク表示**（`#/codegraph`、FR-1091）は、関数・メソッド・クラスの呼び出し・参照・継承を、ファイルごとにまとまる動く図で見られます（Canvas の力学レイアウト・ズーム・点のドラッグ・流れの動き・選択した点から広がる波紋・検索・キーボード用の一覧）。Python は `ast`、JS/TS は文字列とコメントを除いた本文を読み、解決できた関係だけを線にします。メソッド名が一意なときの名前一致は「推測」として別の線（既定は非表示）で、動的な呼び出しは推測しません。`GET /api/codegraph`（ローカル専用・読み取りのみ） |
 | ⑧ 表 | 元の行を 要求・設計・証跡・運用 の 4 グループの種別で一覧。セルの ID はリンク（未解決 ID は明示）。並べ替え・絞り込み・CSV |
@@ -211,5 +211,5 @@ Git リポジトリではソースの明示的な要求参照・import・TODO �
 
 - テスト（HVE のリポジトリだけ。`HVE-Studio/tests/` は導入先には入れません）: `python -m pytest HVE-Studio/tests -q`
 - 整合性保守: `整合性保守 / Maintenance` → 対象要求 → プレビュー → `確認して実行`
-- 構成: `studio.py`（サーバー）、`eabk_model.py`（データ層の読み取りとグラフ化）、`web/`（画面。ビルド不要の ES モジュール。`web/vendor/three.module.min.js` は three.js・MIT）
+- 構成: `studio.py`（サーバー）、`hve_model.py`（データ層の読み取りとグラフ化）、`web/`（画面。ビルド不要の ES モジュール。`web/vendor/three.module.min.js` は three.js・MIT）
 - 画面の文言は `web/js/i18n.js` の `ja` / `en` に追加します。

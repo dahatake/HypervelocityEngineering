@@ -79,7 +79,7 @@ def test_ac160_file_source_lists_match_only_sides_and_fuzzy(tmp_path):
     assert rows(out, "在庫 ≈ 在　庫（旧）", "cat.csv:4")  # 空白・全半角・括弧注記の違いは揺れ候補（一致ではない）
     assert not rows(out, "在庫 ⇔")
     assert rows(out, "商品", "企業カタログ: cat.csv:5")
-    assert out.index("一致:") < out.index("EABK のみ")
+    assert out.index("一致:") < out.index("HVE のみ")
 
 
 def test_ac160_similarity_threshold_from_param(tmp_path):
@@ -99,7 +99,7 @@ def test_ac160_json_and_markdown_sources(tmp_path, name, text):
     set_source(repo, name)
     out = run_entities(repo, "check").stdout
     assert rows(out, "注文 ⇔ 注文") and rows(out, "顧客 ⇔ 顧客")
-    assert rows(out, "在庫", "EABK:")
+    assert rows(out, "在庫", "HVE:")
 
 
 class _Handler(http.server.BaseHTTPRequestHandler):

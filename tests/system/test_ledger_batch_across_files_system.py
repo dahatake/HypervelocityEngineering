@@ -106,7 +106,7 @@ COMMANDS = [
 
 
 def _ledger_run(repo: Path, log: Path, *extra: str):
-    env = dict(os.environ, PYTHONUTF8="1", EABK_ALLOW_PRIMARY="1", FAKE_BROWSER_LOG=str(log))
+    env = dict(os.environ, PYTHONUTF8="1", HVE_ALLOW_PRIMARY="1", FAKE_BROWSER_LOG=str(log))
     for old in [log, *log.parent.glob(log.name + ".*")]:
         if old.exists():
             old.unlink()

@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-import eabk_model
+import hve_model
 
 DIRECTORY = ".hve-studio"
 FILENAME = "managed-data.json"
@@ -79,9 +79,9 @@ def inspect(root: Path, source_fingerprint: str | None = None) -> tuple[dict, di
         data = _read(root)
         if data is None:
             return result, None
-        fingerprint = source_fingerprint if source_fingerprint is not None else eabk_model.fingerprint(root)
+        fingerprint = source_fingerprint if source_fingerprint is not None else hve_model.fingerprint(root)
         current = (data.get("repo") == str(root) and data.get("sourceFingerprint") == fingerprint
-                   and data.get("studio") == eabk_model.STUDIO_VERSION)
+                   and data.get("studio") == hve_model.STUDIO_VERSION)
         result.update(state="current" if current else "stale", generatedAt=data.get("generatedAt"))
         return result, data["model"] if current else None
     except (OSError, DataError) as exc:
@@ -127,17 +127,17 @@ def sync(root: Path, progress=None) -> dict:
     with _exclusive(root) as path:
         original = path.read_bytes() if path.exists() else None
         _read(root)  # Only an intact file produced by Studio may be replaced.
-        inv = eabk_model.repo_scan.inventory(root)
-        before = eabk_model.fingerprint(root, inv)
+        inv = hve_model.repo_scan.inventory(root)
+        before = hve_model.fingerprint(root, inv)
         _progress(progress, "prepare", 1, 1)
-        model = eabk_model.build_model(root, progress=progress, inv=inv, source_fingerprint=before)
+        model = hve_model.build_model(root, progress=progress, inv=inv, source_fingerprint=before)
         if model["meta"].get("error"):
             raise DataError("no management data or local Git repository to analyze")
-        after = eabk_model.fingerprint(root)
+        after = hve_model.fingerprint(root)
         if before != after:
             raise DataError("repository changed during synchronization; retry")
         data = {"owner": OWNER, "schema": SCHEMA, "repo": str(root),
-                "studio": eabk_model.STUDIO_VERSION, "sourceFingerprint": after,
+                "studio": hve_model.STUDIO_VERSION, "sourceFingerprint": after,
                 "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"), "model": model}
         data["sha256"] = hashlib.sha256(_bytes(data)).hexdigest()
         _progress(progress, "write", 0, 1, str(path))
@@ -150,7 +150,7 @@ def sync(root: Path, progress=None) -> dict:
                 os.fsync(handle.fileno())
             _path(root)
             current = path.read_bytes() if path.exists() else None
-            if current != original or eabk_model.fingerprint(root) != after:
+            if current != original or hve_model.fingerprint(root) != after:
                 raise DataError("repository or generated data changed before saving; retry")
             os.replace(temp, path)
             temp = None

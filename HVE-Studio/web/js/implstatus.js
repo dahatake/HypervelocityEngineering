@@ -1,5 +1,5 @@
 // FR-1014: implementation-status screen (stacked progress bars + kanban + table).
-// Reads model.implStatus (computed by eabk_model.build_impl_status); never writes to the repository.
+// Reads model.implStatus (computed by hve_model.build_impl_status); never writes to the repository.
 import { t, onLang, lang } from './i18n.js';
 import { store } from './store.js';
 import { el } from './ui.js';

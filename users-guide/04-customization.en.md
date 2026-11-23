@@ -20,7 +20,7 @@ Keys you omit take the defaults from `DEFAULT_CONFIG` in `scripts/ebaklib.py`. K
 
 ## 4.1 Context you want on every request
 
-EABK Lite has no hooks and does not add a preamble automatically. If you want a standing preamble, put it in your own Copilot instructions (outside the `AGENTS.md` block, or in your per-user instructions).
+HVE Lite has no hooks and does not add a preamble automatically. If you want a standing preamble, put it in your own Copilot instructions (outside the `AGENTS.md` block, or in your per-user instructions).
 
 ## 4.2 Management-data paths (`management_files`)
 
@@ -41,7 +41,7 @@ You can change these to match your directory layout. After changing them, run `p
 | Key | Default | Meaning |
 |---|---|---|
 | `base_branch` | `main` | The branch that diff checks (CHK-12 and others) compare against. rd-auditor's diff audit also uses the diff with this branch |
-| `work.dir` | `work` | Where temporary files go (logs, evidence, results, audit results). Not tracked by git. EABK Lite does not delete `/work` automatically; delete it by hand when you no longer need it |
+| `work.dir` | `work` | Where temporary files go (logs, evidence, results, audit results). Not tracked by git. HVE Lite does not delete `/work` automatically; delete it by hand when you no longer need it |
 
 ## 4.4 Check scope (`checks`)
 
@@ -122,7 +122,7 @@ On a toolkit update, `tools/install.py` looks for wiring you added directly to `
 
 ## 4.8 Removed configuration keys (when updating from 0.5.x)
 
-In 0.6.0 (EABK Lite), the following run- and hook-based keys are gone. The installer does not rewrite an older version's settings. A normal update leaves these keys in place, but they are no longer read. To remove them, recreate the settings from defaults with `--clean` (clean install) or delete them by hand ([9.4](09-versioning.en.md#94-updating-from-an-older-version-clean-install)).
+In 0.6.0 (HVE Lite), the following run- and hook-based keys are gone. The installer does not rewrite an older version's settings. A normal update leaves these keys in place, but they are no longer read. To remove them, recreate the settings from defaults with `--clean` (clean install) or delete them by hand ([9.4](09-versioning.en.md#94-updating-from-an-older-version-clean-install)).
 
 | Removed key | Use in 0.5.x |
 |---|---|
@@ -143,15 +143,15 @@ The tools and skills of the MCP servers, plugins, and extensions you have set up
 
 - **Where to configure**: Per user (VS Code user settings, `~/.copilot/`, GitHub Copilot app **Customize** → **MCP**) or per repository (`.vscode/mcp.json`, GitHub repository settings). Do not put credentials in the repository; pass them through each user's sign-in or environment variables. The toolkit does not ship MCP server settings.
 - **Recording sources**: Facts obtained from internal information are recorded with their source in the source ledger (SRC-ID) of the requirements definition (skill `requirement-definition`). People without the same tools can follow the same information from the requirements definition alone.
-- **Changes to external systems**: EABK Lite does not block external changes (sending mail, creating tickets, creating resources, deploying). Copilot's usual confirmation (tool approval) decides.
+- **Changes to external systems**: HVE Lite does not block external changes (sending mail, creating tickets, creating resources, deploying). Copilot's usual confirmation (tool approval) decides.
 - **Restricting rd-auditor**: If you write `tools:` in the frontmatter of `.github/agents/rd-auditor.agent.md`, tools not listed (including MCP server tools) can no longer be used. To add them, list them in the form `<server name>/*`.
 
 ## 4.10 Changing rules, agents, and skills
 
 - **Rules**: The installer writes a rules block into `AGENTS.md` and `.github/copilot-instructions.md`, between `<!-- ebak-abk:begin -->` and `<!-- ebak-abk:end -->`. The text between the markers is rewritten on every update. Write your project's own rules outside the markers.
-- **Look of the screens**: EABK does not prescribe a design system. Write the one you want (for example "Fluent 2 for the web" or "follow the company brand guide") in the default constraints of the requirements definition or in your request.
+- **Look of the screens**: HVE does not prescribe a design system. Write the one you want (for example "Fluent 2 for the web" or "follow the company brand guide") in the default constraints of the requirements definition or in your request.
 - **Agents and skills**: You can edit `.github/agents/rd-auditor.agent.md` and `.github/skills/*/SKILL.md` directly. Re-running the installer does not overwrite locally modified files (`KEEP-LOCAL`). To take in a new version, check with `--dry-run`, then merge the diff by hand or use `--force` (which keeps `.ebak-backup-*`).
-- **Models**: EABK does not specify models. To pin rd-auditor to a model, write `model:` in its frontmatter.
+- **Models**: HVE does not specify models. To pin rd-auditor to a model, write `model:` in its frontmatter.
 
 ## 4.11 CI
 

@@ -36,14 +36,14 @@ def _open(studio, query="", lang="en", reduced=False):
     browser, url = studio
     ctx = browser.new_context(viewport={"width": 1500, "height": 900}, reduced_motion="reduce" if reduced else "no-preference")
     page = ctx.new_page()
-    page.add_init_script(f"localStorage.setItem('eabk-studio.lang','{lang}')")
+    page.add_init_script(f"localStorage.setItem('hve-studio.lang','{lang}')")
     page.goto(f"{url}/#/floorplan?tour=0{query}")
     page.wait_for_selector(CARD, timeout=90000)
     return page
 
 
 def _state(page):
-    return page.evaluate("() => window.eabkView.getState()")
+    return page.evaluate("() => window.hveView.getState()")
 
 
 def _card(page, key):
@@ -57,23 +57,23 @@ def test_ac510_overview_inside_brackets_and_history(studio):
     assert top["view"] == "" and top["cards"] >= 8 and page.locator(".fp-line").count() >= 3
     assert page.locator(f'{CARD}[data-type="node"]').count() >= 8
     _card(page, "n:server").dblclick()
-    page.wait_for_function("() => window.eabkView.getState().view === 'n:server'")
+    page.wait_for_function("() => window.hveView.getState().view === 'n:server'")
     labels = page.locator(".fp-bracket").all_inner_texts()
     assert any("Used by" in x for x in labels) and any("Inside Studio server" in x for x in labels) and any("Uses" in x for x in labels)
     assert page.locator(f"{CARD}.pill").count() >= 1 and "v=n%3Aserver" in page.url
     page.go_back()
-    page.wait_for_function("() => window.eabkView.getState().view === ''")
+    page.wait_for_function("() => window.hveView.getState().view === ''")
     page.go_forward()
-    page.wait_for_function("() => window.eabkView.getState().view === 'n:server'")
+    page.wait_for_function("() => window.hveView.getState().view === 'n:server'")
     page.locator('[data-testid="fp-back"]').click()
-    page.wait_for_function("() => window.eabkView.getState().view === ''")
+    page.wait_for_function("() => window.hveView.getState().view === ''")
     page.context.close()
 
 
 # FR-1092 AC-510: the path at the top says where you are (codebase › part › … › folder › file › selected item), each step goes back, the last one is the current place.
 def test_ac510_path_shows_the_position_in_the_structure(studio):
     page = _open(studio, "&v=f%3AHVE-Studio%2Fstudio.py")
-    page.wait_for_function("() => window.eabkView.getState().view === 'f:HVE-Studio/studio.py'")
+    page.wait_for_function("() => window.hveView.getState().view === 'f:HVE-Studio/studio.py'")
     crumbs = page.locator('[data-testid="fp-crumbs"] [data-testid="fp-crumb"]')
     texts = crumbs.all_inner_texts()
     assert texts[0].startswith("Codebase") and texts[1].startswith("Part") and texts[-1].startswith("File") and len(texts) >= 3
@@ -81,10 +81,10 @@ def test_ac510_path_shows_the_position_in_the_structure(studio):
     page.locator(f'{CARD}[data-type="route"]').first.click()
     assert page.locator('[data-testid="fp-crumbs"] [aria-current="location"]').inner_text().startswith("Endpoint")
     crumbs.nth(1).click()
-    page.wait_for_function("() => window.eabkView.getState().view.startsWith('n:')")
+    page.wait_for_function("() => window.hveView.getState().view.startsWith('n:')")
     assert page.locator('[data-testid="fp-crumbs"] [aria-current="location"]').inner_text().split("\n")[0] in ("Part", "Folder")
     page.locator('[data-testid="fp-crumbs"] [data-testid="fp-crumb"]').first.click()
-    page.wait_for_function("() => window.eabkView.getState().view === ''")
+    page.wait_for_function("() => window.hveView.getState().view === ''")
     page.wait_for_function("() => document.querySelectorAll('[data-testid=fp-crumbs] [data-testid=fp-crumb]').length === 1")
     page.context.close()
 
@@ -92,7 +92,7 @@ def test_ac510_path_shows_the_position_in_the_structure(studio):
 # FR-1092 AC-510: files hold endpoints and functions; a shared link opens the place; Backspace, F, / and Esc work; the right-click menu and semantic zoom.
 def test_ac510_file_view_keyboard_menu_and_semantic_zoom(studio):
     page = _open(studio, "&v=f%3AHVE-Studio%2Fstudio.py")
-    page.wait_for_function("() => window.eabkView.getState().view === 'f:HVE-Studio/studio.py'")
+    page.wait_for_function("() => window.hveView.getState().view === 'f:HVE-Studio/studio.py'")
     assert page.locator(f'{CARD}[data-type="route"]').count() >= 5 and page.locator(f'{CARD}[data-type="symbol"]').count() >= 3
     route = page.locator(f'{CARD}[data-type="route"]').first
     assert route.locator(".fp-route").inner_text().startswith(("GET", "POST"))
@@ -101,7 +101,7 @@ def test_ac510_file_view_keyboard_menu_and_semantic_zoom(studio):
     page.keyboard.press("Escape")
     page.locator('[data-testid="fp-stage"]').focus()
     page.keyboard.press("Backspace")
-    page.wait_for_function("() => window.eabkView.getState().view === 'n:server'")
+    page.wait_for_function("() => window.hveView.getState().view === 'n:server'")
     page.keyboard.press("f")
     page.keyboard.press("/")
     assert page.evaluate("() => document.activeElement?.dataset.testid") == "fp-search"
@@ -135,16 +135,16 @@ def test_ac511_panel_health_recent_screens_and_filters(studio):
     assert page.locator(".fp-issue.done").count() >= n_done                  # kept across reloads
     page.locator('[data-testid="fp-h-again"]').first.click()
     page.locator('[data-testid="fp-h-show"]').first.click()
-    page.wait_for_function("() => window.eabkView.getState().cards > 0")
+    page.wait_for_function("() => window.hveView.getState().cards > 0")
     page.locator('[data-testid="fp-recent"]').click()
     assert page.locator('[data-testid="fp-recent-modal"]').is_visible()
     page.locator('[data-testid="fp-recent-modal"] [data-testid="fp-show-recent"]').first.click()
-    page.wait_for_function("() => window.eabkView.getState().answer === true")
+    page.wait_for_function("() => window.hveView.getState().answer === true")
     page.locator('[data-testid="fp-back-map"]').click()
     page.locator('[data-testid="fp-screens"]').click()
     assert page.locator('[data-testid="fp-screen"]').count() >= 5
     page.locator('[data-testid="fp-screen"]', has_text="Floorplan").first.click()
-    page.wait_for_function("() => window.eabkView.getState().answer === true && window.eabkView.getState().cards >= 3")
+    page.wait_for_function("() => window.hveView.getState().answer === true && window.hveView.getState().cards >= 3")
     page.context.close()
 
 
@@ -156,11 +156,11 @@ def test_ac511_flows_and_tour(studio):
     page.wait_for_selector('[data-testid="fp-flowbar"]')
     assert "1 / 4" in page.locator('[data-testid="fp-flowbar"]').inner_text()
     page.locator('[data-testid="fp-flow-next"]').click()
-    page.wait_for_function("() => window.eabkView.getState().flow === 1")
+    page.wait_for_function("() => window.hveView.getState().flow === 1")
     page.keyboard.press("ArrowRight")
-    page.wait_for_function("() => window.eabkView.getState().flow === 2")
+    page.wait_for_function("() => window.hveView.getState().flow === 2")
     page.keyboard.press("Escape")
-    page.wait_for_function("() => window.eabkView.getState().flow === null")
+    page.wait_for_function("() => window.hveView.getState().flow === null")
     page.locator('[data-testid="fp-tour"]').click()
     assert "1 / 5" in page.locator('[data-testid="fp-flowbar"]').inner_text()
     page.context.close()
@@ -171,12 +171,12 @@ def test_ac512_ask_the_map_and_japanese(studio):
     page = _open(studio)
     page.locator('[data-testid="fp-ask"]').fill("Studio server to Git history")
     page.locator('[data-testid="fp-ask"]').press("Enter")
-    page.wait_for_function("() => window.eabkView.getState().answer === true")
+    page.wait_for_function("() => window.hveView.getState().answer === true")
     assert page.locator(".fp-steps li").count() >= 2 and page.locator(".fp-step").count() >= 2
     page.locator('[data-testid="fp-back-map"]').click()
     page.locator('[data-testid="fp-ask"]').fill("zzzqqq nothing")
     page.locator('[data-testid="fp-ask"]').press("Enter")
-    page.wait_for_function("() => window.eabkView.getState().answer === true")
+    page.wait_for_function("() => window.hveView.getState().answer === true")
     page.locator('[data-testid="fp-side"]', has_text="Nothing matched").wait_for()
     page.context.close()
     ja = _open(studio, lang="ja")

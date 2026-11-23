@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 520" width="1100" height="520" role="img" aria-labelledby="t d" font-family="Segoe UI, Meiryo, Yu Gothic UI, sans-serif">
-<title id="t">The daily flow of EABK Lite</title>
+<title id="t">The daily flow of HVE Lite</title>
 <desc id="d">From a request to Copilot's change, verify, CI, Studio and milestone audits</desc>
 <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#667"/></marker></defs>
 <rect width="1100" height="520" fill="#fafafa"/>

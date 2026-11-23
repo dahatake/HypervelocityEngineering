@@ -1,15 +1,15 @@
 // FR-1099 (repository group) and FR-1100 (relations between its repositories).
 // The header keeps FR-010's button (switch = replace the group with one repository); beside it, the "Repository list"
 // button opens the group with each one's state, where a repository is added (same OS folder dialog) or removed.
-// Only the list of paths is kept in the browser (localStorage `eabk-studio.repos`) and restored on the next start.
+// Only the list of paths is kept in the browser (localStorage `hve-studio.repos`) and restored on the next start.
 import { t, onLang } from './i18n.js';
 import { store } from './store.js';
 import { el, icon, toast, vscodeUrl } from './ui.js';
 import { xrefLink } from './xref.js';
 import { sourceTabs } from './srctabs.js';
 
-const KEY = 'eabk-studio.repos';
-const HDR = { 'Content-Type': 'application/json', 'X-EABK-Studio': '1' };
+const KEY = 'hve-studio.repos';
+const HDR = { 'Content-Type': 'application/json', 'X-HVE-Studio': '1' };
 export const savePaths = (paths) => { try { localStorage.setItem(KEY, JSON.stringify(paths)); } catch { /* the group still applies now */ } };
 const savedPaths = () => { try { const v = JSON.parse(localStorage.getItem(KEY) || '[]'); return Array.isArray(v) ? v.map(String) : []; } catch { return []; } };
 

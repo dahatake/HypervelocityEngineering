@@ -291,7 +291,7 @@ export function mountMaintenance(host) {
     const request = async (path, body) => {
       const response = await fetch(path, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-EABK-Studio': '1' },
+        headers: { 'Content-Type': 'application/json', 'X-HVE-Studio': '1' },
         body: JSON.stringify(body),
       });
       const data = await response.json();

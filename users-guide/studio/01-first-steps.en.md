@@ -12,7 +12,7 @@ If you meet the following, you can use HVE Studio. Items that have been confirme
 | Additional installation | No additional Python packages are needed. three.js for 3D display is bundled. Git repository analysis requires the `git` command. | Confirmed: [`README.md`](../../HVE-Studio/README.md), `repo_scan.py` |
 | Launch script | You can use `start.ps1` on Windows and `start.sh` on macOS/Linux. The range of operation checks per OS version is unconfirmed. | Confirmed: [`start.ps1`](../../HVE-Studio/start.ps1), [`start.sh`](../../HVE-Studio/start.sh) |
 | Browser | A browser that can open a local URL is required. Supported browser names and versions are unconfirmed. | Confirmed: the specification opens a browser at launch. Supported range is unconfirmed. |
-| Target repository | Specify a repository that has EABK management data (any location where `docs/requirements-definition.md` or `docs/catalog.md` can be found), or a git repository without EABK (code mode; see "Using Studio without EABK" below). | Confirmed: [`README.md`](../../HVE-Studio/README.md) |
+| Target repository | Specify a repository that has HVE management data (any location where `docs/requirements-definition.md` or `docs/catalog.md` can be found), or a git repository without HVE (code mode; see "Using Studio without HVE" below). | Confirmed: [`README.md`](../../HVE-Studio/README.md) |
 | Network | No internet connection is needed. Studio listens only on `127.0.0.1`, and the default port is `8765`. | Confirmed: [`README.md`](../../HVE-Studio/README.md) |
 | Permissions / network settings | Whether administrator rights, firewall/proxy settings, or permission to use a local port are required is unconfirmed. If they become necessary, ask your organization's device or network administrator. | Unconfirmed |
 
@@ -71,9 +71,9 @@ Installation and updates also synchronize with progress. The file is `.hve-studi
 
 Press the repository name and select a folder in the OS dialog. No restart is needed. Any local Git repository, including empty or document-only repositories, or a folder with management records can be opened. Invalid targets show a reason and keep the current repository.
 
-## Using Studio without EABK (code mode)
+## Using Studio without HVE (code mode)
 
-Studio can also show a git repository without EABK (FR-1086). From a clone of HVE (this toolkit), pass the root of the target repository:
+Studio can also show a git repository without HVE (FR-1086). From a clone of HVE (this toolkit), pass the root of the target repository:
 
 ```powershell
 python HVE-Studio/studio.py --repo C:\path\to\any-git-repo --check

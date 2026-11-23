@@ -152,7 +152,7 @@ def test_ac522_settings_survive_reload_without_the_key(studio):
     page.get_by_test_id("ai-field-key").fill("never-stored-in-browser")
     page.reload()
     page.wait_for_load_state("networkidle")
-    saved = page.evaluate("() => localStorage.getItem('eabk-studio.ai')")
+    saved = page.evaluate("() => localStorage.getItem('hve-studio.ai')")
     assert json.loads(saved) == {"provider": "azure", "auth": "key", "endpoint": "https://contoso.openai.azure.com", "deployment": "gpt-dep"}
     assert "never-stored-in-browser" not in json.dumps(page.evaluate("() => ({...localStorage})"))
     _settings(page)
@@ -183,13 +183,13 @@ def test_ac523_ac524_entra_lists(studio):
     page.get_by_test_id("ai-list-accounts").select_option(lists["accounts"][0]["id"])
     page.wait_for_selector('[data-testid="ai-list-empty"]')
     assert page.locator('[data-testid="ai-settings"] input[type=password], [data-testid="ai-field-endpoint"]').count() == 0
-    cfg = json.loads(page.evaluate("() => localStorage.getItem('eabk-studio.ai')"))
+    cfg = json.loads(page.evaluate("() => localStorage.getItem('hve-studio.ai')"))
     assert cfg["endpoint"] == "https://aoai.openai.azure.com/" and cfg["account"] == lists["accounts"][0]["id"]
     page.context.close()
 
 
 def _configure(page):
-    page.evaluate("() => localStorage.setItem('eabk-studio.ai', JSON.stringify({provider:'azure',auth:'key',endpoint:'https://x.openai.azure.com',deployment:'d',priceIn:'100',priceOut:'400'}))")
+    page.evaluate("() => localStorage.setItem('hve-studio.ai', JSON.stringify({provider:'azure',auth:'key',endpoint:'https://x.openai.azure.com',deployment:'d',priceIn:'100',priceOut:'400'}))")
 
 
 def _answer(text):
@@ -351,7 +351,7 @@ def _route_ai(page, usage=None):
 # FR-1101 AC-546: cap and unit prices are settings kept in the browser; without a unit price nothing is sent
 def test_ac546_cap_and_prices_are_saved_and_missing_price_blocks_sending(studio):
     page = _open(studio, "dashboard")
-    page.evaluate("() => localStorage.setItem('eabk-studio.ai', JSON.stringify({provider:'azure',auth:'key',endpoint:'https://x.openai.azure.com',deployment:'d'}))")
+    page.evaluate("() => localStorage.setItem('hve-studio.ai', JSON.stringify({provider:'azure',auth:'key',endpoint:'https://x.openai.azure.com',deployment:'d'}))")
     page.reload()
     page.wait_for_load_state("networkidle")
     asked = []
@@ -371,7 +371,7 @@ def test_ac546_cap_and_prices_are_saved_and_missing_price_blocks_sending(studio)
     page.get_by_test_id("ai-priceOut").press("Tab")
     page.reload()
     page.wait_for_load_state("networkidle")
-    cfg = json.loads(page.evaluate("() => localStorage.getItem('eabk-studio.ai')"))
+    cfg = json.loads(page.evaluate("() => localStorage.getItem('hve-studio.ai')"))
     assert (cfg["budgetYen"], cfg["priceIn"], cfg["priceOut"]) == ("50000", "120", "480")
     page.get_by_test_id("ai-settings-btn").click()
     assert page.get_by_test_id("ai-budgetYen").input_value() == "50000"
@@ -391,7 +391,7 @@ def test_ac547_usage_cost_and_monthly_total(studio):
     assert "入力 1000" in line and "出力 500" in line and "概算" in line      # 1000*100/1e6 + 500*400/1e6 = 0.30 yen
     assert "0.30 円" in line and "（概算）" not in line                        # the provider returned the counts
     assert "0.30 円 / 上限 100,000 円（0%）" in page.get_by_test_id("ai-budget-status").inner_text()
-    stored = json.loads(page.evaluate("() => localStorage.getItem('eabk-studio.ai-usage')"))
+    stored = json.loads(page.evaluate("() => localStorage.getItem('hve-studio.ai-usage')"))
     assert set(stored) == {"month", "inTokens", "outTokens", "yen"} and stored["inTokens"] == 1000
     page.get_by_test_id("ai-dismiss").click()
     page.unroute("**/api/ai/ask")
@@ -399,8 +399,8 @@ def test_ac547_usage_cost_and_monthly_total(studio):
     page.get_by_test_id("ai-example").first.click()
     page.wait_for_selector('[data-testid="ai-answer"]')
     assert "（概算）" in page.get_by_test_id("ai-usage-line").inner_text()
-    assert json.loads(page.evaluate("() => localStorage.getItem('eabk-studio.ai-usage')"))["inTokens"] == 1400
-    page.evaluate("() => { const u = JSON.parse(localStorage.getItem('eabk-studio.ai-usage')); u.month = '2000-01'; localStorage.setItem('eabk-studio.ai-usage', JSON.stringify(u)); }")
+    assert json.loads(page.evaluate("() => localStorage.getItem('hve-studio.ai-usage')"))["inTokens"] == 1400
+    page.evaluate("() => { const u = JSON.parse(localStorage.getItem('hve-studio.ai-usage')); u.month = '2000-01'; localStorage.setItem('hve-studio.ai-usage', JSON.stringify(u)); }")
     page.get_by_test_id("ai-close").click()
     page.get_by_test_id("ai-ask").click()
     assert "0.00 円" in page.get_by_test_id("ai-budget-status").inner_text()     # a new month starts from zero
@@ -412,8 +412,8 @@ def test_ac548_warning_at_80_percent_and_stop_at_100_percent(studio):
     page = _open(studio, "dashboard")
     _configure(page)
     page.evaluate("""() => { const d = new Date(), m = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-        localStorage.setItem('eabk-studio.ai', JSON.stringify({provider:'azure',auth:'key',endpoint:'https://x.openai.azure.com',deployment:'d',priceIn:'100',priceOut:'400',budgetYen:'1000'}));
-        localStorage.setItem('eabk-studio.ai-usage', JSON.stringify({month: m, inTokens: 0, outTokens: 0, yen: 799}));}""")
+        localStorage.setItem('hve-studio.ai', JSON.stringify({provider:'azure',auth:'key',endpoint:'https://x.openai.azure.com',deployment:'d',priceIn:'100',priceOut:'400',budgetYen:'1000'}));
+        localStorage.setItem('hve-studio.ai-usage', JSON.stringify({month: m, inTokens: 0, outTokens: 0, yen: 799}));}""")
     page.reload()
     page.wait_for_load_state("networkidle")
     asked = []
@@ -421,12 +421,12 @@ def test_ac548_warning_at_80_percent_and_stop_at_100_percent(studio):
     page.get_by_test_id("ai-ask").click()
     status = page.get_by_test_id("ai-budget-status")
     assert status.get_attribute("data-level") == "ok"
-    page.evaluate("() => { const u = JSON.parse(localStorage.getItem('eabk-studio.ai-usage')); u.yen = 800; localStorage.setItem('eabk-studio.ai-usage', JSON.stringify(u)); }")
+    page.evaluate("() => { const u = JSON.parse(localStorage.getItem('hve-studio.ai-usage')); u.yen = 800; localStorage.setItem('hve-studio.ai-usage', JSON.stringify(u)); }")
     page.get_by_test_id("ai-close").click()
     page.get_by_test_id("ai-ask").click()
     status = page.get_by_test_id("ai-budget-status")
     assert status.get_attribute("data-level") == "warn" and status.locator("svg").count() == 1 and "80%" in status.inner_text()
-    page.evaluate("() => { const u = JSON.parse(localStorage.getItem('eabk-studio.ai-usage')); u.yen = 1000; localStorage.setItem('eabk-studio.ai-usage', JSON.stringify(u)); }")
+    page.evaluate("() => { const u = JSON.parse(localStorage.getItem('hve-studio.ai-usage')); u.yen = 1000; localStorage.setItem('hve-studio.ai-usage', JSON.stringify(u)); }")
     page.get_by_test_id("ai-close").click()
     page.get_by_test_id("ai-ask").click()
     assert page.get_by_test_id("ai-budget-status").get_attribute("data-level") == "stop"

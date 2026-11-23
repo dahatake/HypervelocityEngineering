@@ -17,7 +17,7 @@
 | `scripts/summarize.py` | 長いログの要約 | なし |
 | `scripts/adopt.py` | 既存アプリの導入 | `docs/baseline/`・`tests/system/golden/`・`work/import/` |
 | `tools/install.py` | 導入・更新・削除 | 導入先のリポジトリ |
-| `tools/uninstall.py` | どの版の EABK でも削除する（`install.py --uninstall`・`--purge` の実体） | 導入先のリポジトリ |
+| `tools/uninstall.py` | どの版の HVE でも削除する（`install.py --uninstall`・`--purge` の実体） | 導入先のリポジトリ |
 
 ## ebaklib.py（共通ライブラリ）
 
@@ -136,7 +136,7 @@ MANUAL CHK-11 tests/system/ledger.json AC-001 の本文が…（担当: System T
 
 ```bash
 python scripts/entities.py list  [--repo DIR] [--json]            # エンティティ台帳（名前・説明・管理テーブル・使い方・列・関係）
-python scripts/entities.py check [--repo DIR] [--json] [--strict] # 企業データカタログとの照合（一致／EABK のみ／企業カタログのみ／名称の揺れ候補）
+python scripts/entities.py check [--repo DIR] [--json] [--strict] # 企業データカタログとの照合（一致／HVE のみ／企業カタログのみ／名称の揺れ候補）
 python scripts/entities.py todo  [--repo DIR] [--json]            # 覆われていないエンティティの ToDo（質問票の行の形式）
 ```
 
@@ -267,13 +267,13 @@ python tools/uninstall.py --target <導入先> --purge --runs     # 管理デー
 | `--runs` | 旧版の conductor の worktree と、HEAD に取り込み済みの `run/*` ブランチを削除する（既定は表示だけ。リンクはたどらない） |
 | `--allow-non-git` | git のリポジトリの最上位でなくても実行する |
 
-判定: どれかの版が配布したパスにあり、内容（改行の違いは無視）がその版のどれかの内容か、マニフェストに記録されたハッシュと一致するファイルを削除します。旧版だけが使ったパスで一致しないファイルは利用者のものとして残します（`KEEP-UNKNOWN`）。表示: `REMOVE`・`UNBLOCK`・`UNAPPEND`・`KEEP-LOCAL` など 1 行 1 件と、最後の `changes=N`。終了コード: 0 は選んだ範囲に EABK が残っていない、1 は残っている（`RESIDUE` の一覧）、2 は誤り。
+判定: どれかの版が配布したパスにあり、内容（改行の違いは無視）がその版のどれかの内容か、マニフェストに記録されたハッシュと一致するファイルを削除します。旧版だけが使ったパスで一致しないファイルは利用者のものとして残します（`KEEP-UNKNOWN`）。表示: `REMOVE`・`UNBLOCK`・`UNAPPEND`・`KEEP-LOCAL` など 1 行 1 件と、最後の `changes=N`。終了コード: 0 は選んだ範囲に HVE が残っていない、1 は残っている（`RESIDUE` の一覧）、2 は誤り。
 
 カタログ `tools/uninstall-catalog.json` は、`tools/build-uninstall-catalog.py` が `tools/install.py` のすべての版（merge で入った版を含む）と各版の配布物の blob から作ります。`tools/bump-version.py` が版の更新のたびに作り直し、`--check` で古くないかを確かめられます。すべての版の導入と削除は `tools/verify-uninstall-matrix.py` で確かめます（[docs/manual-tests.md](../docs/manual-tests.md)）。
 
 ## HVE-Studio（データ層のビューアー）
 
-インストールすると、導入先の `HVE-Studio/` に入ります。データ層（要求定義書・カタログ・台帳）を図・表・検索で見る、ローカルの読み取り専用の Web アプリです（日本語・英語）。EABK を入れていない git リポジトリも、HVE の clone から `python HVE-Studio/studio.py --repo <任意の git リポジトリ>` で見られます（コードのモード。FR-1086）。
+インストールすると、導入先の `HVE-Studio/` に入ります。データ層（要求定義書・カタログ・台帳）を図・表・検索で見る、ローカルの読み取り専用の Web アプリです（日本語・英語）。HVE を入れていない git リポジトリも、HVE の clone から `python HVE-Studio/studio.py --repo <任意の git リポジトリ>` で見られます（コードのモード。FR-1086）。
 
 ```text
 python HVE-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--no-remote] [--check]
@@ -281,7 +281,7 @@ python HVE-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--no-remote]
 
 | オプション | 動作 |
 |---|---|
-| `--repo DIR` | 対象リポジトリ。EABK がなくてもよい（親へさかのぼってデータ層を探し、なければ git のルート）。省略時はカレントディレクトリ（データ層があるか、コードのモードで見られる git リポジトリのとき）、それ以外は Studio 自身のリポジトリ |
+| `--repo DIR` | 対象リポジトリ。HVE がなくてもよい（親へさかのぼってデータ層を探し、なければ git のルート）。省略時はカレントディレクトリ（データ層があるか、コードのモードで見られる git リポジトリのとき）、それ以外は Studio 自身のリポジトリ |
 | `--port N` | 待ち受けポート（既定 8765。使用中なら次の番号を最大 20 まで試す） |
 | `--no-open` | ブラウザーを自動で開かない |
 | `--no-remote` | GitHub の Issue・PR・Actions を gh で読まない（生成 AI の設定には影響しない） |

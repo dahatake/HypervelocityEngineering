@@ -1,5 +1,5 @@
 // FR-1062 AC-343 AC-344: 全画面で使う「種類 → 区分 → 領域 → 項目」の階層の共通部品（見出し・件数・開閉・未分類・JA/EN の名称・キーボード操作）。
-// 階層の導出は eabk_model.py（model.hierarchy）が 1 か所で行い、ここは描画だけを受け持つ（割り当て表を持たない）。
+// 階層の導出は hve_model.py（model.hierarchy）が 1 か所で行い、ここは描画だけを受け持つ（割り当て表を持たない）。
 // 層の識別: data-tier-level = kind|division|area、data-tier-path = JSON 配列（その層までの名前）、data-count = その層の項目件数。
 // 色だけに頼らない: 開閉は ▸ / ▾ の記号と aria-expanded、件数は文字で示す。
 import { lang, onLang, t } from './i18n.js';

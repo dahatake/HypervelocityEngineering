@@ -118,7 +118,7 @@ def test_ac428_both_languages_and_themes_without_outside_requests(studio, lang, 
     page.on("request", lambda r: outside.append(r.url) if not r.url.startswith(url) and not r.url.startswith("data:") and not r.url.startswith("blob:") else None)
     if lang == "en":
         page.goto(url)
-        page.evaluate("() => localStorage.setItem('eabk-studio.lang','en')")
+        page.evaluate("() => localStorage.setItem('hve-studio.lang','en')")
         page.reload()
     page.goto(f"{url}/#/mapgraph")
     page.reload()

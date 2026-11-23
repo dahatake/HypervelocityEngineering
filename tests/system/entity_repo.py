@@ -1,4 +1,4 @@
-"""Disposable EABK target repositories for the entity features (FR-1020..FR-1024, NFR-COMPAT-003).
+"""Disposable HVE target repositories for the entity features (FR-1020..FR-1024, NFR-COMPAT-003).
 
 Test-oracle helper only.  The documents are built from the structure of docs/requirements-definition.md
 (用語表 3.3 / 状態表 3.4 / 利用シナリオ 5 / 各要求の `対象エンティティ` 欄) and docs/catalog.md (テーブル表).
@@ -152,8 +152,8 @@ def run_entities(root: Path, *args: str):
 #         - エンティティの関係: 注文→商品（参照）
 #   * Studio contract (3D is a canvas, so state is read from a published object; also mirrored in DOM for 2D/entities):
 #         [data-testid="semantic-zoom"]  attrs  data-scale (number)  data-level (overview|mid|detail)  data-ready ("true" when operable)
-#         window.eabkView.setScale(n)    -> set magnification (1 = whole fits)
-#         window.eabkView.getState()     -> {scale, level, clusters:[{id,count,entities:[name]}],
+#         window.hveView.setScale(n)    -> set magnification (1 = whole fits)
+#         window.hveView.getState()     -> {scale, level, clusters:[{id,count,entities:[name]}],
 #                                            entities:[name], edges:[{from,to,kind}],  kind in 外部キー|参照|使用
 #                                            columns:{<entity>:[{name,type,key,ref}]}}   (columns only at level "detail")
 #         2D DOM: [data-entity="名"], [data-edge][data-from][data-to][data-kind], [data-column]

@@ -1,5 +1,5 @@
 // UI language (Japanese / English). Data from the repository is shown as written.
-const STORE_KEY = 'eabk-studio.lang';
+const STORE_KEY = 'hve-studio.lang';
 let current = (() => { let s = null; try { s = localStorage.getItem(STORE_KEY); } catch { /* not readable: use the browser language */ } return s === 'ja' || s === 'en' ? s : ((navigator.language || 'ja').toLowerCase().startsWith('ja') ? 'ja' : 'en'); })();
 const listeners = new Set();
 
@@ -136,7 +136,7 @@ const D = {
     'state.loading.d': 'しばらくお待ちください。', 'state.error.h': 'データを読み込めませんでした', 'state.error.d': '接続とサーバーの状態を確認して、もう一度お試しください。', 'state.retry': '再試行', 'state.empty.h': 'まだ表示できるデータがありません', 'state.empty.d': 'このリポジトリには要求などの管理データが見つかりません。要求定義書とカタログを用意すると、ここに表示されます。', 'state.empty.a': '別のリポジトリを選ぶ', 'state.nohit.h': '一致する項目がありません', 'state.nohit.d': '入力した検索語に一致する項目が見つかりません。検索語を変えるか、検索ボックスを空にしてください。', 'state.nohit.a': '検索ボックスを空にする', 'state.stale.h': 'データを更新できませんでした', 'state.stale.d': '最後に読み込んだ内容を表示しています。サーバーに接続できるか確認し、もう一度お試しください。入力した内容は保たれます。',
     'search.ph': 'ID・題名・ファイル・用語を検索…', 'repo.change': '対象リポジトリを切り替える', 'repo.nodata': 'data layer がそのフォルダーには見つかりません（docs/requirements-definition.md など）。', 'repo.bad': 'フォルダーが見つかりません。', 'repo.nopicker': 'この環境ではフォルダー選択ダイアログを開けません。', 'repo.retry': '再試行', 'repo.back': '戻る（現在のモデルを保持）',
     'update.avail': 'データが更新されました。再読み込みします…', 'loading': 'データ層を読み込み中…', 'none': '（なし）',
-    'err.nodata': 'このリポジトリには EABK のデータ層が見つかりませんでした。右上のリポジトリ名から別のリポジトリを指定できます。',
+    'err.nodata': 'このリポジトリには HVE のデータ層が見つかりませんでした。右上のリポジトリ名から別のリポジトリを指定できます。',
     'type.goal': '目的', 'type.req': '機能要求', 'type.nfr': '非機能要求', 'type.ac': '受入基準', 'type.part': '共通部品', 'type.api': 'API', 'type.table': 'テーブル', 'type.entity': 'エンティティ(データ)', 'type.file': 'ソースファイル', 'type.test': 'テストファイル',
     'type.component': 'コンポーネント', 'type.case': '試験ケース', 'type.param': 'パラメータ', 'type.question': '質問', 'type.persona': 'ペルソナ', 'type.external': '外部連携',
     'status.approved': '承認済み', 'status.proposed': 'AI提案', 'status.hold': '保留', 'status.rejected': '却下', 'status.retired': '廃止', 'status.unknown': '不明',
@@ -286,7 +286,7 @@ const D = {
         'cmd.ai.ask': 'AI に聞く', 'cmd.ai.settings': 'AI の設定を開く',
         // FR-1099・FR-1100: 複数のリポジトリ
         'repos.group': '対象リポジトリ', 'repos.listBtn': 'リポジトリ一覧', 'repos.add': 'リポジトリを追加', 'repos.title': '対象リポジトリ群', 'repos.d': 'アプリケーションを構成するリポジトリを並べて開きます。各リポジトリのデータは混ぜず、ID の前にリポジトリ名を付けて区別します。', 'repos.list.aria': '対象リポジトリ群（{n} 件）',
-        'repos.col.name': '名前', 'repos.col.path': 'パス', 'repos.col.mode': '表示の方式', 'repos.col.status': '読込みの状態', 'repos.primary': '（最初）', 'repos.mode.eabk': '管理データ', 'repos.mode.code': 'コードのモード',
+        'repos.col.name': '名前', 'repos.col.path': 'パス', 'repos.col.mode': '表示の方式', 'repos.col.status': '読込みの状態', 'repos.primary': '（最初）', 'repos.mode.hve': '管理データ', 'repos.mode.code': 'コードのモード',
         'repos.st.pending': '待機中', 'repos.st.loading': '読込み中', 'repos.st.loaded': '読込み済み', 'repos.st.error': '読込み失敗', 'repos.retry': '再試行', 'repos.remove': '削除', 'repos.remove.aria': '{name} を一覧から削除', 'repos.limit': '{n} / {max} 件', 'repos.relations': 'リポジトリ間の関係を見る',
         'repos.err.not-a-directory': 'フォルダーが見つかりません。', 'repos.err.duplicate': '同じリポジトリはすでに一覧にあります。', 'repos.err.limit': '追加できるのは {n} 件までです。', 'repos.err.no-data-layer': 'このフォルダーには表示できる管理データもコードもありません。', 'repos.err.not-in-group': '一覧にないリポジトリです。', 'repos.err.last-repository': '最後の 1 件は削除できません。', 'repos.err.bad': '操作に失敗しました。',
         'src.tab.repos': 'リポジトリ間の関係', 'xr.title': 'リポジトリ間の関係', 'xr.sub': '各リポジトリのコードから決定的に読み取った関係です（コードは実行せず、外部へ通信しません）。確定と候補を分けて示します。', 'xr.single': 'リポジトリが 1 つです。アプリケーションを構成するリポジトリを追加すると、リポジトリ間の関係を調べます。', 'xr.loading': '関係を調べています…',
@@ -430,9 +430,9 @@ const D = {
     'theme.light': 'Light', 'theme.dark': 'Dark', 'theme.system': 'System', 'layout.group': 'Screen layout', 'layout.change': 'Change layout', 'layout.change.tip': 'Switch the screen layout (saved in this browser only)', 'layout.reset': 'Reset layout', 'layout.reset.tip': 'Restore the default layout (search, selection and filters are kept)', 'theme.group': 'Theme', 'theme.cmd': 'Theme: ', 'theme.keys': 'theme テーマ appearance light dark system ライト ダーク',
     'theme.announce.light': 'Theme set to light', 'theme.announce.dark': 'Theme set to dark', 'theme.announce.system': 'Theme follows the OS setting',
     'state.loading.d': 'Please wait.', 'state.error.h': 'Could not load the data', 'state.error.d': 'Check the connection and the server, then try again.', 'state.retry': 'Retry', 'state.empty.h': 'No data to show yet', 'state.empty.d': 'No requirements or other managed data were found in this repository. Add the requirements document and the catalog and they will appear here.', 'state.empty.a': 'Choose another repository', 'state.nohit.h': 'No matching items', 'state.nohit.d': 'Nothing matches the text in the search box. Change the text or clear the search box.', 'state.nohit.a': 'Clear the search box', 'state.stale.h': 'Could not refresh the data', 'state.stale.d': 'The last loaded content is shown. Check that the server is reachable and try again. What you typed is kept.',
-    'search.ph': 'Search IDs, titles, files, terms…', 'repo.change': 'Switch the target repository', 'repo.nodata': 'No EABK data layer (docs/requirements-definition.md etc.) was found in that folder.', 'repo.bad': 'Folder not found.', 'repo.nopicker': 'The folder dialog cannot be opened in this environment.', 'repo.retry': 'Retry', 'repo.back': 'Back (keep current model)',
+    'search.ph': 'Search IDs, titles, files, terms…', 'repo.change': 'Switch the target repository', 'repo.nodata': 'No HVE data layer (docs/requirements-definition.md etc.) was found in that folder.', 'repo.bad': 'Folder not found.', 'repo.nopicker': 'The folder dialog cannot be opened in this environment.', 'repo.retry': 'Retry', 'repo.back': 'Back (keep current model)',
     'update.avail': 'Data changed. Reloading…', 'loading': 'Loading the data layer…', 'none': '(none)',
-    'err.nodata': 'No EABK data layer was found in this repository. Use the repository button at the top right to pick another one.',
+    'err.nodata': 'No HVE data layer was found in this repository. Use the repository button at the top right to pick another one.',
     'type.goal': 'Goal', 'type.req': 'Functional req.', 'type.nfr': 'Non-functional req.', 'type.ac': 'Acceptance criteria', 'type.part': 'Common part', 'type.api': 'API', 'type.table': 'Table', 'type.entity': 'Entity (data)', 'type.file': 'Source file', 'type.test': 'Test file',
     'type.component': 'Component', 'type.case': 'Test case', 'type.param': 'Parameter', 'type.question': 'Question', 'type.persona': 'Persona', 'type.external': 'External system',
     'status.approved': 'Approved', 'status.proposed': 'AI proposed', 'status.hold': 'On hold', 'status.rejected': 'Rejected', 'status.retired': 'Retired', 'status.unknown': 'Unknown',
@@ -582,7 +582,7 @@ const D = {
         'cmd.ai.ask': 'Ask AI', 'cmd.ai.settings': 'Open AI settings',
         // FR-1099, FR-1100: several repositories
         'repos.group': 'Repositories', 'repos.listBtn': 'Repository list', 'repos.add': 'Add repository', 'repos.title': 'Repository group', 'repos.d': 'Open the repositories that make up the application side by side. Their data is not mixed: IDs are prefixed with the repository name.', 'repos.list.aria': 'Repository group ({n})',
-        'repos.col.name': 'Name', 'repos.col.path': 'Path', 'repos.col.mode': 'Mode', 'repos.col.status': 'Loading state', 'repos.primary': '(first)', 'repos.mode.eabk': 'Management data', 'repos.mode.code': 'Code mode',
+        'repos.col.name': 'Name', 'repos.col.path': 'Path', 'repos.col.mode': 'Mode', 'repos.col.status': 'Loading state', 'repos.primary': '(first)', 'repos.mode.hve': 'Management data', 'repos.mode.code': 'Code mode',
         'repos.st.pending': 'Waiting', 'repos.st.loading': 'Loading', 'repos.st.loaded': 'Loaded', 'repos.st.error': 'Failed to load', 'repos.retry': 'Retry', 'repos.remove': 'Remove', 'repos.remove.aria': 'Remove {name} from the list', 'repos.limit': '{n} / {max}', 'repos.relations': 'See relations between repositories',
         'repos.err.not-a-directory': 'The folder was not found.', 'repos.err.duplicate': 'This repository is already in the list.', 'repos.err.limit': 'Up to {n} repositories can be added.', 'repos.err.no-data-layer': 'This folder has neither management data nor code to show.', 'repos.err.not-in-group': 'This repository is not in the list.', 'repos.err.last-repository': 'The last repository cannot be removed.', 'repos.err.bad': 'The operation failed.',
         'src.tab.repos': 'Between repositories', 'xr.title': 'Relations between repositories', 'xr.sub': 'Relations read deterministically from each repository\'s code (the code is not run and nothing is contacted). Confirmed and candidate relations are shown apart.', 'xr.single': 'There is one repository. Add the repositories that make up the application to examine the relations between them.', 'xr.loading': 'Examining the relations…',

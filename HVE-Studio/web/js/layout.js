@@ -2,7 +2,7 @@
 // 保存するのは配置の識別子だけ（検索語・選択対象・絞り込みは保存しない）。保存先はブラウザーの localStorage で、
 // 別のブラウザー・端末には引き継がれない。壊れた保存値・未知の値は既定（default）に戻す（エラーにしない）。
 // 配置の変更・既定へ戻す操作は再読込なしで行え、画面の状態（検索語・選択・絞り込み）には触れない。
-export const LAYOUT_KEY = 'eabk-studio.layout';
+export const LAYOUT_KEY = 'hve-studio.layout';
 export const LAYOUTS = ['default', 'compact', 'wide'];
 export const DEFAULT_LAYOUT = 'default';
 
@@ -36,7 +36,7 @@ export function changeLayout() {
 export const resetLayout = () => setLayout(DEFAULT_LAYOUT); // 既に既定なら何も変えない
 export const onLayout = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
 
-// window.eabkView: 画面共通のアクセサ。各画面（map など）が代入した view を公開し、getState().layout を常に付ける。
+// window.hveView: 画面共通のアクセサ。各画面（map など）が代入した view を公開し、getState().layout を常に付ける。
 // 画面を離れたら undefined を代入する（基底の view に戻る）。
 const base = { getState: () => ({}) };
 let screen;
@@ -48,7 +48,7 @@ function withLayout(v) {
   return v;
 }
 base.getState = () => ({ layout: layoutState() });
-Object.defineProperty(window, 'eabkView', {
+Object.defineProperty(window, 'hveView', {
   configurable: true,
   get: () => screen || base,
   set: (v) => { screen = v ? withLayout(v) : undefined; },

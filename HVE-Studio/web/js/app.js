@@ -213,7 +213,7 @@ function mountMapDim(host, name, inner) {
   publishDim({ dims: MAP_DIMS, current: cur, selected: cur });
   host.append(el('div', { class: 'dim-float' }, dimToggle({ current: cur, onPick: go, dims: MAP_DIMS })));
   const off = registerDim((d) => go(MAP_DIMS.includes(d) ? d : cur === '2d' ? '3d' : '2d'));
-  const v = window.eabkView;      // every map display reports which dimension it is
+  const v = window.hveView;      // every map display reports which dimension it is
   if (v?.getState && !v.__dim) { const g = v.getState; v.getState = () => ({ dim: cur, ...g() }); v.__dim = true; }
   const orig = inner?.destroy;
   if (inner) inner.destroy = () => { off(); orig?.call(inner); };
@@ -325,7 +325,7 @@ function navCommands() {
   list.push({ cmd: true, id: 'cmd:nav:release', label: t('cmd.goto') + t('nav.release'), key: t('nav.release'), run: () => { location.hash = '#/release'; } });
   list.push(...stepCommands(itemHref), ...aiCommands());   // FR-1094 AC-514, NFR-UX-019 AC-532
   list.push({ cmd: true, id: 'cmd:codegraph', label: t('cmd.codegraph'), key: t('nav.codegraph'), run: () => { location.hash = '#/floorplan'; } });
-  for (const c of window.eabkTheme.choices) list.push({ cmd: true, id: 'cmd:theme:' + c, label: t('theme.cmd') + t('theme.' + c), key: t('theme.keys') + ' ' + t('theme.' + c), run: () => window.eabkTheme.set(c) });
+  for (const c of window.hveTheme.choices) list.push({ cmd: true, id: 'cmd:theme:' + c, label: t('theme.cmd') + t('theme.' + c), key: t('theme.keys') + ' ' + t('theme.' + c), run: () => window.hveTheme.set(c) });
   if (hasDimHandler()) {
     list.push({ cmd: true, id: 'cmd:dim', label: t('cmd.dim'), key: '2D 3D', run: () => runDim() });
     if (headerDim.dims.includes('graph')) list.push({ cmd: true, id: 'cmd:dim:graph', label: t('cmd.dim.graph'), key: 'Graph', run: () => runDim('graph') });
@@ -396,13 +396,13 @@ document.addEventListener('keydown', (e) => {
 // テーマ（FR-1047 AC-259/260）: ライト・ダーク・システム。名前だけを保存・復元する（AC-260）。切替は再読込なしで入力・選択・絞り込み・配置を保つ。
 const themeLive = document.getElementById('themeLive');
 function renderTheme(announce) {
-  const cur = window.eabkTheme.get();
+  const cur = window.hveTheme.get();
   document.querySelectorAll('[data-testid="theme-toggle"] [data-theme-choice]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.themeChoice === cur)));
   document.querySelector('[data-testid="theme-toggle"]').setAttribute('aria-label', t('theme.group'));
   if (announce) themeLive.textContent = t('theme.announce.' + cur);
 }
-document.querySelectorAll('[data-testid="theme-toggle"] [data-theme-choice]').forEach((b) => b.addEventListener('click', () => window.eabkTheme.set(b.dataset.themeChoice)));
-window.eabkTheme.onChange(() => renderTheme(true));
+document.querySelectorAll('[data-testid="theme-toggle"] [data-theme-choice]').forEach((b) => b.addEventListener('click', () => window.hveTheme.set(b.dataset.themeChoice)));
+window.hveTheme.onChange(() => renderTheme(true));
 renderTheme(false);
 // FR-011 AC-430: the header language toggle (#lang) has one button per language (JA / EN); the current one is aria-pressed.
 document.querySelectorAll('#lang [data-lang]').forEach((b) => b.addEventListener('click', () => setLang(b.dataset.lang)));
@@ -410,7 +410,7 @@ applyI18n(document);   // the first paint also fills the dictionary attributes (
 setDocName('');
 onLang(() => { renderNav(); renderTheme(false); if (!box.hidden) renderResults(); });
 // FR-010 AC-332..336: the header button opens the OS folder dialog (served by POST /api/repo/pick); no path-typing modal.
-const HDR = { 'Content-Type': 'application/json', 'X-EABK-Studio': '1' };
+const HDR = { 'Content-Type': 'application/json', 'X-HVE-Studio': '1' };
 function renderRepoBtnLabel() {
   const b = document.getElementById('repoBtn');
   b.setAttribute('aria-label', t('repo.change'));

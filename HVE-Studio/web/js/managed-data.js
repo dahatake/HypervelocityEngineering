@@ -75,7 +75,7 @@ export function initManagedData(reload) {
     draw();
     try {
       const response = await fetch('/api/data/' + action, {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-EABK-Studio': '1' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-HVE-Studio': '1' },
         body: JSON.stringify({ repo: requested, confirm: action === 'delete' }),
       });
       const body = await response.json();

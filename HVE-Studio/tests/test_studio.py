@@ -17,7 +17,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-import eabk_model as m  # noqa: E402
+import hve_model as m  # noqa: E402
 import studio  # noqa: E402
 
 RD = """# 要求定義書
@@ -366,7 +366,7 @@ def test_repository_without_data_layer(tmp_path):
 
 
 def _plain_repo(root):
-    """A repository without EABK: a PRD with requirement IDs in a table, code and a test that mention one of them."""
+    """A repository without HVE: a PRD with requirement IDs in a table, code and a test that mention one of them."""
     (root / "docs").mkdir(parents=True)
     (root / "docs" / "PRD.md").write_text(
         "# PRD\n\n| ID | 要件 | 優先度 |\n|---|---|---|\n| FR-ING-01 | 動画を取り込める | M |\n"
@@ -400,7 +400,7 @@ def test_code_mode_derives_requirements_links_and_components(tmp_path):
     assert _snapshot(repo) == before  # read-only
 
 
-# FR-1086 AC-471: --check and the server accept a repository without EABK; an empty folder is still refused
+# FR-1086 AC-471: --check and the server accept a repository without HVE; an empty folder is still refused
 def test_check_and_start_accept_code_mode(tmp_path, capsys):
     repo = _plain_repo(tmp_path / "plain")
     assert studio.main(["--repo", str(repo), "--check"]) == 0
@@ -424,7 +424,7 @@ def test_code_mode_needs_a_git_repository(tmp_path):
 def test_data_layer_wins_over_code_mode(repo):
     (repo / "docs" / "PRD.md").write_text("| ID | 要件 |\n|---|---|\n| FR-ZZZ-01 | 別の要件 |\n", encoding="utf-8")
     model = m.build_model(repo)
-    assert model["meta"]["mode"] == "eabk" and all(r["id"] != "FR-ZZZ-01" for r in model["reqs"])
+    assert model["meta"]["mode"] == "hve" and all(r["id"] != "FR-ZZZ-01" for r in model["reqs"])
 
 
 # FR-001 AC-001: the model exposes every management-data source for traceability.
@@ -515,8 +515,8 @@ def test_server_switch_repo_needs_header_and_a_data_layer(server, tmp_path_facto
     assert post({"path": str(tmp_path)}, {}) == 403
     empty = tmp_path / "empty"
     empty.mkdir()
-    assert post({"path": str(empty)}, {"X-EABK-Studio": "1"}) == 422
-    assert post({"path": str(tmp_path / "nope")}, {"X-EABK-Studio": "1"}) == 400
+    assert post({"path": str(empty)}, {"X-HVE-Studio": "1"}) == 422
+    assert post({"path": str(tmp_path / "nope")}, {"X-HVE-Studio": "1"}) == 400
 
 
 def _pick(server, headers, host=None):
@@ -537,18 +537,18 @@ def test_pick_rejects_missing_header_and_foreign_host_without_opening_dialog(ser
         raise AssertionError("dialog must not open")
     monkeypatch.setattr(studio, "pick_folder", boom)
     assert _pick(server, {})[0] == 403
-    assert _pick(server, {"X-EABK-Studio": "0"})[0] == 403
-    assert _pick(server, {"X-EABK-Studio": "1"}, host="evil.example")[0] == 403
+    assert _pick(server, {"X-HVE-Studio": "0"})[0] == 403
+    assert _pick(server, {"X-HVE-Studio": "1"}, host="evil.example")[0] == 403
 
 
 # FR-010 AC-332 AC-334 AC-335: selected path / cancel / dialog unavailable
 def test_pick_returns_path_cancel_or_501(server, monkeypatch):
-    H = {"X-EABK-Studio": "1"}
-    monkeypatch.setenv("EABK_STUDIO_PICK_PATH", "/some/where")
+    H = {"X-HVE-Studio": "1"}
+    monkeypatch.setenv("HVE_STUDIO_PICK_PATH", "/some/where")
     assert _pick(server, H) == (200, {"path": "/some/where"})
-    monkeypatch.setenv("EABK_STUDIO_PICK_PATH", "")
+    monkeypatch.setenv("HVE_STUDIO_PICK_PATH", "")
     assert _pick(server, H) == (200, {"path": ""})
-    monkeypatch.delenv("EABK_STUDIO_PICK_PATH")
+    monkeypatch.delenv("HVE_STUDIO_PICK_PATH")
     monkeypatch.setattr(studio, "pick_folder", lambda _: None)
     assert _pick(server, H) == (501, {"error": "picker-unavailable"})
 
@@ -640,7 +640,6 @@ def test_studio_name_in_help_and_check(repo, capsys):
     assert stopped.value.code == 0
     help_text = capsys.readouterr().out
     assert "HVE Studio (Hypervelocity Engineering Studio)" in help_text
-    assert "EABK Studio" not in help_text
     assert studio.main(["--repo", str(repo), "--check"]) == 0
     report = capsys.readouterr().out
     assert report.startswith(f"HVE Studio {m.STUDIO_VERSION} --check")
@@ -656,14 +655,14 @@ def test_check_reports_found_and_missing_files(repo, capsys):
 
 def test_check_without_data_layer_exits_1_and_points_to_the_guide(tmp_path, capsys):
     assert studio.main(["--repo", str(tmp_path), "--check"]) == 1
-    assert "no EABK data layer" in capsys.readouterr().out
+    assert "no HVE data layer" in capsys.readouterr().out
 
 
 def test_start_without_data_layer_does_not_serve_and_explains(tmp_path, capsys):
     assert studio.main(["--repo", str(tmp_path), "--no-open"]) == 1
     err = capsys.readouterr().err
-    # 導入先では users-guide が EABK-docs に改名されるため、実体のガイドパス（studio.GUIDE）で確認する
-    assert "no EABK data layer" in err and studio.GUIDE in err
+    # 導入先では users-guide が HVE-docs に改名されるため、実体のガイドパス（studio.GUIDE）で確認する
+    assert "no HVE data layer" in err and studio.GUIDE in err
 
 
 # FR-1089 AC-485: the server starts before the expensive model build.

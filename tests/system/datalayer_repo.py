@@ -49,7 +49,7 @@ APPLY = ["scripts/rdfix.py", "--full", "--apply"]
 
 
 def run(args: Iterable, cwd: Path, check: bool = False, env: dict | None = None, timeout: int = 600):
-    e = dict(os.environ, PYTHONUTF8="1", EABK_ALLOW_PRIMARY="1")
+    e = dict(os.environ, PYTHONUTF8="1", HVE_ALLOW_PRIMARY="1")
     e.update(env or {})
     r = subprocess.run([str(a) for a in args], cwd=cwd, capture_output=True, text=True,
                        encoding="utf-8", errors="replace", env=e, timeout=timeout)
@@ -66,7 +66,7 @@ def git_init(root: Path) -> None:
     root.mkdir(parents=True, exist_ok=True)
     run(["git", "init", "-q", "-b", "main"], root, check=True)
     run(["git", "config", "user.email", "system-test@example.invalid"], root, check=True)
-    run(["git", "config", "user.name", "EABK System Test"], root, check=True)
+    run(["git", "config", "user.name", "HVE System Test"], root, check=True)
     run(["git", "config", "commit.gpgsign", "false"], root, check=True)
     (root / "README.md").write_text("disposable repository\n", encoding="utf-8")
     commit(root, "initial")
@@ -141,7 +141,7 @@ def _build_clean_installed(root: Path) -> None:
     git_init(root)
     install(root, "--skip-verify")
     pin_full_profile(root)
-    commit(root, "install EABK")
+    commit(root, "install HVE")
     write_clean_data_layer(root)
     commit(root, "clean data layer")
     v = py(root, "scripts/verify.py", "--docs-only")
@@ -149,7 +149,7 @@ def _build_clean_installed(root: Path) -> None:
 
 
 def make_clean_installed(root: Path) -> Path:
-    """Installed EABK + clean data layer, committed.  Precondition: verify --docs-only passes.
+    """Installed HVE + clean data layer, committed.  Precondition: verify --docs-only passes.
     Built once per process and copied (the copy is as isolated as a fresh build)."""
     return snapshots.clone("clean-installed", _build_clean_installed, root)
 
@@ -158,7 +158,7 @@ DATA_FILES = (RD, INTEGRATIONS, CATALOG, REGISTRY, LEDGER)
 
 
 def make_clean_uninstalled(root: Path, scratch: Path) -> Path:
-    """A plain git repository that already holds a clean EABK data layer, without the toolkit (new install)."""
+    """A plain git repository that already holds a clean HVE data layer, without the toolkit (new install)."""
     make_clean_installed(scratch)
     git_init(root)
     for rel in DATA_FILES:

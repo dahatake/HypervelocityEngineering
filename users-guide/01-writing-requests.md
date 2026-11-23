@@ -2,7 +2,7 @@
 
 # 1. 依頼の書き方
 
-EABK Lite には、専用のエージェントや依頼の書式はありません。いつもの Copilot（既定のエージェント）に、ふだんどおりチャットで依頼します。VS Code、GitHub Copilot app、Copilot CLI のどれでも同じです。
+HVE Lite には、専用のエージェントや依頼の書式はありません。いつもの Copilot（既定のエージェント）に、ふだんどおりチャットで依頼します。VS Code、GitHub Copilot app、Copilot CLI のどれでも同じです。
 
 Copilot は、インストーラが `AGENTS.md` と `.github/copilot-instructions.md` に書いた規則に従います。振る舞いを変える変更では、同じ変更の中で要求定義書・カタログ・テストを更新し、最後に `python scripts/verify.py` を exit 0 にします。規則はリポジトリにあるので、個人のカスタム指示やメモリに書き写す必要はありません。
 
@@ -21,7 +21,7 @@ Copilot は、インストーラが `AGENTS.md` と `.github/copilot-instruction
 | 完了の前に検査する | `python scripts/verify.py` を exit 0 にします。push すると CI の `ebak-verify` が同じ検査をします |
 | 一時ファイルは /work に置く | ログ・証跡・作業メモは `/work`（git の管理対象外）に置きます |
 
-EABK Lite は依頼に定型文を自動で付けません。毎回伝えたい前提があれば、自分の Copilot の instructions に書きます（[4. カスタマイズ](04-customization.md)）。
+HVE Lite は依頼に定型文を自動で付けません。毎回伝えたい前提があれば、自分の Copilot の instructions に書きます（[4. カスタマイズ](04-customization.md)）。
 
 ## 1.2 依頼に書くこと
 

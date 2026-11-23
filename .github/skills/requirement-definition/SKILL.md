@@ -1,10 +1,10 @@
 ---
 name: requirement-definition
-description: 振る舞いを変える変更（機能の追加・変更・削除）のときに、docs/requirements-definition.md と docs/catalog.md の構造化欄つきの要求・受入基準・質問票・決定記録・出典台帳を、同じ変更の中で更新する手順書（EABK Lite。誰が編集してもよい）。ID は next-id.py で採番し、終わる前に `verify.py --docs-only` を exit 0 にする。
+description: 振る舞いを変える変更（機能の追加・変更・削除）のときに、docs/requirements-definition.md と docs/catalog.md の構造化欄つきの要求・受入基準・質問票・決定記録・出典台帳を、同じ変更の中で更新する手順書（HVE Lite。誰が編集してもよい）。ID は next-id.py で採番し、終わる前に `verify.py --docs-only` を exit 0 にする。
 ---
-# requirement-definition（要求定義書を更新する手順書・EABK Lite）
+# requirement-definition（要求定義書を更新する手順書・HVE Lite）
 
-この手順書は、利用者の原本「RequirementDefinition作成」の本文（同じフォルダーの `original.md`）を、EABK Lite の進め方で使うための読み替えと規則です。EABK Lite には専任の書き手（rd-author）も進行役（conductor）もありません。**振る舞いを変える人（Copilot または開発者）が、コード・テストと同じ変更の中で要求定義書とカタログを更新します。** 手元の `verify.py` と CI の `ebak-verify` が同じ検査をします。
+この手順書は、利用者の原本「RequirementDefinition作成」の本文（同じフォルダーの `original.md`）を、HVE Lite の進め方で使うための読み替えと規則です。HVE Lite には専任の書き手（rd-author）も進行役（conductor）もありません。**振る舞いを変える人（Copilot または開発者）が、コード・テストと同じ変更の中で要求定義書とカタログを更新します。** 手元の `verify.py` と CI の `ebak-verify` が同じ検査をします。
 
 ## いつ使うか
 
@@ -14,7 +14,7 @@ description: 振る舞いを変える変更（機能の追加・変更・削除�
 
 振る舞いが変わらないリファクタリング・依存の更新・誤字の修正では、要求定義書は変えません（カタログのファイルのパスが変わるときだけ、カタログの行を直します）。
 
-## 読み替え表（原本の指示 → EABK Lite での扱い）
+## 読み替え表（原本の指示 → HVE Lite での扱い）
 
 **読み替えと原本が食い違うときは、読み替えを優先します。**
 

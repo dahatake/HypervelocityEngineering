@@ -26,7 +26,7 @@ def _groups(page, level=None):
 def test_ac345_map2d_tiers_group_items_with_name_count_and_toggle(studio):
     page = _open(studio, "map2d")
     page.wait_for_selector(GROUP)
-    hier = page.evaluate("() => window.eabkStore ? 0 : 0")  # noqa: F841
+    hier = page.evaluate("() => window.hveStore ? 0 : 0")  # noqa: F841
     areas = _groups(page, "area")
     assert areas and all(g["count"] > 0 for g in areas)
     first = page.locator(f'{GROUP}[data-tier-level="area"]').first

@@ -17,7 +17,7 @@ All scripts run on the Python 3.9+ standard library only. They can be run from a
 | `scripts/summarize.py` | Summary of long logs | Nothing |
 | `scripts/adopt.py` | Adopting an existing app | `docs/baseline/`, `tests/system/golden/`, `work/import/` |
 | `tools/install.py` | Install, update, uninstall | The target repository |
-| `tools/uninstall.py` | Remove EABK installed by any version (what `install.py --uninstall` / `--purge` run) | The target repository |
+| `tools/uninstall.py` | Remove HVE installed by any version (what `install.py --uninstall` / `--purge` run) | The target repository |
 
 ## ebaklib.py (shared library)
 
@@ -136,7 +136,7 @@ No entry point changes the requirements definition or the external integration c
 
 ```bash
 python scripts/entities.py list  [--repo DIR] [--json]            # entity register (name, description, managing table, usage, columns, relations)
-python scripts/entities.py check [--repo DIR] [--json] [--strict] # compare with the enterprise data catalog (match / EABK only / enterprise only / naming variants)
+python scripts/entities.py check [--repo DIR] [--json] [--strict] # compare with the enterprise data catalog (match / HVE only / enterprise only / naming variants)
 python scripts/entities.py todo  [--repo DIR] [--json]            # to-dos for uncovered entities (as question-list rows)
 ```
 
@@ -267,13 +267,13 @@ python tools/uninstall.py --target <repo> --purge --runs     # also management d
 | `--runs` | Remove the old conductor's worktrees and the `run/*` branches merged into HEAD (default: list only; links are never followed) |
 | `--allow-non-git` | Run even if the target is not the top of a git repository |
 
-Decision: a file is removed if it is at a path some version shipped and its content (ignoring line-ending differences) matches some version's content at that path or a hash recorded in a manifest. A non-matching file at a path only old versions used is kept as yours (`KEEP-UNKNOWN`). Output: one line per item (`REMOVE`, `UNBLOCK`, `UNAPPEND`, `KEEP-LOCAL`, ...) and a final `changes=N`. Exit code: 0 = nothing of EABK remains in the chosen scope, 1 = something remains (listed under `RESIDUE`), 2 = error.
+Decision: a file is removed if it is at a path some version shipped and its content (ignoring line-ending differences) matches some version's content at that path or a hash recorded in a manifest. A non-matching file at a path only old versions used is kept as yours (`KEEP-UNKNOWN`). Output: one line per item (`REMOVE`, `UNBLOCK`, `UNAPPEND`, `KEEP-LOCAL`, ...) and a final `changes=N`. Exit code: 0 = nothing of HVE remains in the chosen scope, 1 = something remains (listed under `RESIDUE`), 2 = error.
 
 The catalog `tools/uninstall-catalog.json` is built by `tools/build-uninstall-catalog.py` from every version of `tools/install.py` (including versions that came in through merges) and the blobs each version shipped. `tools/bump-version.py` rebuilds it on every version bump, and `--check` tells whether it is stale. Installing and removing every version is verified with `tools/verify-uninstall-matrix.py` ([docs/manual-tests.en.md](../docs/manual-tests.en.md)).
 
 ## HVE-Studio (data-layer viewer)
 
-Installed into `HVE-Studio/` of the target repository. A local, read-only web app that shows the data layer (requirements definition, catalog, ledger) as diagrams, tables and search (Japanese and English). A git repository without EABK can also be viewed from an HVE clone with `python HVE-Studio/studio.py --repo <any-git-repo>` (code mode, FR-1086).
+Installed into `HVE-Studio/` of the target repository. A local, read-only web app that shows the data layer (requirements definition, catalog, ledger) as diagrams, tables and search (Japanese and English). A git repository without HVE can also be viewed from an HVE clone with `python HVE-Studio/studio.py --repo <any-git-repo>` (code mode, FR-1086).
 
 ```text
 python HVE-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--no-remote] [--check]
@@ -281,7 +281,7 @@ python HVE-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--no-remote]
 
 | Option | Behavior |
 |---|---|
-| `--repo DIR` | Target repository, with or without EABK (searches parent directories for the data layer, otherwise uses the git root). Default: the current directory if it has a data layer or is a git repository showable in code mode, otherwise Studio's own repository |
+| `--repo DIR` | Target repository, with or without HVE (searches parent directories for the data layer, otherwise uses the git root). Default: the current directory if it has a data layer or is a git repository showable in code mode, otherwise Studio's own repository |
 | `--port N` | Listening port (default 8765; if in use, tries the next numbers up to 20 times) |
 | `--no-open` | Do not open the browser automatically |
 | `--no-remote` | Do not read GitHub Issues, PRs and Actions through gh (does not affect the AI settings) |

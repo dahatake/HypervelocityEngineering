@@ -2,7 +2,7 @@
 
 # HypervelocityEngineering — Enterprise App Build Kit Lite
 
-GitHub Copilot（VS Code・Copilot CLI・GitHub Copilot app・cloud agent）で開発するリポジトリに、**要求定義書・カタログ・System Test の一貫性**を保つための規則と検査を入れる toolkit です（EABK Lite 0.6.0）。
+GitHub Copilot（VS Code・Copilot CLI・GitHub Copilot app・cloud agent）で開発するリポジトリに、**要求定義書・カタログ・System Test の一貫性**を保つための規則と検査を入れる toolkit です（HVE Lite 0.6.0）。
 
 - 利用者は、いつもの Copilot（既定のエージェント）に**ふだんどおり**依頼します。特別なエージェントやコマンドは要りません。
 - リポジトリの `AGENTS.md` の規則に従って、振る舞いを変える変更の中で、要求定義書・カタログ・テストが同じ変更として更新されます。
@@ -11,7 +11,7 @@ GitHub Copilot（VS Code・Copilot CLI・GitHub Copilot app・cloud agent）で�
 - データ層は **HVE Studio**（ローカルの読み取り専用ビューアー）で図・表・検索で見られます。
 - すでにソースコード・設計書があるアプリ（brownfield）にも使えます。まず `python scripts/adopt.py scan` で棚卸しします（[既存のアプリを導入する](users-guide/10-adopting-existing-apps.md)）。
 
-![EABK Lite の毎日の流れ](users-guide/images/fig-flow.svg)
+![HVE Lite の毎日の流れ](users-guide/images/fig-flow.svg)
 
 📖 **初めて使う方へ**: [Quickstart](#quickstart) → [ユーザーガイドの目次](users-guide/README.md) → [S9 画面ツアー（図解）](users-guide/studio/09-visual-tour.md) の順に読むと、全体と全画面を図で理解できます。ユーザーガイドの目次と Studio の索引、S9 の先頭にある「← リポジトリの README」から、この README に戻れます。
 
@@ -22,7 +22,7 @@ GitHub Copilot（VS Code・Copilot CLI・GitHub Copilot app・cloud agent）で�
 - **アカウントチームとの情報共有が不足**し、顧客に Copilot の製品説明しかできていないことがある。競合との違いや、AI と Copilot の真の価値が顧客に伝わっていない。
 - Hub のチームが持つ**シナリオとナラティブ**は、「Hub らじお」として Viva Engage の動画で公開しているが、視聴するユーザーが少ない。
 
-そこで、シナリオ・ナラティブ・要求・決定事項を、**人にも AI にも読める管理データ**として 1 か所で一貫して保ち、同じ手順を何度でも再現できる形にすることを目指しています。この toolkit（EABK Lite と HVE Studio）は、その土台として、「何を決めたか」「どこまで進んだか」「抜けや矛盾はないか」を機械的な検査と図で確かめる部分を担います。Hub 向けの Engagement 専用機能は、現時点でこの toolkit には含まれません。
+そこで、シナリオ・ナラティブ・要求・決定事項を、**人にも AI にも読める管理データ**として 1 か所で一貫して保ち、同じ手順を何度でも再現できる形にすることを目指しています。この toolkit（HVE Lite と HVE Studio）は、その土台として、「何を決めたか」「どこまで進んだか」「抜けや矛盾はないか」を機械的な検査と図で確かめる部分を担います。Hub 向けの Engagement 専用機能は、現時点でこの toolkit には含まれません。
 
 ### なぜ Lite か
 
@@ -64,7 +64,7 @@ AI に要求定義・実装・テストを繰り返させると、次の問題�
 - 離れた要求どうしの矛盾に、書いた本人のセルフレビューでは気づけない。
 - 指示がプロンプトや個人のメモリにしかなく、人・PC・モデルが変わると振る舞いが変わる。
 
-EABK Lite は、次の 5 つでこれらを防ぎます。
+HVE Lite は、次の 5 つでこれらを防ぎます。
 
 | 手段 | 内容 |
 |---|---|
@@ -109,7 +109,7 @@ tests/system/ledger.json      System Test の台帳（永続）
 work/            一時ファイル（.gitignore 対象）。監査の結果は work/audit/<日時>/
 ```
 
-EABK Lite には hook も、依頼への定型文の自動付与もありません。規則は `AGENTS.md`・`copilot-instructions.md` のブロックで伝わり、守れているかは verify と CI の検査で確かめます。
+HVE Lite には hook も、依頼への定型文の自動付与もありません。規則は `AGENTS.md`・`copilot-instructions.md` のブロックで伝わり、守れているかは verify と CI の検査で確かめます。
 
 ### 検査（verify と検査プロファイル）
 
@@ -215,7 +215,7 @@ python tools/install.py --target /path/to/your-repo
 
 | 種類 | ファイル | 再実行時の扱い |
 |---|---|---|
-| toolkit のファイル | `.github/agents/rd-auditor.agent.md`、`.github/skills/`（`requirement-definition`・`rd-audit`・`adopt-existing`）、`.github/workflows/ebak-verify.yml`、`scripts/*.py`・`verify.ps1`・`verify.sh`、`HVE-Studio/`（ビューアー本体。Studio のテストは入れません）、`EABK-docs/`（このリポジトリの `users-guide/` と同じ内容。HVE Studio のガイドは `EABK-docs/studio/`。導入先の `users-guide/` は触りません） | 変更していなければ新しいバージョンに更新します。ローカルで変更していれば**そのまま残します**（`KEEP-LOCAL`。`--force` で上書き） |
+| toolkit のファイル | `.github/agents/rd-auditor.agent.md`、`.github/skills/`（`requirement-definition`・`rd-audit`・`adopt-existing`）、`.github/workflows/ebak-verify.yml`、`scripts/*.py`・`verify.ps1`・`verify.sh`、`HVE-Studio/`（ビューアー本体。Studio のテストは入れません）、`HVE-docs/`（このリポジトリの `users-guide/` と同じ内容。HVE Studio のガイドは `HVE-docs/studio/`。導入先の `users-guide/` は触りません） | 変更していなければ新しいバージョンに更新します。ローカルで変更していれば**そのまま残します**（`KEEP-LOCAL`。`--force` で上書き） |
 | 管理データの雛形 | `docs/requirements-definition.md`、`docs/catalog.md`、`docs/integrations.md`（外部連携カタログ。任意）、`docs/id-registry.md`、`tests/system/ledger.json` | **存在しない場合だけ**作成します。既存のファイルは上書きしません |
 | 表示用管理データ | `.hve-studio/managed-data.json` | 導入・更新の最後に進捗付きで作成・同期。要求正本への移行ではなく、既存文書・ソースなどの解析結果。通常アンインストールでは保持し、`--purge` では削除 |
 | 設定 | `scripts/ebak.config.json` | なければ作成します。あれば新しいキーだけを追加し、利用者が設定した値は変更しません |
@@ -290,7 +290,7 @@ python tools/uninstall.py --target /path/to/your-repo --purge            # 管�
 
 `--purge` は管理データ・設定・`/work` なども削除します。変更した toolkit ファイルなどは既定では残ります（詳細は下の表）。`python tools/install.py --target ... --uninstall`・`--purge`、`install.ps1 -Uninstall`、`install.sh --uninstall` も同じ実装を使います。
 
-**どの版の EABK でも削除できます。** アンインストーラーは、`tools/install.py` のすべての版（旧名 hve の版を含む）が配布したファイルの内容のハッシュを git の履歴から集めたカタログ `tools/uninstall-catalog.json` で判定します。ダウンロードするのは `uninstall.py` とカタログの 2 ファイルだけで、toolkit の clone は要りません。マニフェストがない導入先でも、旧版のファイル（`hvelib.py`・`hve-verify.yml`・conductor など）、旧版のブロックの印（`hve-abk`・`hve-conductor`）、旧版の設定とマニフェスト（`scripts/hve.config.json`・`.github/hve-toolkit.json`）、`*.hve-backup-*` も削除します。
+**どの版の HVE でも削除できます。** アンインストーラーは、`tools/install.py` のすべての版（旧名 hve の版を含む）が配布したファイルの内容のハッシュを git の履歴から集めたカタログ `tools/uninstall-catalog.json` で判定します。ダウンロードするのは `uninstall.py` とカタログの 2 ファイルだけで、toolkit の clone は要りません。マニフェストがない導入先でも、旧版のファイル（`hvelib.py`・`hve-verify.yml`・conductor など）、旧版のブロックの印（`hve-abk`・`hve-conductor`）、旧版の設定とマニフェスト（`scripts/hve.config.json`・`.github/hve-toolkit.json`）、`*.hve-backup-*` も削除します。
 
 | オプション（PowerShell） | 内容 |
 |---|---|
@@ -311,7 +311,7 @@ python tools/uninstall.py --target /path/to/your-repo --purge            # 管�
 | System Test のコード（`tests/system/` の台帳以外）、アプリのコード、`docs/` のほかの文書 | 残す | 残す |
 
 - 削除は git の作業ツリーに対して行います。結果を `git status` で確認してから commit します（`git restore` で戻せます。`/work` は git の管理対象外なので戻せません）。git のリポジトリの最上位でなければ実行しません（`--allow-non-git` で続行）。
-- 終了コード: `0` は選んだ範囲に EABK が残っていない、`1` は残っている（`RESIDUE` に一覧）、`2` は誤り。何度実行しても安全です（2 回目は `changes=0`）。
+- 終了コード: `0` は選んだ範囲に HVE が残っていない、`1` は残っている（`RESIDUE` に一覧）、`2` は誤り。何度実行しても安全です（2 回目は `changes=0`）。
 - `--purge` の後は、利用者のファイル（改行コード CRLF を含む）が導入前とバイト単位で同じに戻り、`git status --porcelain --ignored` が空になります。ただし 0.6.0 より前のインストーラーは CRLF の `AGENTS.md`・`.gitignore` を LF に書き換えていたため、その差は `git status` に残ります（`git restore` で戻します）。
 
 ### plugin ではなくインストーラーを使う理由
@@ -358,7 +358,7 @@ GitHub Copilot には、agents・skills・hooks をまとめて配布する標�
 
 詳しくは [ふだんの進め方](users-guide/02-daily-workflow.md) と [依頼の書き方](users-guide/01-writing-requests.md) を参照してください。
 
-EABK Lite は依頼に定型文を自動で付けません。毎回伝えたい前提があれば、自分の Copilot の instructions に書きます。
+HVE Lite は依頼に定型文を自動で付けません。毎回伝えたい前提があれば、自分の Copilot の instructions に書きます。
 
 ### 既存のアプリに導入する
 
@@ -393,7 +393,7 @@ PowerShell では `-Clean`、`install.sh` では `--clean` です。
 
 0.5.x からの使い方の変化:
 
-| 0.5.x | 0.6.0（EABK Lite） |
+| 0.5.x | 0.6.0（HVE Lite） |
 |---|---|
 | `/build` で conductor に依頼、`<run_options>` | 既定のエージェントにふだんどおり依頼し、承認はチャットで返します（[推奨の進め方](#推奨の進め方)） |
 | hook・定型文の自動付与・役割ごとのゲート | ありません。毎回伝えたい前提は自分の Copilot の instructions に書きます |
@@ -407,7 +407,7 @@ PowerShell では `-Clean`、`install.sh` では `--clean` です。
 
 ## HVE Studio（データ層のビューアー）
 
-**HVE Studio**（Hypervelocity Engineering Studio、`HVE-Studio/`）は、EABK が管理するデータ層（要求定義書・カタログ・System Test の台帳・ID 台帳）を、**図・表・検索**で見て回る、ローカル専用の Web アプリです。toolkit の一部として、インストールすると対象リポジトリに入ります。
+**HVE Studio**（Hypervelocity Engineering Studio、`HVE-Studio/`）は、HVE が管理するデータ層（要求定義書・カタログ・System Test の台帳・ID 台帳）を、**図・表・検索**で見て回る、ローカル専用の Web アプリです。toolkit の一部として、インストールすると対象リポジトリに入ります。
 
 - **原本の閲覧・解析は読み取り専用**です。管理データを優先し、ソースの明示的な要求参照・import・TODO などで補完します。`127.0.0.1` だけで待ち受け、原本への書込みは確認済みの「整合性保守」だけです。タスク編集はリポジトリ外の Studio 専用保存先に分離します。
 - Python 3.9 以上の標準ライブラリだけで動きます（追加のインストールなし）。データ層のファイルを更新すると、数秒で画面が読み直されます。
@@ -439,9 +439,9 @@ python HVE-Studio/studio.py              # ブラウザーが開く。画面上�
 
 Windows では `.\HVE-Studio\start.ps1`、macOS / Linux では `./HVE-Studio/start.sh . 8765` でも起動できます。詳細は [HVE-Studio/README.md](HVE-Studio/README.md)、スクリプトのオプションは [スクリプトリファレンス](users-guide/05-scripts-reference.md) です。
 
-### EABK なしで Studio を使う（コードのモード）
+### HVE なしで Studio を使う（コードのモード）
 
-EABK を入れていない git リポジトリも見られます（FR-1086）。この toolkit（HVE）を clone したフォルダーから、対象のリポジトリのルートを `--repo` に指定します。
+HVE を入れていない git リポジトリも見られます（FR-1086）。この toolkit（HVE）を clone したフォルダーから、対象のリポジトリのルートを `--repo` に指定します。
 
 ```bash
 python HVE-Studio/studio.py --repo <任意の git リポジトリ> --check   # mode: code (...) requirement-docs=… requirements=… linked-to-code=… code-files=… test-files=… components=…

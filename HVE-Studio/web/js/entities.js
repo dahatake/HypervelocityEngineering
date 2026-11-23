@@ -1,5 +1,5 @@
 // Entity × use-case matrix (FR-1021) and entity detail (FR-1022).  Data: model.entities (derived by scripts/entities.py,
-// see eabk_model.build_entities) joined with the requirements, state machines and graph already in the store.
+// see hve_model.build_entities) joined with the requirements, state machines and graph already in the store.
 import { t, onLang } from './i18n.js';
 import { store, norm } from './store.js';
 import { el, statusBadge, nodeChip, vscodeUrl, typeLabel } from './ui.js';

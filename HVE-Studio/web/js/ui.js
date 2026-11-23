@@ -5,7 +5,7 @@ import { store } from './store.js';
 // 系列色はデザイントークン（tokens.css の --viz-* / --color-status-*）から現在のテーマの値を読む（直値を持たない。FR-1048）。
 // 値はテーマが変わるまで保持し、変わったら読み直す（描画の性能を保つ）。
 let tokenCache = {};
-if (typeof window !== 'undefined' && window.eabkTheme) window.eabkTheme.onChange(() => { tokenCache = {}; });
+if (typeof window !== 'undefined' && window.hveTheme) window.hveTheme.onChange(() => { tokenCache = {}; });
 export function token(name) {
   return tokenCache[name] ??= getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }

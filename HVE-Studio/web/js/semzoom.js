@@ -3,7 +3,7 @@
 // 3D renderer (sz3d.js), so switching between them keeps the target, the level and the filter.
 //   scale 1 = the whole model fits.  scale < PARAM-017 (2): "overview" = clusters;  < PARAM-018 (8): "mid" = entities + relation
 //   lines;  otherwise "detail" = column list (name, type, key, reference).
-// Data: model.entities (scripts/entities.py through eabk_model.build_entities): entities[].columns, relations, clusters.
+// Data: model.entities (scripts/entities.py through hve_model.build_entities): entities[].columns, relations, clusters.
 // Only the part inside the viewport is drawn (virtualisation); getState() always reports the complete data.
 import { t, lang, onLang } from './i18n.js';
 import { store, norm } from './store.js';
@@ -538,7 +538,7 @@ export function mountShell(host, opts) {
   });
   const offView = onView((why) => { if (why === 'external') { sync(); draw(); } });
 
-  const eabkView = {
+  const hveView = {
     setScale: (n) => setScale(n),
     getState: () => stateOf(d, th),
     select: (n, col) => select(n, { column: col || null, force: true }),
@@ -546,7 +546,7 @@ export function mountShell(host, opts) {
     setLevel, setFilter: (s) => { view.filter = String(s || ''); filterIn.value = view.filter; sync(); draw(); },
     mode: opts.mode, renderer: renderer.kind,
   };
-  window.eabkView = eabkView;
+  window.hveView = hveView;
   sync();
 
   return {
@@ -557,7 +557,7 @@ export function mountShell(host, opts) {
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
       cancelAnimationFrame(raf);
-      if (window.eabkView === eabkView) window.eabkView = undefined;
+      if (window.hveView === hveView) window.hveView = undefined;
       renderer.destroy?.();
     },
   };

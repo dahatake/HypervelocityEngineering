@@ -10,7 +10,7 @@ This chapter explains **the layout and each screen of HVE Studio, one screen at 
 
 Studio is a **view-only** app. To change requirements or implementation, ask Copilot in chat, not Studio.
 
-![The daily flow of EABK Lite: request, updated in one change, verify, CI. Studio shows the updated data layer. rd-auditor audits at milestones](../images/fig-flow.en.svg)
+![The daily flow of HVE Lite: request, updated in one change, verify, CI. Studio shows the updated data layer. rd-auditor audits at milestones](../images/fig-flow.en.svg)
 
 1. Ask Copilot as you normally would.
 2. Copilot updates the requirements, catalog and tests in the same change as the code.

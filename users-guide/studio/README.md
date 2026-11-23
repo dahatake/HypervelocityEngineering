@@ -2,9 +2,9 @@
 
 # HVE Studio ユーザーガイド（第 2 部）
 
-正式名称は **Hypervelocity Engineering Studio** です。旧名は EABK Studio です。フォルダーは `EABK-Studio/` から `HVE-Studio/` に、ルートの起動スクリプトは `start-eabk-studio.*` から `start-hve-studio.*` に変わりました。保存済みの表示設定は引き続き使えます。旧版から更新したリポジトリに残る `EABK-Studio/` は、インストーラーが孤立ファイルとして報告します。`--clean` で削除できます。
+正式名称は **Hypervelocity Engineering Studio** です。旧名は HVE Studio です。フォルダーは `HVE-Studio/` から `HVE-Studio/` に、ルートの起動スクリプトは `start-hve-studio.*` から `start-hve-studio.*` に変わりました。保存済みの表示設定は引き続き使えます。旧版から更新したリポジトリに残る `HVE-Studio/` は、インストーラーが孤立ファイルとして報告します。`--clean` で削除できます。
 
-このフォルダーは、[EABK ユーザーガイド](../README.md)の第 2 部です（EABK 本体は第 1 部の 1〜11。この部の章は S1〜S9）。HVE Studio は、EABK が管理している「要求・カタログ・試験の記録」（データ層）を、**図・表・検索**で見て回るための、あなたのパソコンだけで動くアプリです。コードを読めなくても、「何を作ると決めたか」「どこまで作ったか」「どの部品・データ・APIがどこにあるか」が分かります。
+このフォルダーは、[HVE ユーザーガイド](../README.md)の第 2 部です（HVE 本体は第 1 部の 1〜11。この部の章は S1〜S9）。HVE Studio は、HVE が管理している「要求・カタログ・試験の記録」（データ層）を、**図・表・検索**で見て回るための、あなたのパソコンだけで動くアプリです。コードを読めなくても、「何を作ると決めたか」「どこまで作ったか」「どの部品・データ・APIがどこにあるか」が分かります。
 
 > **初めての方は [S9 画面ツアー（図解）](09-visual-tour.md) から。** 画面の構成と各画面の見かたを、図つきで 1 画面ずつ説明します。画面の右上の黄色い **「初めての方へ」** ボタンでも、いまの画面の案内が始まります。
 >
@@ -34,7 +34,7 @@
 | S8 | [08-data-reference.md](08-data-reference.md) | どの画面が、どのファイルの何を読んで、どう計算するか |
 | S4 | [04-troubleshooting.md](04-troubleshooting.md) | うまく動かないとき（`--check`）・用語集 |
 
-このガイドは配布元では `users-guide/studio/`、`tools/install.py` で EABK を入れたリポジトリでは `EABK-docs/studio/` に入ります。技術的な仕様は [HVE-Studio/README.md](../../HVE-Studio/README.md) にあります。画像は、ツールを作ったリポジトリ自身のデータを読んだ例です（採取条件は [screen-images.json](screen-images.json)、再採取は `capture-screens.py`）。
+このガイドは配布元では `users-guide/studio/`、`tools/install.py` で HVE を入れたリポジトリでは `HVE-docs/studio/` に入ります。技術的な仕様は [HVE-Studio/README.md](../../HVE-Studio/README.md) にあります。画像は、ツールを作ったリポジトリ自身のデータを読んだ例です（採取条件は [screen-images.json](screen-images.json)、再採取は `capture-screens.py`）。
 
 ## 先に知っておくこと
 

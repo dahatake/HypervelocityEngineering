@@ -1,4 +1,4 @@
-"""EABK Lite: the check profile applies the same way to every command (FR-1084)."""
+"""HVE Lite: the check profile applies the same way to every command (FR-1084)."""
 import json
 
 from conftest import SOURCE

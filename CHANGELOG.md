@@ -11,18 +11,18 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 - **説明用の図を SVG で追加**（日本語 `fig-*.svg`・英語 `fig-*.en.svg`、計 20 点）。Studio の図は `users-guide/studio/images/`、毎日の流れと Quickstart の図は `users-guide/images/`。
 - **README と users-guide を相互にたどれるようにしました**。README から S9・目次へ、ユーザーガイドの目次・Studio の索引・S9 から README へのリンクを追加。章は S1〜S9、第 1 部は 1〜11 に更新。
 - README に「目指すもの: Microsoft Innovation Hub の Engagement を、大量に・高い品質で」を追加。
-- 配布: Studio の英語版の文書（`users-guide/studio/*.en.md`）も `MANAGED` に加え、導入先の `EABK-docs/` で英語版へのリンクが切れないようにしました。
+- 配布: Studio の英語版の文書（`users-guide/studio/*.en.md`）も `MANAGED` に加え、導入先の `HVE-docs/` で英語版へのリンクが切れないようにしました。
 
 ### HVE Studio への改称（FR-011）
 
-- EABK Studio の表示名を **HVE Studio**、正式名称を **Hypervelocity Engineering Studio** に変更しました。画面のブランド・JA/EN の文書タイトル・CLI・起動ラベル・配布時の案内・ユーザーガイドを合わせています。
-- **フォルダー名・ファイル名も変更しました（互換性に影響あり）**: `EABK-Studio/` は `HVE-Studio/` に、ルートの起動スクリプト `start-eabk-studio.cmd`／`start-eabk-studio.command` は `start-hve-studio.cmd`／`start-hve-studio.command` に変わりました。起動は `python HVE-Studio/studio.py` です。
-- 旧版から更新したリポジトリでは、旧 `EABK-Studio/` が孤立ファイルとしてディスクに残り、インストーラーがそれを報告します。`--clean`（クリーンインストール）かアンインストールで削除できます。削除されるまでの間も、ID の検査と既存アプリの導入時の判定は旧フォルダーを toolkit のファイルとして扱います。
-- `eabk-studio.*` の保存設定キー、`X-EABK-Studio` の通信ヘッダー、`EABK_STUDIO_PICK_PATH`、`eabk_model.py`（EABK のデータ層のモデル）は変更せず、既存の設定を維持します。過去の変更履歴・出典・ID 台帳の旧名称は当時の記録として残します。
+- HVE Studio の表示名を **HVE Studio**、正式名称を **Hypervelocity Engineering Studio** に変更しました。画面のブランド・JA/EN の文書タイトル・CLI・起動ラベル・配布時の案内・ユーザーガイドを合わせています。
+- **フォルダー名・ファイル名も変更しました（互換性に影響あり）**: `HVE-Studio/` は `HVE-Studio/` に、ルートの起動スクリプト `start-hve-studio.cmd`／`start-hve-studio.command` は `start-hve-studio.cmd`／`start-hve-studio.command` に変わりました。起動は `python HVE-Studio/studio.py` です。
+- 旧版から更新したリポジトリでは、旧 `HVE-Studio/` が孤立ファイルとしてディスクに残り、インストーラーがそれを報告します。`--clean`（クリーンインストール）かアンインストールで削除できます。削除されるまでの間も、ID の検査と既存アプリの導入時の判定は旧フォルダーを toolkit のファイルとして扱います。
+- `hve-studio.*` の保存設定キー、`X-HVE-Studio` の通信ヘッダー、`HVE_STUDIO_PICK_PATH`、`hve_model.py`（HVE のデータ層のモデル）は変更せず、既存の設定を維持します。過去の変更履歴・出典・ID 台帳の旧名称は当時の記録として残します。
 
 ### アンインストーラー（FR-1087）
 
-- **どの版の EABK でも削除できる `tools/uninstall.py` を追加しました。** `tools/install.py` のすべての版（旧名 hve の版、merge で入った版を含む 91 版）が配布したファイルの内容のハッシュを、git の履歴から集めたカタログ `tools/uninstall-catalog.json` で判定します。マニフェストがない導入先でも、旧版のファイル・ブロックの印（`hve-abk`・`hve-conductor`）・設定とマニフェスト（`hve.config.json`・`hve-toolkit.json`）・`*.hve-backup-*`・すべての版の `.gitignore`／`.gitattributes` の追記を削除します。どの版とも内容が違うファイルは残します（`KEEP-LOCAL`・`KEEP-UNKNOWN`）。
+- **どの版の HVE でも削除できる `tools/uninstall.py` を追加しました。** `tools/install.py` のすべての版（旧名 hve の版、merge で入った版を含む 91 版）が配布したファイルの内容のハッシュを、git の履歴から集めたカタログ `tools/uninstall-catalog.json` で判定します。マニフェストがない導入先でも、旧版のファイル・ブロックの印（`hve-abk`・`hve-conductor`）・設定とマニフェスト（`hve.config.json`・`hve-toolkit.json`）・`*.hve-backup-*`・すべての版の `.gitignore`／`.gitattributes` の追記を削除します。どの版とも内容が違うファイルは残します（`KEEP-LOCAL`・`KEEP-UNKNOWN`）。
 - `tools/uninstall.ps1`・`tools/uninstall.sh` は `uninstall.py` とカタログの 2 ファイルだけをダウンロードして実行します（toolkit の clone は不要）。`install.py --uninstall`・`--purge`・`--clean` は同じ実装を使います。
 - `--runs`: 旧版の conductor の worktree と、取り込み済みの `run/*` ブランチを削除します（既定は表示だけ。リンクはたどりません）。
 - 終了コード: 0 は残りなし、1 は残りあり（`RESIDUE` の一覧）、2 は誤り。git のリポジトリの最上位でなければ実行しません。
@@ -31,12 +31,12 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [0.6.0]
 
-### EABK Lite（互換性のない変更）
+### HVE Lite（互換性のない変更）
 
 根拠: 3 つのリポジトリの git 履歴・セッションの記録・run-history の分析（オーケストレーションがトークン量と時間を増やし、hook が完成を妨げた実例があった一方、構造と追跡性の検査だけが複数の人・PC で効くと判断）。要求: G-010、FR-1084、FR-1085。
 
 - **やめたもの**: 進行役 conductor と作業役（rd-author・test-designer・implementer・reviewer）の agent、skill（build・build-template・implement-fr・system-test-increment・dedupe）、worktree の run と統合（`run-state.py`・`integrate.py`・`next-impl.py`・`build-request.py`・`watch.py`・`kpi.py`・`clean-work.py`・`select-tests.py`）、hook をすべて（`.github/hooks/` と `scripts/hooks/gate.py`。役割のゲート G-1〜G-6・subagent-stop の verify・agent-stop の完了条件・`/build template`・定型文の自動付与と `.github/ebak-prompt-prefix.md`・設定の `prompt_prefix`）。新規の導入では `docs/run-history.md` を作らない。これらの要求（FR-1009・FR-1010・FR-1015・FR-1016・FR-1064・FR-1065・FR-1074〜FR-1077・FR-1081・NFR-OPS-005・NFR-OPS-008〜010・NFR-COMPAT-001）は廃止。
-- **残したもの**: 規則（AGENTS.md・copilot-instructions のブロックを「振る舞いを変える変更の中で要求定義書・カタログ・テストを更新する」「ID は `next-id.py`」「テストに要求 ID」「台帳は `ledger.py`」「完了前に `verify.py`」に書き換え）、データ層、決定的な検査（手元の `verify.py` と CI の `ebak-verify`・`ebak-data-layer`）、節目の手動監査（rd-auditor。出力は `work/audit/<日時>/`）、EABK Studio、既存アプリの導入（`adopt.py request` は Copilot のチャットに貼る `<constraints>` の依頼文を出す）、外部連携カタログ。
+- **残したもの**: 規則（AGENTS.md・copilot-instructions のブロックを「振る舞いを変える変更の中で要求定義書・カタログ・テストを更新する」「ID は `next-id.py`」「テストに要求 ID」「台帳は `ledger.py`」「完了前に `verify.py`」に書き換え）、データ層、決定的な検査（手元の `verify.py` と CI の `ebak-verify`・`ebak-data-layer`）、節目の手動監査（rd-auditor。出力は `work/audit/<日時>/`）、HVE Studio、既存アプリの導入（`adopt.py request` は Copilot のチャットに貼る `<constraints>` の依頼文を出す）、外部連携カタログ。
 - **検査プロファイル（FR-1084）**: `checks.profile` が `lite`（既定）のとき、`rdcheck.py check`・`verify.py` は `checks.lite_checks`（CHK-01・02・03・05・09・12・17・19・24）だけを報告する。`full` ですべての CHK。`--profile lite|full` で上書き。プロファイルは `rdcheck.py`・`verify.py`・`rdfix.py` のすべてに同じように効くので、`rdfix.py --full` の合否は `verify.py --docs-only` の合否と同じ。
 - **インストーラ（FR-1085）: 旧版からの移行の処理を持たず、クリーンインストール（`--clean`・PowerShell は `-Clean`）で代える**: `--clean` は、マニフェストに記録されたファイル（旧版のものも）とこの版の配布物を、変更していても削除し、`.ebak-backup-*`・`scripts/ebak.config.json`・`AGENTS.md` などのブロック・`.gitignore`/`.gitattributes` に追記した行（見出しが `# Enterprise App Build Kit` で始まる節）・マニフェストも削除してから導入し直す。管理データ・`/work`・アプリのコードとテストは残す。git リポジトリで未 commit の変更がないときだけ実行し（消したファイルを git から戻せるようにするため）、`--uninstall`・`--purge`・`--check` とは併用できない。2 回目は何も変えない。版ごとの削除リスト（`OBSOLETE`）・設定の旧キーの削除（PRUNE）・`WARN-HOOK`・`WARN-VERIFY`・旧マーカー（`ebak-conductor`）の判定は削除した。通常の更新は、この版が配布しなくなったファイルを削除せず、マニフェストに残して件数を「注意」で表示する。0.5.x の run が残した worktree と `work/*` ブランチ、旧版のデータ層の `docs/run-history.md` は手で消す。
 - `rdfix.py` の手動対応の「担当」を、役割名から作業の種類（`要求定義書`・`System Test の台帳`・`コードとカタログ`・`リポジトリ`）に変更。データ層の確認と修復の入口は従来どおり `python scripts/rdfix.py --full --apply`。
@@ -45,9 +45,9 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 - **run を前提とするつまみを撤去**: `rdcheck.py check`・`verify.py` の `--run`・`--strict`・`--strict-ledger`・`--no-strict-ledger` と CHK-21。つまみは検査の範囲（`checks.profile`・`--profile`）だけになり、要約行から `run=` を外した。`rdfix.py --apply` の作業役のブランチでの拒否も撤去。
 - **使われなくなった内部を削除**: `scripts/ebaklib.py` の run・worktree・start-claim・heartbeat・時間予算・依存の共有・CPU の配分（`MAKEFLAGS`・`VITEST_MAX_WORKERS` などを全コア数で上書きしていた `apply_resource_env`）。`ebaklib.py` は 64 KB → 47 KB。`ledger.py run` の結果は `work/system-test/results.json` に置く。
 - **導入先に配らないもの**: `HVE-Studio/tests`（導入先は Studio を開発しない）と、既定の `verify.commands`（このリポジトリの Studio のテスト）。新規の導入では `verify.commands` を空にする（旧版の `toolkit-unit`・`studio-ui` と `work.retention_days` は `--clean` で設定ごと消える）。新規の導入の `.gitattributes` に run-history の行を入れない。
-- **EABK Studio を EABK なしで使える（コードのモード、FR-1086）**: データ層のない git リポジトリでは、Markdown の要求の ID（PRD.md の表の先頭の列・見出し）、その ID を書いたコードとテスト、コンポーネントにまとめたソースを読み取りだけで導出し、既存の画面で表示する。`python EABK-Studio/studio.py --repo <任意の git リポジトリ>`。データ層があるリポジトリでは従来どおりデータ層だけを読む。
-- **実行履歴（`docs/run-history.md`）の扱いをすべて削除（0.5.x との互換性は持たない）**: run を廃止したので書く人がいない。CHK-23 の run-id の重複検査、`rdfix.py` の `history` の修復対象（対象は ID 台帳・カタログ・System Test の台帳・`.gitignore` の 4 種類）、設定の `management_files.run_history`、配布の雛形と `.gitattributes` の `merge=union` の行、`adopt.py` の除外、EABK Studio の表示（ダッシュボードのチップ・表のビュー・データ層の構造判定）、インストーラの旧版の行の判定（`OLD_GITATTR_LINES`・`OLD_GITIGNORE_HEADERS`）。導入先に残った `docs/run-history.md` は何にも読まれないので、手で消してよい。旧版からの更新は `--clean` で行う（上のインストーラの項）。
-- 利用者ガイド: `users-guide/02-during-and-after-run.md` を `02-daily-workflow.md` に改名し、日々の進め方として書き直し。README・01〜11 を EABK Lite に合わせて改訂。
+- **HVE Studio を HVE なしで使える（コードのモード、FR-1086）**: データ層のない git リポジトリでは、Markdown の要求の ID（PRD.md の表の先頭の列・見出し）、その ID を書いたコードとテスト、コンポーネントにまとめたソースを読み取りだけで導出し、既存の画面で表示する。`python HVE-Studio/studio.py --repo <任意の git リポジトリ>`。データ層があるリポジトリでは従来どおりデータ層だけを読む。
+- **実行履歴（`docs/run-history.md`）の扱いをすべて削除（0.5.x との互換性は持たない）**: run を廃止したので書く人がいない。CHK-23 の run-id の重複検査、`rdfix.py` の `history` の修復対象（対象は ID 台帳・カタログ・System Test の台帳・`.gitignore` の 4 種類）、設定の `management_files.run_history`、配布の雛形と `.gitattributes` の `merge=union` の行、`adopt.py` の除外、HVE Studio の表示（ダッシュボードのチップ・表のビュー・データ層の構造判定）、インストーラの旧版の行の判定（`OLD_GITATTR_LINES`・`OLD_GITIGNORE_HEADERS`）。導入先に残った `docs/run-history.md` は何にも読まれないので、手で消してよい。旧版からの更新は `--clean` で行う（上のインストーラの項）。
+- 利用者ガイド: `users-guide/02-during-and-after-run.md` を `02-daily-workflow.md` に改名し、日々の進め方として書き直し。README・01〜11 を HVE Lite に合わせて改訂。
 
 ### それ以前の未リリースの変更
 
@@ -68,12 +68,12 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
   - `ledger.py add`: 同じ要求・同じ層の有効なケースがあれば追加を拒否し、既存のケースの拡張を案内する（例外は `--new-case-reason`）。CHK-34（warn）: 統合できるケースがある。
   - test-designer・system-test-increment: 画面 E2E は、アプリ・ブラウザーの起動、ログイン、データの用意を 1 回にし、固定の待ちと全面の総当たりを避ける指針を追加。
   - 実行: `scripts/ebak.config.json` の `system_test.jobs` の既定を `auto`（同時に 2〜6 プロセス）にした。ポートやデータを共有するケースは `ledger.py add --serial`（既存は `update --serial true`）で単独実行にする。`system_test.budget` に、ケース数・1 ケースの秒数・合計秒数の上限を置いた。
-  - この toolkit の System Test: `tests/toolkit` の `repo`・`sample` も、install 済みの repo を 1 プロセスで 1 回作ってコピーする（`tests/toolkit` と `tests/integration` の全体で 17 分 40 秒 → 14 分 42 秒）。`test_full_run_rehearsal` は verify.commands を軽い命令に置き換えて 51 秒 → 20 秒（失敗する命令に替えるとテストが落ちることを確認）、`test_concurrent_claim_and_start` は後の確認を同時に行い、さらに `run-state.py start` の git 呼び出しを減らして 44 秒 → 33 秒（反復回数・同時数は PARAM-051・052 のまま。`worktree list` と `rev-parse --git-common-dir` を git を起動せず `.git` から読む。30 個の worktree で `git worktree list` と同じ結果であることを確認）。残りは worktree の作成（checkout、約 0.25 秒）と Windows のプロセス起動で、直列の 1 チャットあたり約 1.4 秒が下限に近い。`rdcheck.py similar <ID>` が、カタログの同じ ID の行を比較元にして要求との類似を見落とす不具合を修正（要求・受入基準を優先）。`test_ac187` は、言語切替が JA / EN の 2 つのボタンになった（AC-430）のに合わせて各ボタンを押す。別ファイルにまたがる同じ要求・層のケースは、`ledger.py run` が 1 つの pytest プロセスにまとめて実行するため統合しない（`ledger.py cost` に件数を表示）。 1 プロセスで install した repo をコピーして使い（`tests/system/snapshots.py`。1 テストあたり約 7.6 秒の install を 1 回に）、Studio のサーバーはプロセスで 1 つを共有し、2D マップの当たり判定の走査は粗密の 2 段（同じ格子の部分集合）と半径の二分探索にした。EABK-Studio の `studio` fixture は pytest-playwright の browser を使い、ほかのファイルと同じプロセスで動かしても asyncio の衝突で落ちない（以前は 43 件が error）。
+  - この toolkit の System Test: `tests/toolkit` の `repo`・`sample` も、install 済みの repo を 1 プロセスで 1 回作ってコピーする（`tests/toolkit` と `tests/integration` の全体で 17 分 40 秒 → 14 分 42 秒）。`test_full_run_rehearsal` は verify.commands を軽い命令に置き換えて 51 秒 → 20 秒（失敗する命令に替えるとテストが落ちることを確認）、`test_concurrent_claim_and_start` は後の確認を同時に行い、さらに `run-state.py start` の git 呼び出しを減らして 44 秒 → 33 秒（反復回数・同時数は PARAM-051・052 のまま。`worktree list` と `rev-parse --git-common-dir` を git を起動せず `.git` から読む。30 個の worktree で `git worktree list` と同じ結果であることを確認）。残りは worktree の作成（checkout、約 0.25 秒）と Windows のプロセス起動で、直列の 1 チャットあたり約 1.4 秒が下限に近い。`rdcheck.py similar <ID>` が、カタログの同じ ID の行を比較元にして要求との類似を見落とす不具合を修正（要求・受入基準を優先）。`test_ac187` は、言語切替が JA / EN の 2 つのボタンになった（AC-430）のに合わせて各ボタンを押す。別ファイルにまたがる同じ要求・層のケースは、`ledger.py run` が 1 つの pytest プロセスにまとめて実行するため統合しない（`ledger.py cost` に件数を表示）。 1 プロセスで install した repo をコピーして使い（`tests/system/snapshots.py`。1 テストあたり約 7.6 秒の install を 1 回に）、Studio のサーバーはプロセスで 1 つを共有し、2D マップの当たり判定の走査は粗密の 2 段（同じ格子の部分集合）と半径の二分探索にした。HVE-Studio の `studio` fixture は pytest-playwright の browser を使い、ほかのファイルと同じプロセスで動かしても asyncio の衝突で落ちない（以前は 43 件が error）。
 
 - System Test の台帳から、blocked の 150 件を削除する（利用者の指示）。重複を統合して停止していたケース 135 件、System Test の対象外（検証レベルが integration）のケース 12 件、廃止したベンチマーク要求のケース 3 件（`test_benchmark_submission.py` も削除）。同じ受入基準を保証する有効なケースは残る。ID は ID 台帳で「削除済み」とし再利用しない。台帳のケースは通常削除しない決まり（CHK-12）のため、`rdcheck.py check --base <削除前の commit>` はこの削除を報告する（意図した削除）。
 
-- Spec Kit の取り込み（`import-speckit.py`）、ベンチマーク一式（`bench/`）、`scripts/perf-report.py` を削除する。EABK Studio は残す。
-  - 理由: GitHub Copilot の直近 3 か月の機能強化（Agents window・Agent Host・応答ごとのモデル別 Token 表示・dynamic workflows など）で代替でき、EABK の目的（役割の分離・強制ゲート・決定的スクリプト・データの永続管理）に寄与しない周辺機能だった。Spec Kit の `specs/**`・`.specify/**` を ID の走査から外す既定は残す。
+- Spec Kit の取り込み（`import-speckit.py`）、ベンチマーク一式（`bench/`）、`scripts/perf-report.py` を削除する。HVE Studio は残す。
+  - 理由: GitHub Copilot の直近 3 か月の機能強化（Agents window・Agent Host・応答ごとのモデル別 Token 表示・dynamic workflows など）で代替でき、HVE の目的（役割の分離・強制ゲート・決定的スクリプト・データの永続管理）に寄与しない周辺機能だった。Spec Kit の `specs/**`・`.specify/**` を ID の走査から外す既定は残す。
   - インストーラ: 配布一覧から外し、`OBSOLETE` に加えた（更新時に、変更していない旧ファイルを削除する）。hook の心拍（`idle_gap_minutes`）の動作は変えない。
 
 - hook G-5 の誤拒否を減らす。
@@ -161,10 +161,10 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 - **既存アプリの導入（brownfield）** を追加しました（`scripts/adopt.py`・skill `adopt-existing`・[users-guide/10](users-guide/10-adopting-existing-apps.md)）。公開されている知見（再文書化とリエンジニアリングの分離、特性化テスト・golden master、Strangler Fig、ホットスポット分析、LLM による要求逆生成の幻覚対策）を、この toolkit の規則（G-1・G-2・G-3、承認は利用者）に照らして検証し、3 層（事実の棚卸し／逆生成の仮説＝出典と証跡の固定・承認待ち／現状の挙動の固定）で採用しました。`scan`・`request`・`anchor`・`check`・`golden` を提供し、conductor・rd-author・test-designer・rd-auditor・implementer の手順に導入モードを追加しました。
 
-- **EABK Studio**（`EABK-Studio/`。データ層をブラウザーで見る、読み取り専用のローカル Web アプリ）を、toolkit の副機能として配布します。インストールすると対象リポジトリに入り、インストールの最後に起動コマンドを表示します。
+- **HVE Studio**（`HVE-Studio/`。データ層をブラウザーで見る、読み取り専用のローカル Web アプリ）を、toolkit の副機能として配布します。インストールすると対象リポジトリに入り、インストールの最後に起動コマンドを表示します。
   - 役割別のガイドを追加しました: Product Manager・Architect・Software Engineer 向け（各 15 分のチュートリアル・おすすめのリンク・判断できること）と、各画面がどのファイルのどの節・列を読み、どう計算するかのデータリファレンス（実画面の画像つき。`capture-screens.py` で再採取できます）。
   - `studio.py` に `--check`（管理データのファイルの有無と解析件数を表示して終了。データ層がなければ exit 1）と `--role pm|architect|swe`（最初に開く画面）を追加しました。データ層のない `--repo` には、起動せずに案内を出します。`start.ps1`（`-Role`・`-Check`・`-NoOpen`）と `start.sh`（残りの引数）は、オプションをそのまま渡せます。
-  - EABK と EABK Studio のユーザーガイドを `users-guide/` の 1 か所にまとめました。Studio のガイドは `EABK-Studio/users-guide/` から [users-guide/studio/](users-guide/studio/README.md) へ移り（導入先では `EABK-docs/studio/`）、章の記号を `S1`〜`S8` にしました。索引 [users-guide/README.md](users-guide/README.md) を、第 1 部（EABK 本体）・第 2 部（Studio）・役割別・目的別の構成に作り直しました。更新時、導入先の旧 `EABK-Studio/users-guide/` は（変更していなければ）削除されます。
+  - HVE と HVE Studio のユーザーガイドを `users-guide/` の 1 か所にまとめました。Studio のガイドは `HVE-Studio/users-guide/` から [users-guide/studio/](users-guide/studio/README.md) へ移り（導入先では `HVE-docs/studio/`）、章の記号を `S1`〜`S8` にしました。索引 [users-guide/README.md](users-guide/README.md) を、第 1 部（HVE 本体）・第 2 部（Studio）・役割別・目的別の構成に作り直しました。更新時、導入先の旧 `HVE-Studio/users-guide/` は（変更していなければ）削除されます。
   - Studio は `__pycache__` を作らないので、対象リポジトリの `git status` を汚しません。
 - conductor にレーンの自動判定を追加しました（`run-state.py lane decide|confirm|show`）。変えた要求が 3 件以下・queue が 2 項目以下で、セキュリティ・競合・共通部品・未確定・事業目的との不一致がないときだけ fast レーンとし、独立監査・reviewer・全量の多数決を省きます（比較レポートの E-4・E-5 の実測に基づく）。要求の書き戻し・System Test の先行設計・verify・hook は省きません。条件を外れる事象が出たら full に戻します。run-report にレーンと省いた工程、依頼の範囲の充足率を書きます。
 

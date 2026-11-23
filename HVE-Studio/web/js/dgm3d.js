@@ -150,7 +150,7 @@ export function mount3d(host, g, { onPick } = {}) {
 
   // FR-1068 AC-374: test hook — the nodes now drawn as {id, kind, shape}.
   const hook3 = { nodes: () => items.map((s) => ({ id: s.id, kind: s.kind, shape: shapeOf(s.kind) })), style: () => prefs.style, fx: () => [...fxSet()], camera: () => rig.camera() };
-  window.__eabk3d = hook3;
+  window.__hve3d = hook3;
 
   return {
     setSelected(id) {
@@ -162,7 +162,7 @@ export function mount3d(host, g, { onPick } = {}) {
     },
     destroy() {
       dead = true; cancelAnimationFrame(raf); ro.disconnect();
-      if (window.__eabk3d === hook3) delete window.__eabk3d;
+      if (window.__hve3d === hook3) delete window.__hve3d;
       rig.destroy(); rig.el.remove(); styleEl?.remove(); legendEl?.remove(); objs.dispose();
       scene.traverse((o) => { if (!o.isInstancedMesh) o.geometry?.dispose?.(); o.material?.dispose?.(); });
       texs.forEach((x) => x.dispose());

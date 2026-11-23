@@ -575,10 +575,10 @@ function mountGraph(host) {
       return { mode: 'map3d', map3d: { points: pts, tiers: JSON.parse(mount3.dataset.tiers || '[]') } };
     },
   };
-  window.eabkView = viewApi3;
+  window.hveView = viewApi3;
   // FR-1068 AC-374: テスト hook。いま描かれているノードの {id, kind, shape}。
   const hook3 = { nodes: displayedNodes, style: () => prefs.style, fx: () => [...fxSet()], camera: () => rig.camera() };
-  window.__eabk3d = hook3;
+  window.__hve3d = hook3;
   if (snapshot) frame(0);
   else raf = requestAnimationFrame(frame);
   if (snapshot) {
@@ -591,8 +591,8 @@ function mountGraph(host) {
 
   return {
     destroy() {
-      if (window.eabkView === viewApi3) window.eabkView = undefined;
-      if (window.__eabk3d === hook3) delete window.__eabk3d;
+      if (window.hveView === viewApi3) window.hveView = undefined;
+      if (window.__hve3d === hook3) delete window.__hve3d;
       dead = true; cancelAnimationFrame(raf); stopTour(); rig.destroy(); rig.el.remove(); ro.disconnect(); offs.forEach((f) => f()); hideTip();
       scene.traverse((o) => { o.geometry?.dispose?.(); o.material?.dispose?.(); });
       labelCache.forEach((tx) => tx.dispose());

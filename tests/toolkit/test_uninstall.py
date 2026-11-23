@@ -1,4 +1,4 @@
-"""tools/uninstall.py: remove EABK installed by any version (FR-1087)."""
+"""tools/uninstall.py: remove HVE installed by any version (FR-1087)."""
 import hashlib
 import io
 import json

@@ -1,7 +1,7 @@
 """System test for FR-1099 AC-536 (HVE Studio: repositories that make up one application).
 
 AC-536: from the header's repository controls, repositories are added one by one with the OS folder dialog (the same
-mechanism as FR-010; EABK_STUDIO_PICK_PATH replaces the dialog in tests) and removed from the list; the list shows each
+mechanism as FR-010; HVE_STUDIO_PICK_PATH replaces the dialog in tests) and removed from the list; the list shows each
 repository's name, path, mode (management data / code mode) and loading state; at most PARAM-069 = 10; the same path is
 rejected with a reason; one failing repository does not hide the others and shows its cause and a retry; the set of
 paths (only) is kept per browser and restored on the next start; cancelling the dialog changes nothing.
@@ -23,7 +23,7 @@ from entity_repo import make_other, make_standard
 
 ROOT = Path(__file__).resolve().parents[3]
 STUDIO = ROOT / "HVE-Studio" / "studio.py"
-HDR = {"X-EABK-Studio": "1", "Content-Type": "application/json"}
+HDR = {"X-HVE-Studio": "1", "Content-Type": "application/json"}
 
 
 class Studio:
@@ -38,9 +38,9 @@ class Studio:
 
     def start(self, pick):
         env = dict(os.environ)
-        env.pop("EABK_STUDIO_PICK_PATH", None)
+        env.pop("HVE_STUDIO_PICK_PATH", None)
         if pick is not None:
-            env["EABK_STUDIO_PICK_PATH"] = str(pick)
+            env["HVE_STUDIO_PICK_PATH"] = str(pick)
         self.proc = subprocess.Popen([sys.executable, str(STUDIO), "--repo", str(self.repo), "--port", str(self.port), "--no-open",
                                       "--no-remote"], cwd=self.repo, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         end = time.time() + 15
@@ -122,7 +122,7 @@ def test_ac536_add_list_duplicate_restore_and_cancel(browser, repos):
         _add(page)          # the same path again
         expect(page.locator("#toast")).to_contain_text("すでに一覧")
         _count(page, 2)
-        saved = json.loads(page.evaluate("() => localStorage.getItem('eabk-studio.repos')"))
+        saved = json.loads(page.evaluate("() => localStorage.getItem('hve-studio.repos')"))
         assert [Path(p) for p in saved] == [a, b] and all(isinstance(p, str) for p in saved)
         st.stop()
         st.start(None)                                     # next start: the server opens only `a` ...
@@ -142,7 +142,7 @@ def test_ac536_add_list_duplicate_restore_and_cancel(browser, repos):
         page.get_by_test_id("repo-list-open").click()
         page.locator(f'[data-testid="repo-row"][data-path="{rows[1]["path"]}"] [data-testid="repo-remove"]'.replace("\\", "\\\\")).click()
         _count(page, 1)
-        assert [Path(p) for p in json.loads(page.evaluate("() => localStorage.getItem('eabk-studio.repos')"))] == [a]
+        assert [Path(p) for p in json.loads(page.evaluate("() => localStorage.getItem('hve-studio.repos')"))] == [a]
     finally:
         st.stop()
 

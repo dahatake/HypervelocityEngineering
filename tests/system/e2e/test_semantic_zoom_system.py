@@ -3,9 +3,9 @@
 Expected values come from the acceptance criteria and PARAM-017=2 / PARAM-018=8 / PARAM-019=300 /
 PARAM-020=5000 / PARAM-022=3 s only.  PROVISIONAL CONTRACT (仮置き, see tests/system/entity_repo.py header):
 fixture notation for columns/relations, and the Studio state contract
-    [data-testid="semantic-zoom"][data-scale][data-level][data-ready], window.eabkView.setScale/getState,
+    [data-testid="semantic-zoom"][data-scale][data-level][data-ready], window.hveView.setScale/getState,
     2D DOM [data-entity] / [data-edge][data-from][data-to][data-kind] / [data-column], routes #/entities #/map2d #/map3d.
-3D is a canvas, so it is verified only through window.eabkView.getState().
+3D is a canvas, so it is verified only through window.hveView.getState().
 """
 import os
 import platform
@@ -95,10 +95,10 @@ def _open(browser, url, route):
 
 
 def _state(page, scale):
-    page.evaluate("s => window.eabkView.setScale(s)", scale)
+    page.evaluate("s => window.hveView.setScale(s)", scale)
     page.wait_for_function(
         "s => Math.abs(Number(document.querySelector('[data-testid=\"semantic-zoom\"]').dataset.scale) - s) < 1e-6", arg=scale)
-    return page.evaluate("() => window.eabkView.getState()")
+    return page.evaluate("() => window.hveView.getState()")
 
 
 def _level(page):
@@ -239,7 +239,7 @@ def test_ac183_large_data_counts_are_complete_even_if_display_is_partial(browser
     page = browser.new_context(viewport={"width": 1400, "height": 900}).new_page()
     page.goto(f"{large_url}/#/{route}")
     page.wait_for_selector('[data-testid="semantic-zoom"][data-ready="true"]', timeout=30000)
-    st = page.evaluate("() => window.eabkView.getState()")
+    st = page.evaluate("() => window.hveView.getState()")
     n = len(st["entities"]) if st["level"] != "overview" else sum(c["count"] for c in st["clusters"])
     assert n == 300
     page.context.close()

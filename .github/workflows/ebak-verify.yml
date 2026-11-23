@@ -1,6 +1,6 @@
 name: ebak-verify
 
-# EABK Lite: the deterministic checks (rdcheck profile from scripts/ebak.config.json, default "lite") and the
+# HVE Lite: the deterministic checks (rdcheck profile from scripts/ebak.config.json, default "lite") and the
 # project commands in verify.commands run here for every push and pull request, so the rules in AGENTS.md hold
 # for every person and every PC without relying on prompts.
 on:

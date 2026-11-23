@@ -21,10 +21,10 @@ PROVISIONAL CONTRACT (仮置き。実装者が確認し、食い違えば CONFLI
     {"env":{...},"samples":{"first_display":[ms,...],"zoom":[...],"select":[...]}}（操作ごと PARAM-038 回以上）。
 
     AC-276 の基準値の取得手順（実装者が、外観変更に着手する前に最初に行う。測定済みでなければ AC-276 は失敗する）:
-      1. 基準 commit の worktree を作る:  git worktree add ../eabk-baseline-80c7cc55 80c7cc55
+      1. 基準 commit の worktree を作る:  git worktree add ../hve-baseline-80c7cc55 80c7cc55
       2. この試験ファイル（と tests/system/e2e の補助モジュール）を、その worktree の同じ場所へ複製する（基準側に無ければ）。
-      3. その worktree で実行:  EABK_RECORD_PERF_BASELINE=1 python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py
-            -k test_ac276 -q   （PowerShell: $env:EABK_RECORD_PERF_BASELINE='1'）
+      3. その worktree で実行:  HVE_RECORD_PERF_BASELINE=1 python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py
+            -k test_ac276 -q   （PowerShell: $env:HVE_RECORD_PERF_BASELINE='1'）
          → work/runs/202610171403/evidence/perf-baseline-80c7cc55.json（env と samples）が書かれる。
       4. そのファイルを、run の作業ブランチ側の同じパスへ複製して commit する（測定環境と値を記録する）。
       5. 以後の通常実行（環境変数なし）は、この値と比べる。測定は同じ機器・同じ環境で行う。
@@ -702,7 +702,7 @@ def _git(*args):
 def test_ac275_nav_items_and_legacy_urls_identical_to_baseline_commit(page):
     # 基準 commit 80c7cc55 の ナビ全項目は、作業ステップ（FR-1094。2026-11-20）の中に置かれて今も全部開ける。
     # 項目の画面 ID は基準の NAV（app.js）と同一で、旧 URL も開ける。ステップ内のナビは「そのステップの画面」だけを並べる。
-    base_app = _git("show", f"{BASE}:EABK-Studio/web/js/app.js")   # 基準 commit のフォルダー名は EABK-Studio（のちに HVE-Studio へ改名）
+    base_app = _git("show", f"{BASE}:HVE-Studio/web/js/app.js")   # 基準 commit のフォルダー名は HVE-Studio（のちに HVE-Studio へ改名）
     base_nav = re.findall(r"'([^']+)'", re.search(r"const NAV = \[([^\]]*)\]", base_app).group(1))
     now = []
     for step in range(1, 7):
@@ -769,7 +769,7 @@ def _measure(browser, url, n):
         page.wait_for_selector('[data-testid="semantic-zoom"][data-ready="true"]', timeout=30000)
         first.append((time.perf_counter() - t0) * 1000)
         for scale in (0.5, 2.0):
-            ms = page.evaluate("""async (s) => { const t = performance.now(); window.eabkView.setScale(s);
+            ms = page.evaluate("""async (s) => { const t = performance.now(); window.hveView.setScale(s);
                 await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); return performance.now() - t }""", scale)
             zoom.append(ms)
         ent = page.locator("[data-entity]").first
@@ -783,7 +783,7 @@ def _measure(browser, url, n):
 
 # NFR-PERF-006 AC-276
 def test_ac276_render_p95_within_tolerance_of_baseline_and_absolute_limits(browser, large_url):
-    if os.environ.get("EABK_RECORD_PERF_BASELINE") == "1":
+    if os.environ.get("HVE_RECORD_PERF_BASELINE") == "1":
         out = ROOT / "work" / "runs" / "202610171403" / "evidence" / "perf-baseline-80c7cc55.json"
         out.parent.mkdir(parents=True, exist_ok=True)
         env = {"commit": subprocess.run(["git", "rev-parse", "--short=8", "HEAD"], cwd=ROOT, capture_output=True,

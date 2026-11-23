@@ -8,7 +8,7 @@ from test_links_wrap_status_ui import studio  # noqa: F401
 def test_startup_tracks_real_model_and_view_loading(studio, language, width):
     browser, url = studio
     context = browser.new_context(viewport={"width": width, "height": 700}, reduced_motion="reduce")
-    context.add_init_script(f"localStorage.setItem('eabk-studio.lang', '{language}')")
+    context.add_init_script(f"localStorage.setItem('hve-studio.lang', '{language}')")
     context.add_init_script("""
       const originalFetch = window.fetch;
       window.pendingStartup = {};

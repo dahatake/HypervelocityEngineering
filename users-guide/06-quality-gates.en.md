@@ -2,7 +2,7 @@
 
 # 6. Checks and CI
 
-Quality in EABK Lite comes from deterministic checks. The local `scripts/verify.py` and the CI workflow `ebak-verify` run the same checks. CI only checks; data-layer repairs are made locally with `python scripts/rdfix.py --full --apply` and included in the same change. At milestones rd-auditor audits the meaning. Nothing depends on prompts or personal memory. The rules (AGENTS.md) and the checks live in the repository, so they work the same way for several people on several PCs.
+Quality in HVE Lite comes from deterministic checks. The local `scripts/verify.py` and the CI workflow `ebak-verify` run the same checks. CI only checks; data-layer repairs are made locally with `python scripts/rdfix.py --full --apply` and included in the same change. At milestones rd-auditor audits the meaning. Nothing depends on prompts or personal memory. The rules (AGENTS.md) and the checks live in the repository, so they work the same way for several people on several PCs.
 
 | Layer | When | What it does | Does it stop work? |
 |---|---|---|---|
@@ -12,7 +12,7 @@ Quality in EABK Lite comes from deterministic checks. The local `scripts/verify.
 
 ## 6.1 There are no hooks
 
-EABK Lite has no hooks and does not add a preamble to requests automatically. Nothing denies tool calls or sends work back, and there are no gates based on roles, edit scope, or branches. Whether the rules are followed is confirmed by verify and the CI checks. If you want a standing preamble, put it in your own Copilot instructions.
+HVE Lite has no hooks and does not add a preamble to requests automatically. Nothing denies tool calls or sends work back, and there are no gates based on roles, edit scope, or branches. Whether the rules are followed is confirmed by verify and the CI checks. If you want a standing preamble, put it in your own Copilot instructions.
 
 When updating from an older version, use `--clean` (clean install); it also deletes the old hook files ([7.4](07-troubleshooting.en.md#74-install-and-update)).
 

@@ -37,7 +37,7 @@
 <script>
   (() => {
     let saved;
-    try { saved = localStorage.getItem('eabk-studio.lang'); } catch { saved = null; }
+    try { saved = localStorage.getItem('hve-studio.lang'); } catch { saved = null; }
     const en = saved === 'en' || (saved !== 'ja' && !navigator.language.toLowerCase().startsWith('ja'));
     if (en) {
       document.getElementById('splashTitle').textContent = 'See the whole picture, in one place.';

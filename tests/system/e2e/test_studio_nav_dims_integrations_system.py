@@ -8,7 +8,7 @@ PROVISIONAL CONTRACT (仮置き。実装者が確認し、食い違えば CONFLI
     （kind は既存の KINDS。dim 省略時は 2D）。
   - 2D/3D 切替: [data-testid="dim-toggle"] の中に [data-dim="2d"] / [data-dim="3d"] のボタン（本文に「2D」「3D」）。
     現在の次元は [data-testid="dim-toggle"][data-current=2d|3d]。
-  - 図の内容: window.eabkView.getState().diagram = {kind, dim, elements:[{id,label}], relations:[{from,to}]}
+  - 図の内容: window.hveView.getState().diagram = {kind, dim, elements:[{id,label}], relations:[{from,to}]}
     （3D は canvas なので、この公開状態で 2D と同じ内容かを比べる）。
   - 外部連携: ナビの項目名「外部連携」。一覧の行 [data-testid="integration-row"][data-id=INT-xxx]、
     CSV は「CSV」ボタン。カタログは docs/integrations.md（`#### INT-001 <名前>` ＋ `- <欄名>: 値`）、
@@ -81,7 +81,7 @@ def int_url(tmp_path):
 
 
 def _state(page):
-    return page.evaluate("() => window.eabkView.getState().diagram")
+    return page.evaluate("() => window.hveView.getState().diagram")
 
 
 def _open(page, kind, dim):

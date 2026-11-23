@@ -54,7 +54,7 @@ If `next-id.py` runs on two branches at the same time, the same ID can be alloca
 | `WARN-WIRING <file>:<line>` appears | A custom check you added directly to `scripts/*.py` will be dropped by the update. Register it again in `extensions.checks` or `scripts/ext/` ([4.7](04-customization.en.md#47-project-specific-checks-extensionschecks--scriptsext)) |
 | You want to stop the data-layer repair after installing | `--no-repair` checks and plans only (writes nothing); `--skip-verify` neither checks nor repairs. The PowerShell wrapper uses `-NoRepair`. The installer's exit code does not depend on the data-layer result |
 
-### Updating from 0.5.x to 0.6.0 (EABK Lite)
+### Updating from 0.5.x to 0.6.0 (HVE Lite)
 
 - **How to update**: The installer has no migration code for older versions. Do a clean install with `--clean`. The old agents, skills, hooks, scripts, the auto-repair workflow and the old settings keys are deleted even if you modified them, and this version is installed again.
 - **Settings**: `scripts/ebak.config.json` is recreated from defaults. Check the previous values (such as `verify.commands`) with `git diff scripts/ebak.config.json` and restore what you need.
@@ -63,7 +63,7 @@ If `next-id.py` runs on two branches at the same time, the same ID can be alloca
 
 ## 7.5 Hooks and the preamble from older versions
 
-EABK Lite has no hooks and no automatic preamble. The following symptoms appear after updating from an older version.
+HVE Lite has no hooks and no automatic preamble. The following symptoms appear after updating from an older version.
 
 | Symptom | What to do |
 |---|---|
@@ -74,7 +74,7 @@ EABK Lite has no hooks and no automatic preamble. The following symptoms appear 
 
 | Symptom | What to do |
 |---|---|
-| It exits with code 1 without starting (`no EABK data layer … and nothing to show in code mode`) | The folder given in `--repo` has no data layer (requirements definition and so on), and code mode has nothing to show either. Code mode applies only to the root of a git repository; an empty or non-git folder is not shown. Check which files were read and the counts (in code mode, the `mode: code (...)` line) with `python HVE-Studio/studio.py --check --repo <path>` |
+| It exits with code 1 without starting (`no HVE data layer … and nothing to show in code mode`) | The folder given in `--repo` has no data layer (requirements definition and so on), and code mode has nothing to show either. Code mode applies only to the root of a git repository; an empty or non-git folder is not shown. Check which files were read and the counts (in code mode, the `mode: code (...)` line) with `python HVE-Studio/studio.py --check --repo <path>` |
 | The port is in use | If the default 8765 is in use, it listens on the next number. To pin it, pass `--port N` |
 | The screen shows old content | When data-layer files change, Studio reloads them within a few seconds. If reloading the browser does not help, restart Studio |
 

@@ -195,7 +195,7 @@ def data_server(data_repo, tmp_path, monkeypatch):
 def request(url, endpoint, payload=None, header=True):
     headers = {"Content-Type": "application/json"}
     if header:
-        headers["X-EABK-Studio"] = "1"
+        headers["X-HVE-Studio"] = "1"
     req = urllib.request.Request(url + endpoint, data=None if payload is None else json.dumps(payload).encode(),
                                  headers=headers)
     with urllib.request.urlopen(req, timeout=10) as response:

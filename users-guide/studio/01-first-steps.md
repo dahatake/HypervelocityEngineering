@@ -12,7 +12,7 @@
 | 追加インストール | 追加インストール不要です（Python パッケージ）。3D 表示用の three.js は同梱されています。Git リポジトリの解析には `git` コマンドが必要です。 | 確認済み: [`README.md`](../../HVE-Studio/README.md)、`repo_scan.py` |
 | 起動スクリプト | Windows では `start.ps1`、macOS/Linux では `start.sh` を利用できます。各 OS の版別の動作確認範囲は未確認です。 | 確認済み: [`start.ps1`](../../HVE-Studio/start.ps1)、[`start.sh`](../../HVE-Studio/start.sh) |
 | ブラウザー | ローカル URL を開くブラウザーが必要です。対応するブラウザー名・版は未確認です。 | 確認済み: 起動時にブラウザーを開く仕様。対応範囲は未確認。 |
-| 対象リポジトリ | EABK の管理データがあるリポジトリ（`docs/requirements-definition.md` または `docs/catalog.md` が見つかる場所）か、EABK のない git リポジトリ（コードのモード。下の「EABK なしで Studio を使う」）を指定します。 | 確認済み: [`README.md`](../../HVE-Studio/README.md) |
+| 対象リポジトリ | HVE の管理データがあるリポジトリ（`docs/requirements-definition.md` または `docs/catalog.md` が見つかる場所）か、HVE のない git リポジトリ（コードのモード。下の「HVE なしで Studio を使う」）を指定します。 | 確認済み: [`README.md`](../../HVE-Studio/README.md) |
 | ネットワーク | インターネット接続は不要です。Studio は `127.0.0.1` だけで待ち受け、既定ポートは `8765` です。 | 確認済み: [`README.md`](../../HVE-Studio/README.md) |
 | 権限・ネットワーク設定 | 管理者権限、ファイアウォール／プロキシの設定、ローカルポート利用許可が必要かどうかは未確認です。必要になった場合は、組織の端末・ネットワーク管理者に確認してください。 | 未確認 |
 
@@ -71,9 +71,9 @@ python HVE-Studio/studio.py --repo C:\path\to\your-repo --delete-data
 
 画面右上のリポジトリ名を押し、OS のダイアログでフォルダーを選びます。起動し直す必要はありません。管理データのあるフォルダーと任意のローカル Git リポジトリ（文書だけ・空でも可）へ切り替えられます。管理データも Git もないフォルダーは、理由を表示して現在の対象を維持します。
 
-## EABK なしで Studio を使う（コードのモード）
+## HVE なしで Studio を使う（コードのモード）
 
-EABK を入れていない git リポジトリも見られます（FR-1086）。HVE（この toolkit）を clone したフォルダーから、対象のリポジトリのルートを指定します。
+HVE を入れていない git リポジトリも見られます（FR-1086）。HVE（この toolkit）を clone したフォルダーから、対象のリポジトリのルートを指定します。
 
 ```powershell
 python HVE-Studio/studio.py --repo C:\path\to\any-git-repo --check

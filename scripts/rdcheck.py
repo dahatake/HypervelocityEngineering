@@ -1544,16 +1544,16 @@ def cmd_digest(args, root, cfg) -> int:
 
 
 def cmd_hierarchy(args, root, cfg) -> int:
-    """FR-1062: 種類→区分→領域→項目の階層。導出の実体は HVE-Studio/eabk_model.py（1 か所）。都度生成し、保存しない。"""
+    """FR-1062: 種類→区分→領域→項目の階層。導出の実体は HVE-Studio/hve_model.py（1 か所）。都度生成し、保存しない。"""
     studio = Path(__file__).resolve().parent.parent / "HVE-Studio"
-    if not (studio / "eabk_model.py").is_file():
+    if not (studio / "hve_model.py").is_file():
         studio = root / "HVE-Studio"
     sys.path.insert(0, str(studio))
     sd = sys.dont_write_bytecode
     sys.dont_write_bytecode = True
     try:
-        import eabk_model
-        hier = eabk_model.build_model(root)["hierarchy"]
+        import hve_model
+        hier = hve_model.build_model(root)["hierarchy"]
     finally:
         sys.dont_write_bytecode = sd
     if args.json:

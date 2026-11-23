@@ -71,7 +71,7 @@ def test_ac214_catalog_related_managed_files_follow_the_normal_update_path_and_n
     assert (fresh / CATALOG).is_file()
 
 
-# FR-1085 AC-467 AC-473: an installed EABK Lite has no hooks, no repairing workflow, no Studio tests, and an empty
+# FR-1085 AC-467 AC-473: an installed HVE Lite has no hooks, no repairing workflow, no Studio tests, and an empty
 # verify.commands (the target registers its own build and test commands)
 def test_fr1085_installed_lite_has_rules_and_checks_only(installed_repo):
     for rel in (".github/hooks", "scripts/hooks", ".github/workflows/ebak-data-layer.yml", "HVE-Studio/tests",

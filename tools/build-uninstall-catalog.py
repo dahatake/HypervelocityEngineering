@@ -3,7 +3,7 @@
 
 The catalog is what tools/uninstall.py knows about every toolkit version, including the ones without a manifest:
   * every file any version of tools/install.py shipped, at the path it was installed to in that version
-    (e.g. users-guide/* was installed as users-guide/ before EABK-docs/ existed), with the content hash of every
+    (e.g. users-guide/* was installed as users-guide/ before HVE-docs/ existed), with the content hash of every
     version of that file ever committed (CRLF normalised, like install.py's sha());
   * the management-data templates, manifests, config files, AGENTS.md block markers, .gitignore / .gitattributes
     headers and lines, backup suffixes and data-file defaults that any version used.

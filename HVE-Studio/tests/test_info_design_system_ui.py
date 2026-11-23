@@ -56,7 +56,7 @@ def test_ac282_group_headings_keyboard_selection_keeps_filter_and_sort(studio):
     assert page.locator("#view .tbar .mini").first.inner_text() == count_before
     with page.expect_download() as dl:
         page.locator("#view button", has_text="CSV").click()
-    assert dl.value.suggested_filename == "eabk-reqs.csv"
+    assert dl.value.suggested_filename == "hve-reqs.csv"
     page.context.close()
 
 

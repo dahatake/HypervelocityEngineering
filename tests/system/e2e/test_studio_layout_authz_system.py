@@ -5,7 +5,7 @@ implementation is NOT the oracle.
 
 PROVISIONAL CONTRACT (仮置き。AC に画面の部品名がないため。実装者が確認し、食い違えば CONFLICT として返す。
 この oracle は実装に合わせて直さない):
-  - レイアウト: window.eabkView.getState().layout = {id: <配置の識別子>, isDefault: bool}。
+  - レイアウト: window.hveView.getState().layout = {id: <配置の識別子>, isDefault: bool}。
   - 変更操作: [data-testid="layout-change"]（既定でない別の配置へ切り替える）。
   - 既定へ戻す: [data-testid="layout-reset"]（同一表示中、再読込なしで行える）。
   - 保存先: ブラウザー（Local Storage）。別のブラウザー・端末 = 新しい browser context（保存領域が別）。
@@ -21,7 +21,7 @@ FORBIDDEN = re.compile(r"認可済み|機密判定済み|アクセス許可済�
 
 
 def _layout(page):
-    return page.evaluate("() => window.eabkView.getState().layout")
+    return page.evaluate("() => window.hveView.getState().layout")
 
 
 def _change(page):

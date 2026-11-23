@@ -17,7 +17,7 @@ def test_fr1068_ac374_uses_shared_shape_table_not_sprites():
 
 # FR-1068 AC-374: legend and test hook
 def test_fr1068_legend_and_hook():
-    assert "buildLegend" in SRC and "window.__eabk3d" in SRC and "nodes:" in SRC
+    assert "buildLegend" in SRC and "window.__hve3d" in SRC and "nodes:" in SRC
 
 
 # FR-1069: style toggle, Software Engineering default, only the style name is stored (shapes3d.saveStyle)
@@ -29,7 +29,7 @@ def test_fr1069_style_toggle():
 def test_fr1070_fr1071_camera_rig_and_reduced_motion():
     assert "createCameraRig" in SRC and "interact: stage" in SRC and "applyDelta" in SRC
     assert "prefers-reduced-motion" in SRC
-    assert "rig.destroy()" in SRC and "delete window.__eabk3d" in SRC
+    assert "rig.destroy()" in SRC and "delete window.__hve3d" in SRC
 
 
 # selection, labels and picking are kept

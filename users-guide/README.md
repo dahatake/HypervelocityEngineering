@@ -1,23 +1,23 @@
 **日本語** | [English](README.en.md)
 
-# EABK Lite ユーザーガイド
+# HVE Lite ユーザーガイド
 
-EABK Lite（Enterprise App Build Kit Lite、0.6.0）と **HVE Studio** は、1 つのアプリケーションです。このフォルダー `users-guide/` が、その唯一のユーザーガイドです。概要・インストール・Quickstart・用語は、リポジトリ直下の [README.md](../README.md) を先に読んでください。
+HVE Lite（Enterprise App Build Kit Lite、0.6.0）と **HVE Studio** は、1 つのアプリケーションです。このフォルダー `users-guide/` が、その唯一のユーザーガイドです。概要・インストール・Quickstart・用語は、リポジトリ直下の [README.md](../README.md) を先に読んでください。
 
-EABK Lite は、**規則（AGENTS.md）＋データ層（要求定義書・カタログ・System Test の台帳・ID 台帳）＋決定的な検査（`verify.py` と CI の `ebak-verify`）＋節目の監査（rd-auditor）** だけの構成です。利用者は、いつもの Copilot（既定のエージェント）にふだんどおり依頼します。振る舞いを変える変更では、AGENTS.md の規則に従って、要求定義書・カタログ・テストが同じ変更の中で更新され、push すると CI が同じ検査をします。
+HVE Lite は、**規則（AGENTS.md）＋データ層（要求定義書・カタログ・System Test の台帳・ID 台帳）＋決定的な検査（`verify.py` と CI の `ebak-verify`）＋節目の監査（rd-auditor）** だけの構成です。利用者は、いつもの Copilot（既定のエージェント）にふだんどおり依頼します。振る舞いを変える変更では、AGENTS.md の規則に従って、要求定義書・カタログ・テストが同じ変更の中で更新され、push すると CI が同じ検査をします。
 
 | 部 | 対象 | 章の記号 | 場所 |
 |---|---|---|---|
-| 第 1 部 | **EABK Lite 本体**: 依頼の書き方、ふだんの進め方、管理データの書式と検査、節目の監査 | 1〜11 | このフォルダー直下 |
+| 第 1 部 | **HVE Lite 本体**: 依頼の書き方、ふだんの進め方、管理データの書式と検査、節目の監査 | 1〜11 | このフォルダー直下 |
 | 第 2 部 | **HVE Studio**: 管理データ（データ層）を図・表・検索で見て回る、ローカル専用の閲覧アプリ | S1〜S9 | [studio/](studio/README.md) |
 
 2 つの部は、同じデータ層でつながっています。変更の中で Copilot（または人）がデータ層を書き、Studio が読みます。要求や実装を変えるときは、Studio ではなく Copilot のチャットで依頼します。
 
-![EABK Lite の毎日の流れ。依頼 → 1 回の変更でコードとデータ層を更新 → verify → push と CI → Studio で見る。節目は rd-auditor が監査する](images/fig-flow.svg)
+![HVE Lite の毎日の流れ。依頼 → 1 回の変更でコードとデータ層を更新 → verify → push と CI → Studio で見る。節目は rd-auditor が監査する](images/fig-flow.svg)
 
 > **初めての方へ**: [README の Quickstart](../README.md#quickstart) → [S9 画面ツアー（図解）](studio/09-visual-tour.md)（全画面を図で説明）の順に読むのがおすすめです。トップへ戻る: [← リポジトリの README](../README.md)
 
-## 第 1 部: EABK Lite 本体
+## 第 1 部: HVE Lite 本体
 
 | # | ドキュメント | 読むタイミング |
 |---|---|---|
@@ -87,6 +87,6 @@ EABK Lite は、**規則（AGENTS.md）＋データ層（要求定義書・カ�
 ## このガイドの書き方の約束
 
 - 章番号は、第 1 部が `1`〜`11`、第 2 部が `S1`〜`S9` です。節は `4.4`・`S8.5.2` のように章番号に続けます。他のガイドから参照するときも、この記号を使います。
-- 配布元のリポジトリでは `users-guide/` です。`tools/install.py` で導入したリポジトリでは `EABK-docs/` に入ります（導入先の `users-guide/` は触りません）。ガイド内のリンクは、配布元の位置を基準にした相対パスです。
-- 実画面の写真は `studio/images/*.png`、採取条件は [studio/screen-images.json](studio/screen-images.json)、再採取は `studio/capture-screens.py` です。説明用の図は SVG で、日本語版（`fig-*.svg`）と英語版（`fig-*.en.svg`）があります（Studio の図は `studio/images/`、EABK 本体の図は `images/`）。
+- 配布元のリポジトリでは `users-guide/` です。`tools/install.py` で導入したリポジトリでは `HVE-docs/` に入ります（導入先の `users-guide/` は触りません）。ガイド内のリンクは、配布元の位置を基準にした相対パスです。
+- 実画面の写真は `studio/images/*.png`、採取条件は [studio/screen-images.json](studio/screen-images.json)、再採取は `studio/capture-screens.py` です。説明用の図は SVG で、日本語版（`fig-*.svg`）と英語版（`fig-*.en.svg`）があります（Studio の図は `studio/images/`、HVE 本体の図は `images/`）。
 - ファイルを追加・改名したら、`tools/install.py` の `MANAGED` を合わせて直します（旧版の削除リストは持ちません。旧版からは `--clean`）（[9](09-versioning.md)）。
