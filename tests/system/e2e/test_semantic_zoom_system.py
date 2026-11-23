@@ -109,7 +109,7 @@ def _edge_set(st):
     return {(e["from"], e["to"], e["kind"]) for e in st["edges"]}
 
 
-# FR-1027 AC-174
+# FR-1027 AC-174: boundaries in both directions, level content, and unlisted columns.
 @pytest.mark.parametrize("route", ROUTES)
 def test_ac174_thresholds_switch_granularity_up_and_down_without_losing_entities(browser, zoom_url, route):
     page = _open(browser, zoom_url, route)
@@ -122,13 +122,6 @@ def test_ac174_thresholds_switch_granularity_up_and_down_without_losing_entities
             assert _level(page) == level  # 現在の粒度が識別できる
             covered = {e for c in st["clusters"] for e in c["entities"]} if level == "overview" else set(st["entities"])
             assert covered == ALL  # どの粒度でも欠けない
-    page.context.close()
-
-
-# FR-1027 AC-174 (content of each level)
-@pytest.mark.parametrize("route", ROUTES)
-def test_ac174_levels_show_clusters_then_edges_then_columns(browser, zoom_url, route):
-    page = _open(browser, zoom_url, route)
     ov = _state(page, 1)
     sizes = sorted(c["count"] for c in ov["clusters"])
     assert sizes == [1, 3]  # 注文・顧客・商品 は連結、在庫は単独のクラスター
@@ -141,16 +134,9 @@ def test_ac174_levels_show_clusters_then_edges_then_columns(browser, zoom_url, r
     cols = {c["name"]: c for c in big["columns"]["注文"]}
     assert (cols["id"]["type"], cols["id"]["key"]) == ("int", "主キー")
     assert (cols["customer_id"]["key"], cols["customer_id"]["ref"]) == ("外部キー", "顧客.id")
-    page.context.close()
-
-
-# FR-1027 AC-174 (abnormal: out-of-range scale and unlisted columns are not invented)
-@pytest.mark.parametrize("route", ["map2d", "map3d"])
-def test_ac174_below_whole_fit_stays_overview_and_undefined_columns_not_invented(browser, zoom_url, route):
-    page = _open(browser, zoom_url, route)
-    assert _state(page, 0.5)["level"] == "overview"  # 1 未満でも粒度は「全体」（欠けない）
-    big = _state(page, T_DETAIL)
-    assert not big["columns"].get("商品")  # 列未記載のエンティティに推測した列を出さない
+    if route in ("map2d", "map3d"):
+        assert not big["columns"].get("商品")  # 列未記載のエンティティに推測した列を出さない
+        assert _state(page, 0.5)["level"] == "overview"
     page.context.close()
 
 
@@ -188,25 +174,18 @@ def test_ac177_2d_usage_edges_distinct_and_no_edge_for_unrelated_entities(browse
 # FR-1029 AC-179
 def test_ac179_3d_state_shows_same_information_per_level_with_kind_and_ends(browser, zoom_url):
     page = _open(browser, zoom_url, "map3d")
+    expect(page.locator("canvas").first).to_be_visible()
     assert sorted(c["count"] for c in _state(page, 1)["clusters"]) == [1, 3]
     mid = _state(page, T_MID)
     assert mid["level"] == "mid"
     assert {("注文", "顧客", "外部キー"), ("注文", "商品", "参照")} <= _edge_set(mid)
+    assert all(k in ("外部キー", "参照", "使用") for _, _, k in _edge_set(mid))
+    assert not any("在庫" in (a, b) and k != "使用" for a, b, k in _edge_set(mid))
     big = _state(page, T_DETAIL)
     assert big["level"] == "detail"
     ref = {c["name"]: c["ref"] for c in big["columns"]["注文"]}
     assert ref["customer_id"] == "顧客.id"
     assert {c["name"] for c in big["columns"]["顧客"]} == {"id", "name"}
-    page.context.close()
-
-
-# FR-1029 AC-179 (abnormal: 3D does not invent relations absent from the data; canvas is rendered)
-def test_ac179_3d_no_invented_edges_and_canvas_present(browser, zoom_url):
-    page = _open(browser, zoom_url, "map3d")
-    expect(page.locator("canvas").first).to_be_visible()
-    mid = _state(page, T_MID)
-    assert all(k in ("外部キー", "参照", "使用") for _, _, k in _edge_set(mid))
-    assert not any("在庫" in (a, b) and k != "使用" for a, b, k in _edge_set(mid))
     page.context.close()
 
 
@@ -230,16 +209,8 @@ def test_ac183_first_display_within_3s_at_300_entities_5000_columns(browser, lar
     record_property("environment", env)
     print(f"[AC-183] {route}: {elapsed:.3f}s on {env}")
     assert elapsed <= 3.0
-    page.context.close()
-
-
-# NFR-PERF-004 AC-183 (abnormal: data is not truncated at scale; 省略 is declared, counts stay full)
-@pytest.mark.parametrize("route", ["entities", "map2d"])
-def test_ac183_large_data_counts_are_complete_even_if_display_is_partial(browser, large_url, route):
-    page = browser.new_context(viewport={"width": 1400, "height": 900}).new_page()
-    page.goto(f"{large_url}/#/{route}")
-    page.wait_for_selector('[data-testid="semantic-zoom"][data-ready="true"]', timeout=30000)
-    st = page.evaluate("() => window.hveView.getState()")
-    n = len(st["entities"]) if st["level"] != "overview" else sum(c["count"] for c in st["clusters"])
-    assert n == 300
+    if route in ("entities", "map2d"):
+        st = page.evaluate("() => window.hveView.getState()")
+        n = len(st["entities"]) if st["level"] != "overview" else sum(c["count"] for c in st["clusters"])
+        assert n == 300
     page.context.close()

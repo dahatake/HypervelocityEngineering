@@ -106,7 +106,7 @@ def test_ac367_header_dim_toggle_never_disappears_or_duplicates_when_switching_s
 def test_ac367_in_screen_toggle_and_header_toggle_share_one_state(pg):
     _go(pg, "map2d")
     pg.locator(f'{HDR} [data-dim="3d"]').click()
-    pg.wait_for_function("() => document.querySelector('[data-testid=\"header-dim-toggle\"]').dataset.current")
+    expect(pg.locator(HDR)).to_have_attribute("data-selected", "3d")
     _skip_if_3d_unavailable(pg)
     assert _cur(pg) == "3d"
     for dt in pg.locator('[data-testid="dim-toggle"]').all():  # 画面内の切替が残っていても同じ値
@@ -128,6 +128,7 @@ def test_ac368_entities_screen_follows_header_mode(pg):
         assert _reason(pg, btn3)  # 対応しないなら理由が必要
         return
     btn3.click()
+    expect(pg.locator(HDR)).to_have_attribute("data-selected", "3d")
     pg.wait_for_function("() => window.__hve3d !== undefined || document.querySelector('[data-testid=\"header-dim-toggle\"]').dataset.current !== '3d'")
     _skip_if_3d_unavailable(pg)
     assert _cur(pg) == "3d"
@@ -150,6 +151,7 @@ def test_ac371_header_switch_keeps_zoom_level_and_selection(pg, route, scale, le
     assert target in before["entities"]
     for to in ("3d", "2d"):
         pg.locator(f'{HDR} [data-dim="{to}"]').click()
+        expect(pg.locator(HDR)).to_have_attribute("data-selected", to)
         pg.wait_for_selector('[data-testid="semantic-zoom"][data-ready="true"]')
         _skip_if_3d_unavailable(pg)
         assert pg.locator('[data-testid="semantic-zoom"]').get_attribute("data-level") == level, (to, level)
@@ -163,6 +165,7 @@ def test_ac371_overview_level_stays_overview_and_entities_not_lost_after_switch(
     pg.wait_for_selector('[data-testid="semantic-zoom"][data-ready="true"]')
     pg.evaluate("() => window.hveView.setScale(1)")
     pg.locator(f'{HDR} [data-dim="3d"]').click()
+    expect(pg.locator(HDR)).to_have_attribute("data-selected", "3d")
     pg.wait_for_selector('[data-testid="semantic-zoom"][data-ready="true"]')
     _skip_if_3d_unavailable(pg)
     assert pg.locator('[data-testid="semantic-zoom"]').get_attribute("data-level") == "overview"
@@ -192,14 +195,6 @@ def test_ac374_3d_nodes_expose_kind_and_distinct_shapes(pg3):
     assert len({next(iter(s)) for s in by_kind.values()}) >= 2, "種別が違うのに全部同じかたち（球のまま）"
 
 
-# FR-1068 AC-374 (異常系): 種別が違うノードが同じかたちのままにならない
-def test_ac374_different_kinds_never_share_a_single_shape(pg3):
-    nodes = _open3d(pg3)
-    shapes = {n["shape"] for n in nodes}
-    kinds = {n["kind"] for n in nodes}
-    assert len(shapes) > 1 or len(kinds) < 2, f"{len(kinds)} 種別が 1 つのかたち {shapes} に潰れている"
-
-
 # FR-1068 AC-375: 凡例が表示され、種別の集合が nodes() の種別の集合と一致する（欠けも余分もない）
 def test_ac375_legend_kinds_match_node_kinds_with_shape_and_name(pg3):
     nodes = _open3d(pg3)
@@ -213,15 +208,6 @@ def test_ac375_legend_kinds_match_node_kinds_with_shape_and_name(pg3):
     for r in rows:
         assert r["kind"] in r["text"] or r["text"], r  # 種別名（語）が行に見える
         assert r["hasShape"], f"凡例の行にかたちの図がない: {r}"
-
-
-# FR-1068 AC-375 (異常系): 絞り込みで表示中の種別が減ったとき、凡例の余分な種別が残らない
-def test_ac375_legend_has_no_extra_kinds_beyond_displayed_nodes(pg3):
-    nodes = _open3d(pg3)
-    kinds = {n["kind"] for n in nodes}
-    legend_kinds = set(pg3.locator('[data-testid="legend-3d"] [data-kind]').evaluate_all("els => els.map(e => e.dataset.kind)"))
-    assert legend_kinds - kinds == set(), f"表示にない種別が凡例にある: {legend_kinds - kinds}"
-    assert kinds - legend_kinds == set(), f"凡例に欠けた種別: {kinds - legend_kinds}"
 
 
 # ============================================================================ AC-378 / AC-379
@@ -241,16 +227,29 @@ def _set_style(pg3, value):
     expect(pg3.locator(STYLE)).to_have_attribute("data-current", value)
 
 
-# FR-1069 AC-378: 初回の既定は engineering。3D 画面で操作でき、根要素の data-style に反映される
-def test_ac378_style_toggle_defaults_to_engineering_and_reflects_on_root(pg3):
+# FR-1069 AC-378 AC-379: default, root state, effects, and content through the same style round-trip.
+def test_ac378_ac379_style_toggle_defaults_reflects_on_root_and_keeps_content(pg3):
+    def snap():
+        nodes = sorted((n["id"], n["kind"]) for n in pg3.evaluate("() => window.__hve3d.nodes()"))
+        legend = sorted(pg3.locator('[data-testid="legend-3d"] [data-kind]').evaluate_all("els => els.map(e => e.dataset.kind)"))
+        return nodes, legend
+
     _open3d(pg3)
     expect(pg3.locator(STYLE)).to_be_visible()
     expect(pg3.locator(STYLE)).to_have_attribute("data-current", "engineering")
     assert _root(pg3).get_attribute("data-style") == "engineering"
+    assert _fx(pg3) == [], f"engineering に演出がある: {_fx(pg3)}"
+    a = snap()
+    assert a[0], "3D に要素がない"
     _set_style(pg3, "entertainment")
     assert _root(pg3).get_attribute("data-style") == "entertainment"
+    assert len(set(_fx(pg3))) >= 2, f"entertainment の演出が 2 種類未満: {_fx(pg3)}"
+    assert snap() == a, "スタイルで要素・凡例の内容が変わった"
+    expect(pg3.locator('[data-testid="legend-3d"]')).to_be_visible()
     _set_style(pg3, "engineering")
     assert _root(pg3).get_attribute("data-style") == "engineering"
+    assert _fx(pg3) == []
+    assert snap() == a, "engineering に戻すと要素・凡例の内容が変わった"
 
 
 # FR-1069 AC-378 (異常系): 範囲外の値は受け付けず、current は 2 値のどちらかのまま
@@ -262,32 +261,6 @@ def test_ac378_style_toggle_only_has_two_values_and_ignores_unknown(pg3):
     pg3.reload()
     pg3.wait_for_selector(STYLE)
     assert pg3.locator(STYLE).get_attribute("data-current") in ("engineering", "entertainment")
-
-
-# FR-1069 AC-379: engineering は演出なし、entertainment は 2 種類以上の演出（data-fx）
-def test_ac379_engineering_has_no_fx_and_entertainment_has_two_or_more(pg3):
-    _open3d(pg3)
-    assert _fx(pg3) == [], f"engineering に演出がある: {_fx(pg3)}"
-    _set_style(pg3, "entertainment")
-    assert len(set(_fx(pg3))) >= 2, f"entertainment の演出が 2 種類未満: {_fx(pg3)}"
-    _set_style(pg3, "engineering")
-    assert _fx(pg3) == []
-
-
-# FR-1069 AC-379: どちらのスタイルでも要素・関係・ラベルの内容は同じ
-def test_ac379_content_is_identical_in_both_styles(pg3):
-    def snap():
-        nodes = sorted((n["id"], n["kind"]) for n in pg3.evaluate("() => window.__hve3d.nodes()"))
-        legend = sorted(pg3.locator('[data-testid="legend-3d"] [data-kind]').evaluate_all("els => els.map(e => e.dataset.kind)"))
-        return nodes, legend
-    _open3d(pg3)
-    _set_style(pg3, "engineering")
-    a = snap()
-    _set_style(pg3, "entertainment")
-    b = snap()
-    assert a == b and a[0], "スタイルで要素・凡例の内容が変わった"
-    pg3.locator('[data-testid="legend-3d"]').wait_for()
-    assert pg3.locator('[data-testid="legend-3d"]').is_visible()
 
 
 # ============================================================================ FR-1079 AC-425 / FR-1066 AC-368 (Graph)

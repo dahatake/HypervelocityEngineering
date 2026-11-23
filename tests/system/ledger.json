@@ -1452,20 +1452,26 @@
       "ac_ids": [
         "AC-174"
       ],
-      "title": "意味的ズーム: 境界 1/2/8 で全体→中→大、上げ下げ両方向、欠け・粒度表示（entities/2D/3D）",
+      "title": "意味的ズーム: 境界の両方向・粒度ごとの内容・未記載列（3画面）",
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_semantic_zoom_system.py -k \"ac174_thresholds\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "aa8deb38",
-      "last_run_at": "2026-11-20T13:28:54+09:00",
-      "evidence": "work/system-test/logs/system-test/E2E-081-202611201324.log",
+      "last_commit": "7c56e948",
+      "last_run_at": "2026-11-24T07:41:07+09:00",
+      "evidence": "work\\logs\\system-test\\E2E-081-202611240740.log",
       "history": [
         {
           "at": "2026-10-15T00:52:15+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-24T07:33:30+09:00",
+          "by": "script",
+          "change": "title: '意味的ズーム: 境界 1/2/8 で全体→中→大、上げ下げ両方向、欠け・粒度表示（entities/2D/3D）' -> '意味的ズーム: 境界の両方向・粒度ごとの内容・未記載列（3画面）'",
+          "reason": "AC-174 の thresholds に levels_show と below_whole_fit の固有 assert を統合。entities/map2d/map3d、上げ下げの全境界、map2d/map3d の 0.5 倍と未記載列を維持し、重複する5回の画面起動を削減。"
         }
       ]
     },
@@ -1502,20 +1508,26 @@
       "ac_ids": [
         "AC-179"
       ],
-      "title": "3D: 倍率に応じ全体/中/大の情報と関係の種別・両端が状態に公開される",
+      "title": "3D: 各粒度の内容・関係の種類と両端・不正関係なし・canvas表示",
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_semantic_zoom_system.py -k \"ac179_3d_state\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "aa8deb38",
-      "last_run_at": "2026-11-20T13:28:54+09:00",
-      "evidence": "work/system-test/logs/system-test/E2E-086-202611201324.log",
+      "last_commit": "7c56e948",
+      "last_run_at": "2026-11-24T07:41:07+09:00",
+      "evidence": "work\\logs\\system-test\\E2E-086-202611240740.log",
       "history": [
         {
           "at": "2026-10-15T00:52:22+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-24T07:33:30+09:00",
+          "by": "script",
+          "change": "title: '3D: 倍率に応じ全体/中/大の情報と関係の種別・両端が状態に公開される' -> '3D: 各粒度の内容・関係の種類と両端・不正関係なし・canvas表示'",
+          "reason": "AC-179 の no_invented_edges_and_canvas_present を 3d_state に統合。canvas、許容関係種別、在庫の不正関係なしの assert を同じ画面で実行。"
         }
       ]
     },
@@ -1527,20 +1539,26 @@
       "ac_ids": [
         "AC-183"
       ],
-      "title": "大規模(300件/5000列)で初回表示 3 秒以内（entities/2D/3D、環境と値を記録）",
+      "title": "大規模表示: 3画面の初回3秒以内とentities/map2dの300件完全性",
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_semantic_zoom_system.py -k \"ac183_first_display\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "aa8deb38",
-      "last_run_at": "2026-11-20T13:28:54+09:00",
-      "evidence": "work/system-test/logs/system-test/E2E-088-202611201324.log",
+      "last_commit": "7c56e948",
+      "last_run_at": "2026-11-24T07:41:07+09:00",
+      "evidence": "work\\logs\\system-test\\E2E-088-202611240740.log",
       "history": [
         {
           "at": "2026-10-15T00:52:25+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-24T07:33:31+09:00",
+          "by": "script",
+          "change": "title: '大規模(300件/5000列)で初回表示 3 秒以内（entities/2D/3D、環境と値を記録）' -> '大規模表示: 3画面の初回3秒以内とentities/map2dの300件完全性'",
+          "reason": "AC-183 の large_data_counts を first_display に統合。3画面の3秒閾値・環境記録を維持し、entities/map2d の300件確認を測定終了後に実行して計時区間を変更しない。"
         }
       ]
     },
@@ -4231,14 +4249,14 @@
       "ac_ids": [
         "AC-367"
       ],
-      "title": "全画面の2D・3D・Graph切替は常設され画面内切替と同期しRPGの入口がない",
+      "title": "全画面の3モード常設・画面内同期（切替後の選択値を待機）",
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac367_header_dim_toggle_exists_on_every_screen or test_ac367_header_dim_toggle_never_disappears_or_duplicates_when_switching_screens or test_ac367_in_screen_toggle_and_header_toggle_share_one_state\" -q",
       "canary": true,
       "status": "pass",
-      "last_commit": "aa8deb38",
-      "last_run_at": "2026-11-20T13:28:54+09:00",
-      "evidence": "work/system-test/logs/system-test/E2E-199-202611201324.log",
+      "last_commit": "7c56e948",
+      "last_run_at": "2026-11-24T07:41:07+09:00",
+      "evidence": "work\\logs\\system-test\\E2E-199-202611240740.log",
       "history": [
         {
           "at": "2026-10-19T21:06:42+09:00",
@@ -4263,6 +4281,12 @@
           "by": "test-designer",
           "change": "command: 'python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k test_ac367_header_dim_toggle_exists_on_every_screen -q' -> 'python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac367_header_dim_toggle_exists_on_every_screen or test_ac367_header_dim_toggle_never_disappears_or_duplicates_when_switching_screens or test_ac367_in_screen_toggle_and_header_toggle_share_one_state\" -q'; title: 'ヘッダーに2D・3D・Graph切替が常設されRPGの入口がない' -> '全画面の2D・3D・Graph切替は常設され画面内切替と同期しRPGの入口がない'",
           "reason": "AC-367 変更: 全画面の切替から RPG を除き、2D・3D・Graphの存在・状態、画面遷移時の常設、画面内切替との同期を検証する"
+        },
+        {
+          "at": "2026-11-24T07:38:21+09:00",
+          "by": "script",
+          "change": "title: '全画面の2D・3D・Graph切替は常設され画面内切替と同期しRPGの入口がない' -> '全画面の3モード常設・画面内同期（切替後の選択値を待機）'",
+          "reason": "高速化で再現した切替途中の判定競合を修正。3D/2Dクリック後、描画完了時のdata-selectedを待ってから既存assertと非対応判定を行う。固定待機の追加やassertの緩和はない。"
         }
       ]
     },
@@ -4274,14 +4298,14 @@
       "ac_ids": [
         "AC-368"
       ],
-      "title": "Graph非対応画面では理由付きdisabled、対応画面では2D・3D・Graphへ切替できる",
+      "title": "Graph非対応の理由・対応画面のモード切替（描画後に判定）",
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac368_entities_screen_follows_header_mode or test_ac425_graph_renders_nodes_and_directed_edges_on_supported_screens or test_ac368_graph_is_disabled_with_reason_outside_graph_screens or test_ac425_graph_disabled_with_reason_on_layers_and_ctx_and_2d_unaffected\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "aa8deb38",
-      "last_run_at": "2026-11-20T13:28:54+09:00",
-      "evidence": "work/system-test/logs/system-test/E2E-202-202611201324.log",
+      "last_commit": "7c56e948",
+      "last_run_at": "2026-11-24T07:41:07+09:00",
+      "evidence": "work\\logs\\system-test\\E2E-202-202611240740.log",
       "history": [
         {
           "at": "2026-10-19T21:06:46+09:00",
@@ -4300,6 +4324,12 @@
           "by": "test-designer",
           "change": "command: 'python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac368_rpg_is_disabled_with_reason_outside_map or test_ac368_graph_is_disabled_with_reason_outside_graph_screens\" -q' -> 'python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac368_entities_screen_follows_header_mode or test_ac425_graph_renders_nodes_and_directed_edges_on_supported_screens or test_ac368_graph_is_disabled_with_reason_outside_graph_screens or test_ac425_graph_disabled_with_reason_on_layers_and_ctx_and_2d_unaffected\" -q'; title: 'マップ以外で RPG 風、Graph 画面以外で Graph は disabled で理由が表示される（異常系）' -> 'Graph非対応画面では理由付きdisabled、対応画面では2D・3D・Graphへ切替できる'",
           "reason": "AC-368 変更: RPG の対応範囲を除き、残る 2D・3D・Graph の対応画面での切替と、Graph 非対応画面での理由付き無効状態を検証する"
+        },
+        {
+          "at": "2026-11-24T07:38:21+09:00",
+          "by": "script",
+          "change": "title: 'Graph非対応画面では理由付きdisabled、対応画面では2D・3D・Graphへ切替できる' -> 'Graph非対応の理由・対応画面のモード切替（描画後に判定）'",
+          "reason": "高速化で再現した切替途中の判定競合を修正。3D/2Dクリック後、描画完了時のdata-selectedを待ってから既存assertと非対応判定を行う。固定待機の追加やassertの緩和はない。"
         }
       ]
     },
@@ -4311,20 +4341,26 @@
       "ac_ids": [
         "AC-371"
       ],
-      "title": "中・大ズームでヘッダー切替しても粒度と選択対象が保たれる",
+      "title": "中・大・全体ズームで2D/3D切替後の粒度と対象を維持",
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac371_header_switch_keeps_zoom_level_and_selection\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "aa8deb38",
-      "last_run_at": "2026-11-20T13:28:54+09:00",
-      "evidence": "work/system-test/logs/system-test/E2E-205-202611201324.log",
+      "last_commit": "7c56e948",
+      "last_run_at": "2026-11-24T07:41:07+09:00",
+      "evidence": "work\\logs\\system-test\\E2E-205-202611240740.log",
       "history": [
         {
           "at": "2026-10-19T21:06:51+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test ケースを作成"
+        },
+        {
+          "at": "2026-11-24T07:38:21+09:00",
+          "by": "script",
+          "change": "title: '中・大ズームでヘッダー切替しても粒度と選択対象が保たれる' -> '中・大・全体ズームで2D/3D切替後の粒度と対象を維持'",
+          "reason": "高速化で再現した切替途中の判定競合を修正。3D/2Dクリック後、描画完了時のdata-selectedを待ってから既存assertと非対応判定を行う。固定待機の追加やassertの緩和はない。"
         }
       ]
     },
@@ -4337,14 +4373,14 @@
         "AC-374",
         "AC-375"
       ],
-      "title": "3D ノードが種別ごとに異なるかたちを持つ（ほか 1 件を統合）",
+      "title": "3D: 種別ごとの形状と凡例の集合・一意性・図・名称",
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"(test_ac374_3d_nodes_expose_kind_and_distinct_shapes) or (test_ac375_legend_kinds_match_node_kinds)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "aa8deb38",
-      "last_run_at": "2026-11-20T13:28:54+09:00",
-      "evidence": "work/system-test/logs/system-test/E2E-207-202611201324.log",
+      "last_commit": "7c56e948",
+      "last_run_at": "2026-11-24T07:41:07+09:00",
+      "evidence": "work\\logs\\system-test\\E2E-207-202611240740.log",
       "history": [
         {
           "at": "2026-10-19T21:06:54+09:00",
@@ -4357,6 +4393,12 @@
           "by": "conductor",
           "change": "command, ac_ids: E2E-209 を統合",
           "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
+        },
+        {
+          "at": "2026-11-24T07:33:31+09:00",
+          "by": "script",
+          "change": "title: '3D ノードが種別ごとに異なるかたちを持つ（ほか 1 件を統合）' -> '3D: 種別ごとの形状と凡例の集合・一意性・図・名称'",
+          "reason": "AC-374 の different_kinds は既存の2種別以上・種別内形状一意・複数形状の検証に包含。AC-375 の has_no_extra は絞り込み操作をしておらず、既存の集合一致・一意性・図・名称の検証に包含。2つの重複関数だけを削除。"
         }
       ]
     },
@@ -4401,14 +4443,14 @@
         "AC-378",
         "AC-379"
       ],
-      "title": "演出スタイルの既定は engineering で根要素に反映される（ほか 1 件を統合）",
+      "title": "3Dスタイル: 既定・往復時の根要素・演出数・内容不変",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"(test_ac378_style_toggle_defaults) or (test_ac379_engineering_has_no_fx)\" -q",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"(test_ac378_ac379_style_toggle) or (test_ac378_style_toggle_only)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "aa8deb38",
-      "last_run_at": "2026-11-20T13:28:54+09:00",
-      "evidence": "work/system-test/logs/system-test/E2E-211-202611201324.log",
+      "last_commit": "7c56e948",
+      "last_run_at": "2026-11-24T07:41:07+09:00",
+      "evidence": "work\\logs\\system-test\\E2E-211-202611240740.log",
       "history": [
         {
           "at": "2026-10-19T21:06:59+09:00",
@@ -4421,6 +4463,12 @@
           "by": "conductor",
           "change": "command, ac_ids: E2E-213 を統合",
           "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
+        },
+        {
+          "at": "2026-11-24T07:33:31+09:00",
+          "by": "script",
+          "change": "command: 'python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"(test_ac378_style_toggle_defaults) or (test_ac379_engineering_has_no_fx)\" -q' -> 'python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"(test_ac378_ac379_style_toggle) or (test_ac378_style_toggle_only)\" -q'; title: '演出スタイルの既定は engineering で根要素に反映される（ほか 1 件を統合）' -> '3Dスタイル: 既定・往復時の根要素・演出数・内容不変'",
+          "reason": "AC-378 の defaults、AC-379 の engineering_has_no_fx と content_is_identical を1回の往復に統合し全assertを維持。未知値・再読込の独立ケースは残し選択コマンドにも含める。"
         }
       ]
     },
@@ -4465,14 +4513,14 @@
         "AC-391",
         "AC-392"
       ],
-      "title": "ヘッダーの折返し・320px含む全幅内表示と残存2D/3D/Graph 3モード（RPG非表示）（ほか 1 件を統合）",
+      "title": "ヘッダー: 全5幅の表示・折返し・非重複・横スクロールなし・到達性、英語とTab",
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_header_row_system.py -k \"(ac391) or (ac392)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "aa8deb38",
-      "last_run_at": "2026-11-20T13:28:54+09:00",
-      "evidence": "work/system-test/logs/system-test/E2E-216-202611201324.log",
+      "last_commit": "7c56e948",
+      "last_run_at": "2026-11-24T07:41:07+09:00",
+      "evidence": "work\\logs\\system-test\\E2E-216-202611240740.log",
       "history": [
         {
           "at": "2026-10-19T23:27:17+09:00",
@@ -4509,6 +4557,12 @@
           "by": "conductor",
           "change": "command, ac_ids: E2E-217 を統合",
           "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
+        },
+        {
+          "at": "2026-11-24T07:33:31+09:00",
+          "by": "script",
+          "change": "title: 'ヘッダーの折返し・320px含む全幅内表示と残存2D/3D/Graph 3モード（RPG非表示）（ほか 1 件を統合）' -> 'ヘッダー: 全5幅の表示・折返し・非重複・横スクロールなし・到達性、英語とTab'",
+          "reason": "AC-391 の map表示とAC-392の非重複・到達性を同一初期画面で統合。1280/1024/800/600/320の全幅と全assertを維持して10回の画面起動を削減。英語の別画面とTabの順序は独立して残す。"
         }
       ]
     },

@@ -8,6 +8,8 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 
 ## 機能
 
+System Test の最適化（2026-11-24）: `tests/system/e2e/test_semantic_zoom_system.py` は AC-174・AC-179・AC-183 の同じ画面での検証を統合、`tests/system/e2e/test_studio_header_row_system.py` は AC-391・AC-392 を各幅で一括検証、`tests/system/e2e/test_studio_header_dim_3d_part1_system.py` は AC-374・AC-375 の包含される重複を削除し AC-378・AC-379 の往復操作を統合した。要求・AC・閾値・異なる入力の検証は維持し、台帳の更新理由に対応を記録する。
+
 | 要求 ID | 題名 | 決定状態 | 実装ファイル | テスト | 使っている共通部品 |
 |---|---|---|---|---|---|
 | FR-1009 | 正常完了 run の統合後清掃 | 廃止 | 未実装 | 未実装 | なし |

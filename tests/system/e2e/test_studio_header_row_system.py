@@ -113,10 +113,9 @@ def _rows(items):
     return len(rows)
 
 
-# FR-1072 AC-391: every header element is inside the viewport at each PARAM-048 width; narrow widths wrap into several rows
-# and the header height grows automatically.
+# FR-1072 AC-391 AC-392: visibility, wrapping, non-overlap, and reachability at every PARAM-048 width.
 @pytest.mark.parametrize("width", WIDTHS)
-def test_ac391_all_header_elements_are_inside_viewport_and_wrap(browser, zurl, width):
+def test_ac391_ac392_header_elements_wrap_without_overlap_and_remain_reachable(browser, zurl, width):
     ctx, page = _open(browser, zurl, width)
     items = _all(page)
     for k, n in EXPECT_COUNT.items():
@@ -140,6 +139,27 @@ def test_ac391_all_header_elements_are_inside_viewport_and_wrap(browser, zurl, w
     top = page.evaluate("() => document.querySelector('#stepBand').getBoundingClientRect().bottom")
     assert max(r["y"] + r["h"] for v in items.values() for r in v) <= top + 1
     assert max(r["y"] + r["h"] for k in ("dim", "search", "repo", "time", "lang", "theme") for r in items[k]) <= hdr["bottom"] + 1
+    flat = [r for v in items.values() for r in v]
+    for i, a in enumerate(flat):
+        for b in flat[i + 1:]:
+            assert not _inter(a, b), f"{width}px overlap: {a['text']!r} x {b['text']!r}"
+    assert page.evaluate("() => document.body.scrollWidth <= document.documentElement.clientWidth + 1")
+    assert hdr["sw"] <= hdr["cw"], f"header scrollWidth {hdr['sw']} > clientWidth {hdr['cw']} at {width}px"
+    assert page.evaluate("""() => { const h = document.querySelector('header.top');
+      return [h, ...h.querySelectorAll('*')].every((e) => !(e.scrollWidth > e.clientWidth + 1 && /(auto|scroll)/.test(getComputedStyle(e).overflowX) && e !== document.scrollingElement)); }"""), "header has an inner horizontal scroll area"
+    body = page.evaluate("() => { const v = document.querySelector('#view'); const b = v.getBoundingClientRect(); return {top: b.top}; }")
+    assert body["top"] >= hdr["bottom"] - 1, f"body overlaps header: body top {body['top']} < header bottom {hdr['bottom']}"
+    for k, sel in ITEMS.items():
+        loc = page.locator(sel)
+        for i in range(loc.count()):
+            el = loc.nth(i)
+            hit = el.evaluate("""(e) => { const r = e.getBoundingClientRect();
+              if (r.left < 0 || r.right > innerWidth) return false;
+              const t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+              return !!t && (t === e || e.contains(t) || t.contains(e)); }""")
+            assert hit, f"{k}[{i}] is covered / outside the viewport at {width}px"
+            el.focus()
+            assert el.evaluate("(e) => document.activeElement === e || e.contains(document.activeElement)"), f"{k}[{i}] cannot take focus"
     assert page.evaluate("() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1")
     ctx.close()
 
@@ -161,44 +181,6 @@ def test_ac391_all_visible_in_english_on_other_screen(browser, zurl, width):
     _in_viewport(page, items, width)
     if width <= 600:
         assert _rows(items) >= 2
-    ctx.close()
-
-# FR-1072 AC-392: header element rectangles do not intersect; the page body has no horizontal scroll.
-@pytest.mark.parametrize("width", WIDTHS)
-def test_ac392_header_elements_do_not_overlap_and_page_has_no_horizontal_scroll(browser, zurl, width):
-    ctx, page = _open(browser, zurl, width)
-    flat = [r for v in _all(page).values() for r in v]
-    for i, a in enumerate(flat):
-        for b in flat[i + 1:]:
-            assert not _inter(a, b), f"overlap: {a['text']!r} x {b['text']!r}"
-    assert page.evaluate("() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1")
-    assert page.evaluate("() => document.body.scrollWidth <= document.documentElement.clientWidth + 1")
-    ctx.close()
-
-
-# FR-1072 AC-392: every element is reachable without scrolling (no horizontal scroll in header/page), not covered, and focusable;
-# the body below the header is not overlapped by the (possibly taller) header.
-@pytest.mark.parametrize("width", WIDTHS)
-def test_ac392_every_header_element_is_reachable_without_scrolling(browser, zurl, width):
-    ctx, page = _open(browser, zurl, width)
-    hdr = page.evaluate(JS_HDR)
-    assert hdr["sw"] <= hdr["cw"], f"header scrollWidth {hdr['sw']} > clientWidth {hdr['cw']} at {width}px"
-    assert page.evaluate("""() => { const h = document.querySelector('header.top');
-      return [h, ...h.querySelectorAll('*')].every((e) => !(e.scrollWidth > e.clientWidth + 1 && /(auto|scroll)/.test(getComputedStyle(e).overflowX) && e !== document.scrollingElement)); }"""), "header has an inner horizontal scroll area"
-    body = page.evaluate("() => { const v = document.querySelector('#view'); const b = v.getBoundingClientRect(); return {top: b.top}; }")
-    assert body["top"] >= hdr["bottom"] - 1, f"body overlaps header: body top {body['top']} < header bottom {hdr['bottom']}"
-    for k, sel in ITEMS.items():
-        loc = page.locator(sel)
-        for i in range(loc.count()):
-            el = loc.nth(i)  # スクロール操作なしで到達できる（scroll_into_view は使わない）
-            hit = el.evaluate("""(e) => { const r = e.getBoundingClientRect();
-              if (r.left < 0 || r.right > innerWidth) return false;
-              const t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-              return !!t && (t === e || e.contains(t) || t.contains(e)); }""")
-            assert hit, f"{k}[{i}] is covered / outside the viewport at {width}px"
-            el.focus()
-            assert el.evaluate("(e) => document.activeElement === e || e.contains(document.activeElement)"), f"{k}[{i}] cannot take focus"
-    assert page.evaluate("() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1")
     ctx.close()
 
 # FR-1072 AC-392 (anomaly): Tab from the first header element walks through all of them without leaving the header early.
