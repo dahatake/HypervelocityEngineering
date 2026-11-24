@@ -152,15 +152,27 @@ def test_ac161_url_source_same_result_and_ac162_only_get(tmp_path, server):
 def test_ac161_timeout_reports_unusable_and_keeps_exit_code(tmp_path, server):
     repo = make_standard(tmp_path / "r")
     _Handler.delay = 6
-    set_source(repo, server + "/slow.csv")
-    cfg_p = repo / DOC
-    tbl = "\n### 3.2 パラメータ（PARAM）\n\n| ID | 名前 | 値 | 単位 | 根拠 | 決定状態 |\n|---|---|---|---|---|---|\n| PARAM-016 | 待ち時間 | 1 | 秒 | t | 承認済み |\n\n## 5. 利用シナリオ"
-    cfg_p.write_text(cfg_p.read_text(encoding="utf-8").replace("\n## 5. 利用シナリオ", tbl, 1), encoding="utf-8")
+    set_source(repo, server + "/slow.csv", timeout_sec=1)
     t0 = time.monotonic()
     r = run_entities(repo, "check")
     assert time.monotonic() - t0 < 5.5
     assert r.returncode == 0 and "照合不能" in r.stdout
     assert "照合不能" not in rdcheck(repo).stdout
+
+
+# FR-1023 AC-552: the target's own PARAM-015 / PARAM-016 are not read; the config overrides the toolkit defaults
+def test_ac552_threshold_and_timeout_come_from_config_not_target_params(tmp_path):
+    repo = make_standard(tmp_path / "r")
+    p = repo / DOC
+    tbl = ("\n### 3.2 パラメータ（PARAM）\n\n| ID | 名前 | 値 | 単位 | 根拠 | 決定状態 |\n|---|---|---|---|---|---|\n"
+           "| PARAM-015 | 対象アプリの別の値 | 0.3 | 比 | t | 承認済み |\n| PARAM-016 | 対象アプリの別の値 | 1 | 秒 | t | 承認済み |\n\n## 5. 利用シナリオ")
+    p.write_text(p.read_text(encoding="utf-8").replace("\n## 5. 利用シナリオ", tbl, 1), encoding="utf-8")
+    assert ent.params(repo, {}) == (ent.DEFAULT_THRESHOLD, ent.DEFAULT_TIMEOUT) == (0.8, 10.0)
+    conf = {"enterprise_data_catalog": {"source": "c.csv", "similarity_threshold": 0.9, "timeout_sec": 3}}
+    assert ent.params(repo, conf) == (0.9, 3.0)
+    bad = {"enterprise_data_catalog": {"source": "c.csv", "similarity_threshold": 1.5, "timeout_sec": "x"}}
+    assert ent.params(repo, bad) == (0.8, 10.0)
+    assert ent.params(repo, {"enterprise_data_catalog": "c.csv"}) == (0.8, 10.0)
 
 
 def test_ac161_unparsable_source_is_unusable(tmp_path):

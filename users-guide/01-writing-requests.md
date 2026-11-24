@@ -6,7 +6,7 @@ HVE Lite には、専用のエージェントや依頼の書式はありませ�
 
 Copilot は、インストーラが `AGENTS.md` と `.github/copilot-instructions.md` に書いた規則に従います。振る舞いを変える変更では、同じ変更の中で要求定義書・カタログ・テストを更新し、最後に `python scripts/verify.py` を exit 0 にします。規則はリポジトリにあるので、個人のカスタム指示やメモリに書き写す必要はありません。
 
-> 0.5.x から移行した方へ: `/build`・`/build-template` と `<run_options>` はありません。既定のエージェントにそのまま依頼し、承認はチャットで返します（[9. 版の管理](09-versioning.md)）。
+> 0.5.x から移行した方へ: `/build`・`/build-template` と `<run_options>` はありません。既定のエージェントにそのまま依頼し、承認はチャットで返します（[9. バージョンアップの手順](09-versioning.md)）。
 
 ## 1.1 規則の中身
 

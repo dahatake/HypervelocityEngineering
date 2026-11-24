@@ -7,13 +7,13 @@
 | Symptom | What to do |
 |---|---|
 | `python scripts/verify.py` exits 1 | Fix the `ERROR CHK-xx <location> <message>` lines from the top. How to fix each CHK is in [6.3](06-quality-gates.en.md#63-checks-performed-by-verify). Full logs are in `/work/logs/` |
-| A `HINT rdfix: …` line appears | There are inconsistencies that can be fixed automatically. Check the plan with `python scripts/rdfix.py --full`, then fix with `python scripts/rdfix.py --full --apply` ([7.2](#72-data-layer-mismatches-rdfix)) |
+| A `HINT rdfix: …` line appears | These lines show the repair commands when the management-data check fails. If there is also a line `データ層の不整合のうち N 件は … 自動修正できます` (N inconsistencies can be fixed automatically), some can be fixed automatically. Check the plan with `python scripts/rdfix.py --full`, then fix with `python scripts/rdfix.py --full --apply` ([7.2](#72-data-layer-mismatches-rdfix)) |
 | CI ebak-verify fails on the data-layer check | CI does not repair. Run `python scripts/rdfix.py --full --apply` locally and push the repair in the same change ([7.2](#72-data-layer-mismatches-rdfix)) |
 | It passes locally but only CI ebak-verify fails | CI may lack your app's toolchain. Add setup steps (such as `actions/setup-node`) before the verify step in `.github/workflows/ebak-verify.yml`. Also check that you are not overriding `checks.profile` with `--profile` in your local command |
-| `PASS (cached …)` appears and you worry the result is stale | The cache is used only when the working tree is clean and HEAD, arguments, and configuration are the same. After changing the build environment (SDK, dependencies), re-run with `--no-cache` |
+| `PASS (cached …)` appears and you worry the result is stale | The cache is used only when the working tree is clean and the tree of HEAD, arguments, configuration, and toolkit version are the same, for up to 24 hours (never with `--show-warnings`). After changing the build environment (SDK, dependencies), re-run with `--no-cache` |
 | `FAIL config` | `verify.commands` has an element without `run` or an invalid element. Fix it to the format in [4.6](04-customization.en.md#46-build-static-analysis-and-test-commands-verifycommands) |
-| Many warnings with `--profile full` | full also reports format warnings (CHK-13 ambiguous words, CHK-14 hard-coded numbers, CHK-15 prohibited synonyms, and so on). Warnings do not affect the exit code. Fix them gradually, in step with milestone audits |
-| Many CHK-01 and CHK-20 errors right after installing | Your existing requirements definition is not in the toolkit format. Run `python scripts/next-id.py --sync --adopt`, then ask Copilot to "align the existing requirements definition with the toolkit format without changing its meaning" (for existing apps, see [10](10-adopting-existing-apps.en.md)) |
+| Many warnings with `--profile full` | full also reports format warnings (CHK-13 ambiguous words, CHK-14 hard-coded numbers, CHK-15 prohibited synonyms, and so on). Warnings do not affect the exit code (errors of CHKs outside lite, such as CHK-07 and CHK-20, do make full exit 1). Fix them gradually, in step with milestone audits |
+| Many CHK-01, CHK-24 and similar errors right after installing (CHK-20 too under full) | Your existing requirements definition is not in the toolkit format. Run `python scripts/next-id.py --sync --adopt`, then ask Copilot to "align the existing requirements definition with the toolkit format without changing its meaning" (for existing apps, see [10](10-adopting-existing-apps.en.md)) |
 | CHK-19 detects IDs inside test data or reference material | Add that path (glob) to `checks.id_scan_exclude` in `scripts/ebak.config.json`. The list replaces the default instead of being merged, so copy the default (`DEFAULT_CONFIG` in `scripts/ebaklib.py`) before adding to it |
 | CHK-08 cannot find a path in the catalog | Paths are relative to the repository root and comma-separated, like `src/a.ts, src/b.ts`. If you renamed or deleted a file, `python scripts/rdfix.py --apply` fixes the reference |
 | CHK-10 or CHK-11 appears (AC and ledger out of sync) | An AC was added or changed but the System Test ledger did not follow. Add or review cases and run `python scripts/ledger.py digests --update`. Update the ledger only with `ledger.py` |
@@ -50,16 +50,17 @@ If `next-id.py` runs on two branches at the same time, the same ID can be alloca
 |---|---|
 | `KEEP-LOCAL <file>` appears on update | Toolkit files you modified locally are not overwritten. To take in the new version, check with `--dry-run`, then merge the diff by hand or use `--force` (which keeps `.ebak-backup-*`). Differences only in line endings from Windows `core.autocrlf` do not cause `KEEP-LOCAL` |
 | A note on update says that N files this version does not ship remain | They were installed by an older version. A normal update does not delete them. Reinstall with `--clean` (clean install; [9.4](09-versioning.en.md#94-updating-from-an-older-version-clean-install)) |
-| `--clean` says to commit or stash uncommitted changes first | Check `git status`, commit or `git stash`, and run again. It runs only on a clean working tree so that deleted files can be restored from git |
+| `--clean` says to commit or stash uncommitted changes first | Check `git status`, commit or `git stash`, and run again. It runs only on a clean working tree so that deleted files can be restored from git (outside a git repository it stops with `--clean は git リポジトリでだけ使えます`) |
 | `WARN-WIRING <file>:<line>` appears | A custom check you added directly to `scripts/*.py` will be dropped by the update. Register it again in `extensions.checks` or `scripts/ext/` ([4.7](04-customization.en.md#47-project-specific-checks-extensionschecks--scriptsext)) |
 | You want to stop the data-layer repair after installing | `--no-repair` checks and plans only (writes nothing); `--skip-verify` neither checks nor repairs. The PowerShell wrapper uses `-NoRepair`. The installer's exit code does not depend on the data-layer result |
+| The installer ends with `ERROR: Studio の表示用管理データを同期できませんでした` (could not synchronize Studio's display data) and exit 1 | The installed toolkit stays. Fix the cause shown above it, and synchronize again with `python HVE-Studio/studio.py --repo <repo> --sync-data` |
 
 ### Updating from 0.5.x to 0.6.0 (HVE Lite)
 
 - **How to update**: The installer has no migration code for older versions. Do a clean install with `--clean`. The old agents, skills, hooks, scripts, the auto-repair workflow and the old settings keys are deleted even if you modified them, and this version is installed again.
 - **Settings**: `scripts/ebak.config.json` is recreated from defaults. Check the previous values (such as `verify.commands`) with `git diff scripts/ebak.config.json` and restore what you need.
 - **What remains**: The management data (requirements definition, catalog, ledger, ID registry) and `/work` are not changed. `docs/run-history.md` from 0.5.x and `.github/ebak-prompt-prefix.md` also remain but are no longer read. Delete them by hand if you do not need them.
-- **Worktrees and work branches**: Worktrees and `work/*` branches left by 0.5.x runs are not deleted automatically. Check them with `git worktree list` and `git branch --list "work/*"`, and delete the ones you no longer need with `git worktree remove <path>` and `git branch -D <branch>`. Delete old run folders under `/work` too if you do not need them.
+- **Worktrees and work branches**: Worktrees, integration branches `run/*` and per-item branches `work/*` left by 0.5.x runs are not deleted by the update. The worktrees and merged `run/*` branches can be removed with `python tools/uninstall.py --target <repo> --runs` (without `--runs` they are only listed). Check the rest with `git worktree list` and `git branch --list "run/*" "work/*"`, and delete the ones you no longer need with `git worktree remove <path>` and `git branch -D <branch>`. Delete old run folders under `/work` too if you do not need them.
 
 ## 7.5 Hooks and the preamble from older versions
 
@@ -74,7 +75,7 @@ HVE Lite has no hooks and no automatic preamble. The following symptoms appear a
 
 | Symptom | What to do |
 |---|---|
-| It exits with code 1 without starting (`no HVE data layer … and nothing to show in code mode`) | The folder given in `--repo` has no data layer (requirements definition and so on), and code mode has nothing to show either. Code mode applies only to the root of a git repository; an empty or non-git folder is not shown. Check which files were read and the counts (in code mode, the `mode: code (...)` line) with `python HVE-Studio/studio.py --check --repo <path>` |
+| It exits with code 1 without starting (`no HVE data layer in <path> (…), and not a local Git repository.`) | The folder given in `--repo` has no data layer (requirements definition and so on), and code mode has nothing to show either. Code mode applies only to the root of a git repository; an empty or non-git folder is not shown. Check which files were read and the counts (in code mode, the `mode: code (...)` line) with `python HVE-Studio/studio.py --check --repo <path>` |
 | The port is in use | If the default 8765 is in use, it listens on the next number. To pin it, pass `--port N` |
 | The screen shows old content | When data-layer files change, Studio reloads them within a few seconds. If reloading the browser does not help, restart Studio |
 
@@ -93,6 +94,7 @@ For anything else, see [Studio troubleshooting](studio/04-troubleshooting.en.md)
 | What you want to see | Location |
 |---|---|
 | Full logs of verify and tests | `work/logs/` |
+| System Test results and logs (`ledger.py run`) | `work/system-test/results.json`, `work/system-test/logs/` |
 | rdfix lock and files that could not be restored | `work/.ebak/rdfix.lock`, `work/.ebak/rdfix-undo-*/` |
 | Audit results | `work/audit/<date-time>/report.md` (each run in `run<n>.md`) |
 | CI results | The GitHub Actions screen (ebak-verify) |

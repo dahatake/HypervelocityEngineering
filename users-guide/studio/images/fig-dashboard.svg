@@ -12,11 +12,11 @@
 <rect x="1008" y="18" width="52" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
 <text x="1034" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">JA | EN</text>
 <rect x="865.2" y="18" width="126.80000000000001" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
-<text x="928.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Software Engineer</text>
+<text x="928.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">GRAPH</text>
 <rect x="783.6" y="18" width="75.6" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
-<text x="821.4" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Architect</text>
+<text x="821.4" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">3D</text>
 <rect x="663.6" y="18" width="114.0" height="24" rx="12" fill="#e8f1fb" stroke="#c8c8c8" stroke-width="1" />
-<text x="720.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Product Manager</text>
+<text x="720.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">2D</text>
 <rect x="20" y="56" width="113" height="30" rx="6" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
 <rect x="26" y="83" width="101" height="3" rx="1" fill="#0f5fa8" stroke="#0f5fa8" stroke-width="1" />
 <text x="76.5" y="76" font-size="12" fill="#0f5fa8" font-weight="bold" text-anchor="middle">ダッシュボード</text>
@@ -104,8 +104,8 @@
 <text x="40" y="210.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">2</text>
 <circle cx="716" cy="206" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
 <text x="716" y="210.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">3</text>
-<rect x="24" y="520" width="367" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
-<text x="32" y="535" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">① 数字のカードを選ぶと、該当する要求の一覧へ移ります</text>
+<rect x="24" y="520" width="385" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
+<text x="32" y="535" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">① 数字のカードを選ぶと、該当する要求がマップで強調されます</text>
 <rect x="24" y="548" width="315" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
 <text x="32" y="563" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">② ドーナツ: 全体の内訳（決定状態・優先度）</text>
 <rect x="24" y="576" width="458" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />

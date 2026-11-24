@@ -5,6 +5,15 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+### ドキュメント監査と、見つかった実装のずれの修正（FR-1102、FR-1023 AC-552）
+
+- **README・users-guide をコードと照合して修正しました**（日英・SVG）。インストールされるファイルと `.gitattributes` の行、CI の起動条件（PR と `main` への push）、`--clean` の正しい実行方法（toolkit の clone から `--target <repo>`）、CHK の重要度と lite/full の違い、スクリプトのオプション、Studio の画面名・ボタン名（役割ボタンの削除後の作業ステップ）、0.5.x の構成のままだった構成図、`header.png` の再採取など。
+- **アンインストール**: `--purge` が設定の `management_files` を読まず、パスを変えた管理データが残っていました（AC-475 に合わせました。旧版の設定のキー `files` も読みます）。
+- **インストール**: 管理データの雛形を、設定の `management_files` のパスに作ります（既定のパスに別の雛形を作りません）。配布元のリポジトリ専用の `checks.id_scan_exclude` を導入先の設定に入れません（既定は `scripts/ebaklib.py`）。
+- **既存アプリの導入**: `adopt.py request` の依頼文を、設定の `work.dir` の下の `import/` に書きます。
+- **企業データカタログ**: 類似度の下限と待ち秒を、設定 `enterprise_data_catalog.similarity_threshold`・`timeout_sec` で変えます。導入先の要求定義書の PARAM-015・016（導入先のアプリ自身のパラメータ）は読みません。既定値（0.8・10 秒）は変わりません。
+- ヘルプ文の誤り（`next-id.py` の INT、`rdcheck.py` の CHK の範囲、`verify.py` のキャッシュの説明と参照する節）と、Studio の使われない文言のキーを直しました。
+
 ### ユーザーガイドの刷新（図解・初めての方向け）
 
 - **S9「画面ツアー（図解）」を追加**（`users-guide/studio/09-visual-tour.md`・`.en.md`）。画面の構成と 9 つの画面を、番号つきの図で 1 画面ずつ説明します。直近に追加された **「初めての方へ」ウィザード**・**フロアプラン**・**ネットワーク表示**（コード関係）の説明を含みます。
@@ -16,8 +25,8 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 ### HVE Studio への改称（FR-011）
 
 - HVE Studio の表示名を **HVE Studio**、正式名称を **Hypervelocity Engineering Studio** に変更しました。画面のブランド・JA/EN の文書タイトル・CLI・起動ラベル・配布時の案内・ユーザーガイドを合わせています。
-- **フォルダー名・ファイル名も変更しました（互換性に影響あり）**: `HVE-Studio/` は `HVE-Studio/` に、ルートの起動スクリプト `start-hve-studio.cmd`／`start-hve-studio.command` は `start-hve-studio.cmd`／`start-hve-studio.command` に変わりました。起動は `python HVE-Studio/studio.py` です。
-- 旧版から更新したリポジトリでは、旧 `HVE-Studio/` が孤立ファイルとしてディスクに残り、インストーラーがそれを報告します。`--clean`（クリーンインストール）かアンインストールで削除できます。削除されるまでの間も、ID の検査と既存アプリの導入時の判定は旧フォルダーを toolkit のファイルとして扱います。
+- **フォルダー名・ファイル名も変更しました（互換性に影響あり）**: `EABK-Studio/` は `HVE-Studio/` に、ルートの起動スクリプト `start-eabk-studio.cmd`／`start-eabk-studio.command` は `start-hve-studio.cmd`／`start-hve-studio.command` に変わりました。起動は `python HVE-Studio/studio.py` です。
+- 旧版から更新したリポジトリでは、旧 `EABK-Studio/` が孤立ファイルとしてディスクに残り、インストーラーがそれを報告します。`--clean`（クリーンインストール）かアンインストールで削除できます。削除されるまでの間も、ID の検査と既存アプリの導入時の判定は旧フォルダーを toolkit のファイルとして扱います。
 - `hve-studio.*` の保存設定キー、`X-HVE-Studio` の通信ヘッダー、`HVE_STUDIO_PICK_PATH`、`hve_model.py`（HVE のデータ層のモデル）は変更せず、既存の設定を維持します。過去の変更履歴・出典・ID 台帳の旧名称は当時の記録として残します。
 
 ### アンインストーラー（FR-1087）

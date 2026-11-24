@@ -1173,3 +1173,8 @@
 | AC-548 | AC | 使用中 | 2026-11-20T13:11:46+09:00 | main@aa8deb38 |  |
 | PARAM-070 | PARAM | 使用中 | 2026-11-20T13:11:47+09:00 | main@aa8deb38 |  |
 | SRC-058 | SRC | 使用中 | 2026-11-20T13:11:47+09:00 | main@aa8deb38 |  |
+| FR-1102 | FR | 採番済み | 2026-11-24T11:27:58+09:00 | main@c0a8bc8e | 導入先の設定のパスとキーに従う |
+| AC-549 | AC | 採番済み | 2026-11-24T11:27:59+09:00 | main@c0a8bc8e | 設定のパス・キーに従う（install 雛形・設定配布・adopt request・entities） |
+| AC-550 | AC | 採番済み | 2026-11-24T11:27:59+09:00 | main@c0a8bc8e | 設定のパス・キーに従う（install 雛形・設定配布・adopt request・entities） |
+| AC-551 | AC | 採番済み | 2026-11-24T11:27:59+09:00 | main@c0a8bc8e | 設定のパス・キーに従う（install 雛形・設定配布・adopt request・entities） |
+| AC-552 | AC | 採番済み | 2026-11-24T11:27:59+09:00 | main@c0a8bc8e | 設定のパス・キーに従う（install 雛形・設定配布・adopt request・entities） |

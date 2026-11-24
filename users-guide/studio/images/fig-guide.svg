@@ -12,11 +12,11 @@
 <rect x="1008" y="18" width="52" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
 <text x="1034" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">JA | EN</text>
 <rect x="865.2" y="18" width="126.80000000000001" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
-<text x="928.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Software Engineer</text>
+<text x="928.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">GRAPH</text>
 <rect x="783.6" y="18" width="75.6" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
-<text x="821.4" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Architect</text>
+<text x="821.4" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">3D</text>
 <rect x="663.6" y="18" width="114.0" height="24" rx="12" fill="#e8f1fb" stroke="#c8c8c8" stroke-width="1" />
-<text x="720.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Product Manager</text>
+<text x="720.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">2D</text>
 <rect x="20" y="56" width="113" height="30" rx="6" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
 <rect x="26" y="83" width="101" height="3" rx="1" fill="#0f5fa8" stroke="#0f5fa8" stroke-width="1" />
 <text x="76.5" y="76" font-size="12" fill="#0f5fa8" font-weight="bold" text-anchor="middle">ダッシュボード</text>
@@ -65,12 +65,12 @@
 <text x="93.5" y="529" font-size="12" fill="#333" font-weight="normal" text-anchor="middle">1 画面の切り替え</text>
 <rect x="171" y="512" width="152" height="26" rx="13" fill="#fff" stroke="#ffd33d" stroke-width="1" />
 <text x="247.0" y="529" font-size="12" fill="#333" font-weight="normal" text-anchor="middle">2 この画面の見かた</text>
-<rect x="331" y="512" width="113" height="26" rx="13" fill="#fff" stroke="#ffd33d" stroke-width="1" />
-<text x="387.5" y="529" font-size="12" fill="#333" font-weight="normal" text-anchor="middle">3 掘り下げ方</text>
-<rect x="452" y="512" width="139" height="26" rx="13" fill="#fff" stroke="#ffd33d" stroke-width="1" />
-<text x="521.5" y="529" font-size="12" fill="#333" font-weight="normal" text-anchor="middle">4 検索とコマンド</text>
-<rect x="599" y="512" width="113" height="26" rx="13" fill="#fff" stroke="#ffd33d" stroke-width="1" />
-<text x="655.5" y="529" font-size="12" fill="#333" font-weight="normal" text-anchor="middle">5 表示の設定</text>
+<rect x="331" y="512" width="145" height="26" rx="13" fill="#fff" stroke="#ffd33d" stroke-width="1" />
+<text x="403.5" y="529" font-size="12" fill="#333" font-weight="normal" text-anchor="middle">3 ここから掘り下げる</text>
+<rect x="484" y="512" width="139" height="26" rx="13" fill="#fff" stroke="#ffd33d" stroke-width="1" />
+<text x="553.5" y="529" font-size="12" fill="#333" font-weight="normal" text-anchor="middle">4 検索とコマンド</text>
+<rect x="631" y="512" width="113" height="26" rx="13" fill="#fff" stroke="#ffd33d" stroke-width="1" />
+<text x="687.5" y="529" font-size="12" fill="#333" font-weight="normal" text-anchor="middle">5 表示の設定</text>
 <rect x="24" y="560" width="328" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
 <text x="32" y="575" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">① 明るく枠で囲まれた所が、いま説明している場所</text>
 <rect x="24" y="588" width="588" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />

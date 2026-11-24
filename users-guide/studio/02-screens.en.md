@@ -4,7 +4,7 @@
 
 Switch screens with the navigation at the top (9 items). Point at any item and a one-line description of "what data you can browse" appears as a tooltip, and the same sentence appears at the top of the screen. On every screen, **the selected item and its related items are highlighted** (common to search, diagrams, and tables). The data and calculations each screen reads are in [08-data-reference.en.md](08-data-reference.en.md).
 
-![Header (tabs, search, target repository, role switch, language)](images/header.png)
+![Header (New here?, 2D/3D/GRAPH switch, search, target repository, repository list, language, layout, theme)](images/header.png)
 
 ## Work steps (the Product Manager's order of work)
 
@@ -14,14 +14,14 @@ Six numbered work steps line the top of the screen (FR-1094). Studio starts on s
 |---|---|---|
 | 1 Understand the whole | Dashboard | — |
 | 2 Settle requirements | Tables (requirements) | Entities, Integrations |
-| 3 Check the impact | Map | Diagrams, Source mapping |
-| 4 Track progress | Implementation status | Tables (test cases) |
-| 5 Decide on release | "Release decision" of Implementation status | Tables (test cases) |
-| 6 Tidy up and record | Integrity maintenance | Tables (decisions) |
+| 3 Check the impact | Source Map (floorplan) | Map, Diagrams |
+| 4 Track progress | Impl. status | Tables (test cases) |
+| 5 Decide on release | "Release decision" of Impl. status | Tables (test cases) |
+| 6 Tidy up and record | Maintenance | Tables (decisions) |
 
 - **Release decision** (step 5, FR-1095): met / not met / undetermined per goal and the overall "needs attention / OK / unknown" with reasons, the last ledger run and the items to act on. When it cannot be judged it says "unknown", never "OK". The state is always shown next to step 5.
 - **Ask AI** (optional, FR-1096..FR-1098): choose Microsoft Azure (Key / Entra ID) or the GitHub Copilot SDK (GitHub CLI sign-in / Key) in "AI settings" to ask for explanations, summaries and recommendations on every step. Before anything is sent, Studio shows what is sent and where, and asks for consent. Code file contents, paths, Issue and PR bodies and keys are never sent. Without settings, nothing is sent to any AI.
-- **Several repositories** (FR-1099, FR-1100): add repositories with "+" in the header; IDs get the repository name as a prefix. The "Between repositories" tab of Source mapping shows package dependencies, function and API calls and data exchange, split into confirmed and candidate, as a diagram and a table.
+- **Several repositories** (FR-1099, FR-1100): open "Repository list" in the header and add repositories with "Add repository" (up to 10); IDs get the repository name as a prefix. The "Between repositories" tab of Source Map shows package dependencies, function and API calls and data exchange, split into confirmed and candidate, as a diagram and a table.
 
 ### Microsoft Design principles and their acceptance criteria
 
@@ -37,12 +37,12 @@ Six numbered work steps line the top of the screen (FR-1094). Studio starts on s
 | Item | Data you can browse |
 |---|---|
 | ① Dashboard | Per-goal progress, metrics, history, and counts of unresolved items |
-| ② Implementation status | For each approved requirement: not started, implementation registered, tests passed |
+| ② Impl. status | For each approved requirement: not started, implementation registered, tests passed |
 | ③ Map | A relationship graph for tracing the links goal → requirement → component / API / table → file → test (2D / 3D) |
 | ④ Diagrams | Context, goal tree, state transition, data relationship, component, and implementation placement diagrams (2D / 3D) |
 | ⑤ Entities | The kinds of business data, and the mapping of create / read / update / delete per use case |
 | ⑥ External integrations | A list and details of integrations with external apps and data (list and detail views were added in FR-1042) |
-| ⑦ Source mapping | The catalog's file paths, and their mapping to requirements, components, and tests |
+| ⑦ Source Map | The catalog's file paths, and their mapping to requirements, components, and tests |
 | ⑧ Tables | The original rows of all records (sorting, CSV) |
 | ⑨ Consistency maintenance | Aligns catalog titles and decision states with requirements (the only operation that changes originals) |
 
@@ -55,13 +55,13 @@ The "primary place to browse" is the item where you see that kind's meaning, rel
 | Kind | Primary place | Secondary |
 |---|---|---|
 | Goal | Dashboard | Tables |
-| Requirement | Implementation status | Tables |
-| Acceptance criterion | Implementation status | Tables |
-| Test case | Implementation status | Tables |
+| Requirement | Impl. status | Tables |
+| Acceptance criterion | Impl. status | Tables |
+| Test case | Impl. status | Tables |
 | Shared component | Diagrams (component diagram) | Tables |
 | API | Diagrams (implementation placement diagram) | Tables |
 | Table | Diagrams (data relationship diagram) | Tables |
-| File | Source mapping | Tables |
+| File | Source Map | Tables |
 | PARAM | Map | Tables |
 | Question | Dashboard | Tables |
 | Term | Entities | Tables |
@@ -75,7 +75,7 @@ The "primary place to browse" is the item where you see that kind's meaning, rel
 The old URLs `#/map2d`, `#/map3d`, and `#/placement` remain as aliases and redirect to the Map (2D / 3D) and Diagrams (implementation placement diagram).
 
 ## Switching between 2D / 3D
-The Map and the 6 kinds of diagram (context diagram, goal tree, state transition diagram, data relationship diagram, component diagram, implementation placement diagram) have a 2D / 3D switch icon at the top right (bottom right for the Map). The icons are anime-style "flat" and "solid" figures with the words "2D" and "3D" attached. Either way, the same content comes from the same management data. When you switch, your selection, filters, diagram kind, and search text are kept. You can also switch with the keyboard (Tab → Enter) and with `> 2D` in the search box, and the icon animation stops when the OS reduced-motion setting is on. In environments where 3D can't be rendered, 2D is shown along with the reason and a table with the same content.
+The header always has a `2D` / `3D` / `GRAPH` display switch; modes the current screen does not support are disabled with the reason shown next to them (Graph only on the Map, the goal tree / state transition / data relationship / component diagrams, and the Entities screen). The Map and the 6 kinds of diagram (context diagram, goal tree, state transition diagram, data relationship diagram, component diagram, implementation placement diagram) also have an in-screen 2D / 3D switch icon at the top right (bottom right for the Map). The icons are anime-style "flat" and "solid" figures with the words "2D" and "3D" attached. Either way, the same content comes from the same management data. When you switch, your selection, filters, diagram kind, and search text are kept. You can also switch with the keyboard (Tab → Enter) and with `> 2D` in the search box, and the icon animation stops when the OS reduced-motion setting is on. In environments where 3D can't be rendered, 2D is shown along with the reason and a table with the same content.
 
 ## Real screen examples
 
@@ -89,7 +89,7 @@ Capture conditions and SHA-256 are recorded in [screen-images.json](screen-image
 | Map (3D) | ![Map (3D)](images/map3d.png) |
 | Diagrams | ![Diagrams](images/diagrams.png) |
 | Diagrams' implementation placement diagram (formerly "Placement") | ![Diagrams' implementation placement diagram](images/placement.png) |
-| Source mapping | ![Source mapping](images/source.png) |
+| Source Map | ![Source Map](images/source.png) |
 | Tables | ![Tables](images/tables.png) |
 
 ## Dashboard
@@ -103,7 +103,7 @@ An overall diagram arranged from left to right in the order "goal → requiremen
 | Wheel / drag | Zoom / move |
 | Point at a dot | Highlight directly connected items |
 | Click a dot | Highlight up to 2 steps out, with details on the right |
-| Double-click / "Bird's-eye view" | Survey the whole |
+| Double-click / "Bird's-eye" | Survey the whole |
 | "Tour" | The camera automatically circles goal by goal |
 | "Layers" | Add display of acceptance criteria, parameters, questions, etc. |
 | Color switch | Color requirements by kind / decision state / implementation status (red = not implemented) |
@@ -111,7 +111,7 @@ An overall diagram arranged from left to right in the order "goal → requiremen
 Click the minimap at the bottom left to jump to that location.
 
 ## Map (3D)
-See the same relationships as 2D in layers, in three dimensions. Choose 3D with the switch icon, or open `#/map3d`. Drag to rotate, right-drag or Shift+drag to pan, and the wheel to zoom. When you select something, the camera moves in and light flows along related lines. "Side view" switches to the stacking of the layers, "Top view" to the spread of the layout, and "Auto-rotate" to a slow rotation when you do nothing.
+See the same relationships as 2D in layers, in three dimensions. Choose 3D with the switch icon, or open `#/map3d`. Drag to rotate, right-drag or Shift+drag to pan, and the wheel to zoom. When you select something, the camera moves in and light flows along related lines. "Side" switches to the stacking of the layers, "Top" to the spread of the layout, and "Auto-orbit" to a slow rotation when you do nothing.
 
 ## Diagrams
 Diagrams commonly used in requirements definition, built solely from the content of the data layer. Every diagram can be shown in 2D or 3D (3D is a solid diagram of points and lines; rotate with drag or arrow keys, zoom with the wheel or + −).
@@ -175,10 +175,10 @@ These are pages opened by URL (`#/structure` and `#/consistency` do not appear i
 
 The data and calculations each screen reads are in [08-data-reference.en.md](08-data-reference.en.md), and role-specific usage is in [05](05-product-manager.en.md), [06](06-architect.en.md), and [07](07-software-engineer.en.md).
 
-## Source mapping
+## Source Map
 A diagram (treemap, the "Source map" tab) that shows the names of files written in the catalog by area. Area is the number of linked requirements; blue is implementation and green is tests. Select a file to see the requirements it satisfies, the components it uses, and its tests. **This tab does not read the contents of source code.**
 
-The other tab, **"See how functions relate"**, analyzes the source read-only (the code is never run). The **floorplan** shows parts, files and endpoints as cards in three columns, "uses | inside | used by", and the **network view** shows calls, references and inheritance of functions, methods and classes as a live graph. With figures: [S9 section 7](09-visual-tour.en.md#7-source-map--function-relations-floorplan-network-view).
+The other tab, **"See how functions relate"**, analyzes the source read-only (the code is never run). The **floorplan** shows parts, files and endpoints as cards in three columns, "uses | inside | used by", and the **network view** shows calls, references and inheritance of functions, methods and classes as a live graph. With figures: [S9 section 7](09-visual-tour.en.md#7-source-map--function-relations-floorplan-network-view). A third tab, **"Between repositories"** (`#/xrepo`), shows dependencies, calls and data exchange when several repositories are open.
 
 ## The "New here?" tour
 The yellow **"New here?"** button at the top right dims the page and walks you through the current screen, highlighting one area at a time (← → keys to move, Esc to close). It works on all nine screens. With figures: [S9 section 2](09-visual-tour.en.md#2-the-new-here-tour-wizard).
@@ -187,4 +187,4 @@ The yellow **"New here?"** button at the top right dims the page and walks you t
 "Tables" is a screen that lists the original rows of management data by kind. Choose a kind from under 4 group headings: "Requirements" (goals, requirements, acceptance criteria, PARAM, questionnaire), "Design" (entities, shared components, APIs, tables, external integrations, terms, personas), "Evidence" (test cases, files, sources), and "Operations" (decision records, audit findings). An ID written in a cell is a link to its details, and an ID not in the management data is shown as "Unresolved." You can sort by header, filter in the box above, show only rows related to what you selected on the map with "Only rows related to the selection," and export as CSV.
 
 ## Detail panel on the right
-It appears when you select an item. For a requirement, you can see the text, acceptance criteria, decision state, priority, parent goal, data handled, parameters, implementation files, tests, and BLOCKED questions. The "VS Code" link opens the definition's location or the file in the editor. "View on the 2D / 3D map" moves you to that screen.
+It appears when you select an item. For a requirement, you can see the text, acceptance criteria, decision state, priority, parent goal, data handled, parameters, implementation files, tests, and BLOCKED questions. The "Open in VS Code" link opens the definition's location or the file in the editor. "Show on 2D map" / "Show on 3D map" move you to that screen.

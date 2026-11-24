@@ -16,7 +16,7 @@ All settings live in one file, `scripts/ebak.config.json`. When you update with 
 }
 ```
 
-Keys you omit take the defaults from `DEFAULT_CONFIG` in `scripts/ebaklib.py`. Keys starting with `_note` are explanations and do not affect behavior.
+Keys you omit take the defaults from `DEFAULT_CONFIG` in `scripts/ebaklib.py`. Keys starting with `_` (`_note`, `_id_scan_exclude_note`, and so on) are explanations and do not affect behavior.
 
 ## 4.1 Context you want on every request
 
@@ -36,12 +36,15 @@ HVE Lite has no hooks and does not add a preamble automatically. If you want a s
 
 You can change these to match your directory layout. After changing them, run `python scripts/verify.py --docs-only` to confirm that the checks can read the new paths.
 
+- The installer creates the templates (requirements definition, catalog, external integration catalog, ID registry, System Test ledger) at the paths in this setting, only when no file is there (`CREATE`). Without the setting, or when a path points outside the repository, it uses the default path. To use other paths in a repository you are installing into for the first time, write only `management_files` in `scripts/ebak.config.json` before installing.
+- The uninstaller's `--purge` removes the management data at the paths in this setting (and under the key `files` of older versions' settings).
+
 ## 4.3 Base branch and work folder (`base_branch` / `work`)
 
 | Key | Default | Meaning |
 |---|---|---|
 | `base_branch` | `main` | The branch that diff checks (CHK-12 and others) compare against. rd-auditor's diff audit also uses the diff with this branch |
-| `work.dir` | `work` | Where temporary files go (logs, evidence, results, audit results). Not tracked by git. HVE Lite does not delete `/work` automatically; delete it by hand when you no longer need it |
+| `work.dir` | `work` | Where temporary files go (logs, evidence, results, audit results, request drafts from `adopt.py request`). Not tracked by git. HVE Lite does not delete `/work` automatically; delete it by hand when you no longer need it |
 
 ## 4.4 Check scope (`checks`)
 
@@ -120,6 +123,8 @@ For each extension it calls, `verify.py` prints one line `EXT <module>.<function
 
 On a toolkit update, `tools/install.py` looks for wiring you added directly to `scripts/*.py` and prints what the update would drop as `WARN-WIRING  <file>:<line>`. If you see it, register the check again using one of the methods above.
 
+`--clean` (clean install) resets the settings to defaults, so it also removes your `extensions.checks` registrations. Check with `git diff scripts/ebak.config.json` and restore them. `scripts/ext/*.py` and modules you added yourself are not removed.
+
 ## 4.8 Removed configuration keys (when updating from 0.5.x)
 
 In 0.6.0 (HVE Lite), the following run- and hook-based keys are gone. The installer does not rewrite an older version's settings. A normal update leaves these keys in place, but they are no longer read. To remove them, recreate the settings from defaults with `--clean` (clean install) or delete them by hand ([9.4](09-versioning.en.md#94-updating-from-an-older-version-clean-install)).
@@ -150,15 +155,32 @@ The tools and skills of the MCP servers, plugins, and extensions you have set up
 
 - **Rules**: The installer writes a rules block into `AGENTS.md` and `.github/copilot-instructions.md`, between `<!-- ebak-abk:begin -->` and `<!-- ebak-abk:end -->`. The text between the markers is rewritten on every update. Write your project's own rules outside the markers.
 - **Look of the screens**: HVE does not prescribe a design system. Write the one you want (for example "Fluent 2 for the web" or "follow the company brand guide") in the default constraints of the requirements definition or in your request.
-- **Agents and skills**: You can edit `.github/agents/rd-auditor.agent.md` and `.github/skills/*/SKILL.md` directly. Re-running the installer does not overwrite locally modified files (`KEEP-LOCAL`). To take in a new version, check with `--dry-run`, then merge the diff by hand or use `--force` (which keeps `.ebak-backup-*`).
+- **Agents and skills**: You can edit `.github/agents/rd-auditor.agent.md` and `.github/skills/*/SKILL.md` directly. Re-running the installer does not overwrite locally modified files (`KEEP-LOCAL`). To take in a new version, check with `--dry-run`, then merge the diff by hand or use `--force` (which keeps `.ebak-backup-*`). `--clean` deletes modified files too and restores the shipped ones.
+- **Your own agents and skills**: Files you add under `.github/agents/` and `.github/skills/` (for example `.github/skills/my-skill/SKILL.md`) are not shipped files, so updates, `--clean`, and uninstall neither change nor delete them.
 - **Models**: HVE does not specify models. To pin rd-auditor to a model, write `model:` in its frontmatter.
 
 ## 4.11 CI
 
-`.github/workflows/ebak-verify.yml` (ebak-verify) runs `scripts/verify.sh --show-warnings` on pull requests and on pushes to main. The check scope follows `checks.profile` (lite by default). It is the same check as your local `python scripts/verify.py`, so the rules in AGENTS.md are confirmed on every push, whoever made the change and on whichever PC. Add the toolchain your app build needs (such as `actions/setup-node`) before the verify step. You can also add CodeQL or dependency scanning to this workflow.
+`.github/workflows/ebak-verify.yml` (ebak-verify) runs `scripts/verify.sh --show-warnings` on pull requests and on pushes to main. The check scope follows `checks.profile` (lite by default). It is the same check as your local `python scripts/verify.py`, so the rules in AGENTS.md are confirmed on every push, whoever made the change and on whichever PC. Add the toolchain your app build needs (such as `actions/setup-node`) before the verify step. You can also add CodeQL or dependency scanning to this workflow. The workflow is a shipped file, so once you edit it, updates show `KEEP-LOCAL` and `--clean` restores the shipped one (same as 4.10).
 
 ### Data-layer repair (CI does not repair)
 
 CI only checks and never repairs the data layer (`ebak-verify` has contents read permission only). If the data-layer check fails, run the common entry point `python scripts/rdfix.py --full --apply` locally, which checks again, and push the repair in the same change (exit codes 0/1/2 are in [05](05-scripts-reference.en.md)). The requirements definition and `docs/integrations.md` are never changed. The installer also calls this entry point once after installing. `--no-repair` checks and plans only (writes nothing); `--skip-verify` neither checks nor repairs.
 
-Why CI does not repair: CI that only reads needs no write permission, and a bot pushing fixes onto someone's PR branch makes the branches of other people and PCs diverge. The `.github/workflows/ebak-data-layer.yml` shipped by earlier versions (repair commits and Issues) is deleted when you update from an older version with `--clean` (clean install; [9. Versioning](09-versioning.en.md)). To leave the workflow out at install time, pass `--no-ci`.
+Why CI does not repair: CI that only reads needs no write permission, and a bot pushing fixes onto someone's PR branch makes the branches of other people and PCs diverge. The `.github/workflows/ebak-data-layer.yml` shipped by earlier versions (repair commits and Issues) is deleted when you update from an older version with `--clean` (clean install; [9. Version upgrade procedure](09-versioning.en.md)). To leave the workflow out at install time, pass `--no-ci`.
+
+## 4.12 Data-layer repair and the enterprise data catalog (`repair` / `enterprise_data_catalog`)
+
+Neither key is in the default config file. Add them only when you need them.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `repair.max_rounds` | `3` | Upper limit of check → repair rounds in `rdfix.py --full --apply` (PARAM-026; 1 or more) |
+| `repair.lock_wait_sec` | `30` | Seconds to wait for the lock when repairs start at the same time (PARAM-027; 0 or more). `--lock-wait` takes precedence |
+| `enterprise_data_catalog.source` | none | The enterprise data catalog that `entities.py check` and `todo` compare against: a path from the repository root, or an http(s) URL. With none, or `"利用しない"` (not used), nothing is compared |
+| `enterprise_data_catalog.name_column` | none | Column (key for JSON) holding the entity name. Without it, columns such as `エンティティ名` or `name` are searched |
+| `enterprise_data_catalog.format` | `auto` | `csv`, `json`, `markdown`, `html`, or `auto` (decided from the extension and content) |
+| `enterprise_data_catalog.similarity_threshold` | `0.8` | Lower bound of the similarity for a name-variation candidate (greater than 0, at most 1; the toolkit's PARAM-015). Out-of-range values fall back to the default |
+| `enterprise_data_catalog.timeout_sec` | `10` | Seconds to wait when fetching a URL (greater than 0; the toolkit's PARAM-016). Out-of-range values fall back to the default |
+
+The source is only read; its text is never stored or copied ([05](05-scripts-reference.en.md)). The threshold and the wait are not read from the PARAMs in the target's requirements definition (those are the target app's own parameters). Do not put credentials in the URL.

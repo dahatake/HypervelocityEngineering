@@ -2,7 +2,7 @@
 
 # HVE Studio User Guide (Part 2)
 
-The full name is **Hypervelocity Engineering Studio**, formerly HVE Studio. The folder moved from `HVE-Studio/` to `HVE-Studio/`, and the root launchers from `start-hve-studio.*` to `start-hve-studio.*`. Saved display settings keep working. In a repository updated from an older version, the installer reports the leftover `HVE-Studio/` as orphaned files; `--clean` removes them.
+The full name is **Hypervelocity Engineering Studio** (HVE Studio for short), formerly EABK Studio. The folder moved from `EABK-Studio/` to `HVE-Studio/`, and the root launchers from `start-eabk-studio.*` to `start-hve-studio.*`. Saved display settings keep working. In a repository updated from an older version, the installer reports the leftover `EABK-Studio/` as orphaned files; `--clean` removes them.
 
 This folder is Part 2 of the [HVE User Guide](../README.en.md) (HVE itself is chapters 1–11 in Part 1; the chapters in this part are S1–S9). HVE Studio is an app that runs only on your own computer and lets you browse the "record of requirements, catalog, and tests" managed by HVE (the data layer) through **diagrams, tables, and search**. Even if you can't read code, you can see "what we decided to build," "how far it has been built," and "where each component, piece of data, and API lives."
 
@@ -14,13 +14,13 @@ This folder is Part 2 of the [HVE User Guide](../README.en.md) (HVE itself is ch
 
 ## Read by your role
 
-| You are | Read first | Launch | First screen |
+| You are | Read first | Work step to choose | First screen |
 |---|---|---|---|
 | Product Manager (decides what to invest in) | [05-product-manager.en.md](05-product-manager.en.md) | Step 1 "Understand the whole" | Dashboard |
-| Architect (checks design consistency and boundaries) | [06-architect.en.md](06-architect.en.md) | Step 3 "Check the impact" | 2D map |
-| Software Engineer (looks for where implementation and tests are) | [07-software-engineer.en.md](07-software-engineer.en.md) | Steps 2 "Settle requirements" and 4 "Track progress" | Tables |
+| Architect (checks design consistency and boundaries) | [06-architect.en.md](06-architect.en.md) | Step 3 "Check the impact" | Source Map (floorplan); the same step has Map and Diagrams |
+| Software Engineer (looks for where implementation and tests are) | [07-software-engineer.en.md](07-software-engineer.en.md) | Steps 2 "Settle requirements" and 4 "Track progress" | Tables (requirements), Impl. status |
 
-You can also switch roles at any time with the `Product Manager`, `Architect`, and `Software Engineer` buttons at the top right of the screen.
+There are no role buttons (removed on 2026-11-20). Choosing a work step (1–6) at the top of the screen opens that step's default screen.
 
 ## Reading order (S9 → S1 → S2 → by role → S3 → S8 → S4)
 
@@ -39,6 +39,6 @@ This guide lives in `users-guide/studio/` in the distribution source, and in `HV
 ## Things to know first
 
 - **Normal browsing is read-only**. Only confirmed catalog maintenance changes originals. Task edits use Studio-owned storage outside the repository.
-- **Nothing is sent outside**. Communication stays inside your own computer (127.0.0.1). Explicit source references and TODOs are read, but repository code is not executed.
+- **Nothing is sent outside**. Communication stays inside your own computer (127.0.0.1). The only exceptions are reading Issues, PRs and Actions with the `gh` CLI when the remote is GitHub (stop it with `--no-remote`), and what you agree to send with "Ask AI" after setting up "AI settings". Explicit source references and TODOs are read, but repository code is not executed.
 - **It stays up to date automatically**. When a data-layer file is updated, the screen reloads within a few seconds.
 - With `JA | EN` at the top right of the screen, you can switch the screen's language between Japanese and English (requirement text and the like remain as written).

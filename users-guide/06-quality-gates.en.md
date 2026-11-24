@@ -26,7 +26,7 @@ A profile selects which CHKs `rdcheck.py check`, `verify.py`, and `rdfix.py` rep
 | `full` | All of CHK-00 to CHK-34 | Milestone audits (rd-auditor runs with `--profile full --show-warnings`), when you want to see format warnings, when tidying a newly written requirements definition |
 
 - The scope is set by `checks.profile` in `scripts/ebak.config.json`. To change it for one run, pass `--profile lite|full` (it takes precedence over the setting). The profile is the only check knob. Example: `python scripts/verify.py --docs-only --profile full --show-warnings`.
-- In lite, CHKs outside the scope affect neither the output nor the exit code. Lite looks only at structure and traceability (duplicate and reused IDs, existence of referenced targets, links between ACs and tests, protection of System Tests).
+- In lite, CHKs outside the scope affect neither the output nor the exit code. Lite looks only at structure and traceability (duplicate and reused IDs, existence of referenced targets, links between ACs and tests, protection of System Tests). Findings of extension checks (`extensions.checks`, `scripts/ext/`) are not filtered by the profile; they are reported under lite as well.
 - The summary line is `rdcheck: errors=N warnings=M base=… profile=lite`.
 - The profile applies the same way, with no exception, to `rdcheck.py check`, `verify.py`, and `rdfix.py` (including `--full`). So `rdfix.py --full` passes exactly when `verify.py --docs-only` passes with the same profile (mechanical repairs such as catalog sync run the same way under either profile).
 
@@ -37,18 +37,18 @@ These are the checks run by `scripts/verify.py`. CHKs with ● in the "lite" col
 | ID | lite | What is checked | Severity | How to fix |
 |---|---|---|---|---|
 | CHK-00 | | The requirements definition is missing | warn | Create the requirements definition (skill `requirement-definition`) |
-| CHK-01 | ● | Duplicate IDs. IDs not in the ID registry (IDs assigned by hand) | error | Reassign with `next-id.py`. For existing documents, use `next-id.py --sync --adopt` |
+| CHK-01 | ● | Duplicate IDs. IDs not in the ID registry (IDs assigned by hand). The ID registry is missing (warn) | error / warn | Reassign with `next-id.py`. For existing documents, or when the ID registry is missing, use `next-id.py --sync --adopt` |
 | CHK-02 | ● | Reuse of a deleted or missing-number ID | error | Allocate a new ID with `next-id.py` |
 | CHK-03 | ● | An AC does not reference an existing requirement | error | Write it under the requirement's heading, or add `対応する要求:` |
 | CHK-04 | | A requirement has no upstream G-ID (or default constraint). It references a nonexistent G-ID. There is a G-ID with no approved requirement | error / warn | Fix the upstream field |
 | CHK-05 | ● | A MUST requirement has neither an AC nor an unanswered Q | error | Add an AC, or raise a Q |
 | CHK-06 | | An approved requirement has no decision record (rationale and date) | error | Use the form `承認済み（依頼 YYYY-MM-DD）` |
-| CHK-07 | | A catalog requirement ID is not in the requirements definition / decision status or title does not match / a row is missing for an approved, pending-approval, or on-hold requirement / rows for the same requirement are duplicated / the feature table is missing | error | Align with the requirements definition using `rdfix.py --apply` (6.4) |
+| CHK-07 | | A catalog requirement ID is not in the requirements definition / decision status or title does not match / a row is missing for an approved, pending-approval, or on-hold requirement / rows for the same requirement are duplicated / the feature table is missing. The catalog is missing (warn) | error / warn | Align with the requirements definition using `rdfix.py --apply` (6.4) |
 | CHK-08 | | A file written in the catalog does not exist | error | Fix the path or mark it "not implemented". Renames and deletions can be followed with `rdfix.py --apply` |
-| CHK-09 | ● | The ID of an implemented MUST requirement appears in neither the test code nor manual-tests (warn if not implemented) | error / warn | Write `FR-012 AC-031` in the test name or a comment |
-| CHK-10 | | System ACs and ledger cases do not correspond in both directions | warn | Add cases to the ledger (`ledger.py`). Block the cases of ACs that are no longer in scope with `ledger.py block` |
-| CHK-11 | | `ac_digests` does not match the AC text | Same as above | Review the cases and run `ledger.py digests --update` |
-| CHK-12 | ● | Deleting a ledger case, changing command or ac_ids without a reason, a decrease in asserts in tests/system | error | Revert. Make changes with `ledger.py update --reason` |
+| CHK-09 | ● | The ID of an implemented MUST requirement appears in neither the test code nor manual-tests (warn if not implemented). A MUST requirement whose ID appears in tests has no row in the catalog's feature table | error / warn | Write `FR-012 AC-031` in the test name or a comment. Add the catalog row with `rdfix.py --only catalog --apply` |
+| CHK-10 | | System ACs and ledger cases do not correspond in both directions (an AC without a case is a warn). A ledger case references a nonexistent AC or requirement, or an AC outside the System Test scope (error) | error / warn | Add cases to the ledger (`ledger.py`). Block or update the cases of ACs that are no longer in scope with `ledger.py block` / `ledger.py update` |
+| CHK-11 | | `ac_digests` is missing or does not match the AC text | warn | Review the cases and run `ledger.py digests --update` |
+| CHK-12 | ● | Deleting a ledger case, changing command or ac_ids without a reason, a decrease in asserts in tests/system (compared with the diff base `--base`; not checked when there is no base) | error | Revert. Make changes with `ledger.py update --reason` |
 | CHK-13 | | Ambiguous words in new or changed requirements and ACs | warn | Rephrase into observable terms |
 | CHK-14 | | Numbers and units are hard-coded | warn | Make them PARAMs and reference them as `{PARAM-xxx}` |
 | CHK-15 | | A prohibited synonym from the glossary is used | warn | Fix to the correct term |
@@ -73,7 +73,7 @@ These are the checks run by `scripts/verify.py`. CHKs with ● in the "lite" col
 
 CHK-24 to 27 keep the requirements definition and the catalog consistent "as a system". In addition to the vertical links (goal → requirement → acceptance criterion → ledger → implementation and tests), they confirm that the horizontal links between requirements and glossary terms, states, PARAMs, sources, and catalog assets point to existing targets and agree in both directions. You can follow the links with `python scripts/rdcheck.py trace <ID or name>` ([5. Scripts](05-scripts-reference.en.md)).
 
-The output is one finding per line (`ERROR CHK-07 docs/catalog.md:12 …`), followed by one summary line. With `--show-warnings`, warnings are shown too.
+The output is one finding per line (`ERROR CHK-07 docs/catalog.md:12 …`), followed by one summary line. `verify.py` prints at most 25 ERROR lines and shows only the count of the rest as `... (+N errors)` (the full text is in `/work/logs/verify-<datetime>-rdcheck.log`). With `--show-warnings`, warnings are shown too.
 
 ## 6.4 Automatic repair of data-layer inconsistencies (rdfix)
 
@@ -82,7 +82,7 @@ Among the mismatches between the data-layer files (requirements definition, cata
 - There are two callers, with the same result: the installer (once after installing by default; `--no-repair` plans only, `--skip-verify` does nothing) and manual runs. CI does not repair (6.5).
 - Exit codes: 0 (pass / repaired), 1 (manual items left / repairs planned), 2 (not run / cancelled). Exit 2 happens on lock-wait timeout, on a write failure, when the requirements definition or the external integration catalog changed, on a new error, or on an unexpected error; every change is undone.
 - The requirements definition is the source of truth. rdfix never changes it. The ID registry is fixed through `next-id.py` and the ledger through `ledger.py`, with ledger changes kept in `history`.
-- When verify fails and there are inconsistencies that can be fixed automatically, a `HINT rdfix: …` line is printed.
+- When verify's management-data check fails, `HINT rdfix:` lines show `rdfix.py --full` and `rdfix.py --full --apply`. When some inconsistencies can be fixed automatically, another `HINT rdfix:` line shows their count.
 - Inconsistencies that need a judgment are not fixed; they are shown as `MANUAL <CHK> <location> <message>（担当: <kind of work>）次の行動: …`. The "担当" (in charge) is one of `要求定義書` (requirements definition), `System Test の台帳` (System Test ledger), `コードとカタログ` (code and catalog), or `リポジトリ` (repository), naming which files the fix is about. Examples: the AC text changed (CHK-11; review the ledger cases), reuse of a deleted or missing-number ID (CHK-02), an ID not in the ID registry (CHK-01; it may have been assigned by hand).
 
 | Target (`--only`) | What is fixed automatically | Related checks |

@@ -97,7 +97,7 @@ HVE Lite は、次の 5 つでこれらを防ぎます。
 .github/
   agents/        rd-auditor.agent.md … 節目に利用者が選んで頼む、読み取り専用の監査役
   skills/        requirement-definition（要求定義の手順。誰が使ってもよい）/ rd-audit / adopt-existing
-  workflows/     ebak-verify.yml … push・PR で verify を実行（検査だけ。修復は手元で rdfix）
+  workflows/     ebak-verify.yml … main への push・PR で verify を実行（検査だけ。修復は手元で rdfix）
 scripts/         決定的スクリプト（Python 3.9 以上。標準ライブラリだけを使用）
   verify.py / verify.ps1 / verify.sh   データ層の検査（検査プロファイル）＋ビルド・テストのコマンド
   rdcheck.py  rdfix.py  next-id.py  ledger.py  summarize.py  adopt.py  entities.py  extpoints.py  ebaklib.py
@@ -116,7 +116,7 @@ HVE Lite には hook も、依頼への定型文の自動付与もありませ�
 | 層 | 実装 | 動くタイミング |
 |---|---|---|
 | 手元 | `python scripts/verify.py`（データ層の検査＋ `verify.commands` のビルド・テスト）。`--docs-only` でデータ層だけ | 完了の前（`AGENTS.md` の規則） |
-| CI | `.github/workflows/ebak-verify.yml`（`scripts/verify.sh --show-warnings`） | push・PR のたび |
+| CI | `.github/workflows/ebak-verify.yml`（`scripts/verify.sh --show-warnings`） | `main` への push と、PR のたび |
 | 節目 | `rd-auditor`（意味の監査。読み取り専用） | 利用者が頼んだとき |
 
 検査プロファイルは `scripts/ebak.config.json` の `checks.profile` で決めます。
@@ -188,7 +188,7 @@ curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/m
 curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.sh | bash -s -- --dry-run
 ```
 
-特定のバージョン（タグ・ブランチ・commit）を使う場合は、環境変数 `EBAK_REF` を指定します（例: `EBAK_REF=v0.6.0`）。フォークを使う場合は `EBAK_REPO=<owner>/<repo>` を指定します。
+特定のバージョン（タグ・ブランチ・commit）を使う場合は、環境変数 `EBAK_REF` を指定します（例: `EBAK_REF=v0.6.0`。使えるタグは `git ls-remote --tags https://github.com/dahatake/HypervelocityEngineering` で確かめます。タグがなければブランチ名か commit の SHA を指定します）。フォークを使う場合は `EBAK_REPO=<owner>/<repo>` を指定します。`curl … | bash` では `curl -fsSL …/install.sh | EBAK_REF=<ref> bash` のように `bash` の側に付けます（`curl` の前に付けると install.sh に渡りません）。PowerShell では `$env:EBAK_REF = '<ref>'` を先に実行します。
 
 **toolkit を clone 済みの場合**
 
@@ -208,18 +208,21 @@ python tools/install.py --target /path/to/your-repo
 | `--no-ci` | `-NoCi` | `.github/workflows/ebak-verify.yml` をインストールしません |
 | `--no-repair` | `-NoRepair` | 導入後のデータ層の自動修復をせず、検査と修復の計画だけを表示します。toolkit の導入と表示用管理データの生成は行います |
 | `--skip-verify` | — | 導入後のデータ層の検査も修復も行いません。表示用管理データの生成は行います |
+| `--allow-non-git` | — | git リポジトリでない場所にも導入します |
 | `--uninstall` | `-Uninstall` | 変更していない toolkit のファイル、`AGENTS.md` などのブロック、マニフェスト、空になったフォルダーを削除します（管理データと設定は残します）。`uninstall.ps1` / `uninstall.sh` でも実行できます |
 | `--purge` | `-Purge` | `--uninstall` に加えて、管理データ（`docs/` の要求定義書・カタログ・外部連携カタログ・ID 台帳など、`tests/system/ledger.json`）、`scripts/ebak.config.json`、`/work`、`.gitignore`・`.gitattributes` に追記した行、`*.ebak-backup-*` も削除します |
+
+PowerShell の列が「—」のオプションは、PowerShell の 1 行のインストールでは渡せません。`install.sh`（`bash -s -- <オプション>`）か、toolkit を clone して `python tools/install.py` で指定します。
 
 ### インストールされるファイル
 
 | 種類 | ファイル | 再実行時の扱い |
 |---|---|---|
-| toolkit のファイル | `.github/agents/rd-auditor.agent.md`、`.github/skills/`（`requirement-definition`・`rd-audit`・`adopt-existing`）、`.github/workflows/ebak-verify.yml`、`scripts/*.py`・`verify.ps1`・`verify.sh`、`HVE-Studio/`（ビューアー本体。Studio のテストは入れません）、`HVE-docs/`（このリポジトリの `users-guide/` と同じ内容。HVE Studio のガイドは `HVE-docs/studio/`。導入先の `users-guide/` は触りません） | 変更していなければ新しいバージョンに更新します。ローカルで変更していれば**そのまま残します**（`KEEP-LOCAL`。`--force` で上書き） |
+| toolkit のファイル | `.github/agents/rd-auditor.agent.md`、`.github/skills/`（`requirement-definition`・`rd-audit`・`adopt-existing`）、`.github/workflows/ebak-verify.yml`、`scripts/*.py`・`metadata.json`・`verify.ps1`・`verify.sh`、`tools/install.py`、`HVE-Studio/`（ビューアー本体。Studio のテストは入れません）、`HVE-docs/`（このリポジトリの `users-guide/` と同じ内容。HVE Studio のガイドは `HVE-docs/studio/`。導入先の `users-guide/` は触りません） | 変更していなければ新しいバージョンに更新します。ローカルで変更していれば**そのまま残します**（`KEEP-LOCAL`。`--force` で上書き） |
 | 管理データの雛形 | `docs/requirements-definition.md`、`docs/catalog.md`、`docs/integrations.md`（外部連携カタログ。任意）、`docs/id-registry.md`、`tests/system/ledger.json` | **存在しない場合だけ**作成します。既存のファイルは上書きしません |
 | 表示用管理データ | `.hve-studio/managed-data.json` | 導入・更新の最後に進捗付きで作成・同期。要求正本への移行ではなく、既存文書・ソースなどの解析結果。通常アンインストールでは保持し、`--purge` では削除 |
 | 設定 | `scripts/ebak.config.json` | なければ作成します。あれば新しいキーだけを追加し、利用者が設定した値は変更しません |
-| 追記 | `.gitignore` に `/work/`・`/.hve-studio/`（見出し `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`）、`.gitattributes` に `docs/id-registry.md merge=union` | 足りない行だけを追記します |
+| 追記 | `.gitignore` に `/work/`・`/.hve-studio/`（見出し `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`）、`.gitattributes` に `docs/id-registry.md merge=union`・`scripts/*.sh text eol=lf`・`HVE-Studio/*.sh text eol=lf`（見出し `# Enterprise App Build Kit: append-only records`） | 足りない行だけを追記します |
 | ブロック | `AGENTS.md`、`.github/copilot-instructions.md` に `<!-- ebak-abk:begin -->`〜`end` で囲んだ規則（[上の「規則」](#規則agentsmd-に入るブロック)） | ブロックの中だけを置き換えます。ブロック外の記述は変更しません |
 | マニフェスト | `.github/ebak-toolkit.json` | バージョンと、インストールしたファイルのハッシュ（更新・削除の判定に使います） |
 
@@ -344,7 +347,8 @@ GitHub Copilot には、agents・skills・hooks をまとめて配布する標�
    - Windows: `irm https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.ps1 | iex`
    - macOS / Linux: `curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.sh | bash`
 2. `scripts/ebak.config.json` の `verify.commands` にビルドとテストのコマンドを登録します。
-3. あとは、次の「推奨の進め方」で開発します。
+3. リポジトリのルートで `python scripts/verify.py` を実行します。最後の行が `verify: PASS …` で exit 0 なら準備完了です（`verify.commands` が空のままなら `INFO` の行が出ます）。失敗したら [トラブルシューティング](users-guide/07-troubleshooting.md) を見ます。
+4. あとは、次の「推奨の進め方」で開発します。
 
 ![はじめの 3 ステップ](users-guide/images/fig-quickstart.svg)
 
@@ -372,12 +376,13 @@ HVE Lite は依頼に定型文を自動で付けません。毎回伝えたい�
 
 ```bash
 git status                                    # 未 commit の変更がないこと（あると実行しません）
-python tools/install.py --target . --clean --dry-run   # 削除する一覧（CLEAN）を確認
-python tools/install.py --target . --clean
-git diff                                      # 結果を確認して commit（git restore で戻せます）
+# toolkit の clone のルートで実行します（--target は更新するリポジトリのルート）
+python tools/install.py --target /path/to/your-repo --clean --dry-run   # 削除する一覧（CLEAN）を確認
+python tools/install.py --target /path/to/your-repo --clean
+git diff                                      # 更新したリポジトリで結果を確認して commit（git restore で戻せます）
 ```
 
-PowerShell では `-Clean`、`install.sh` では `--clean` です。
+更新するリポジトリのルートで 1 行で実行するときは、PowerShell では `-Clean`、`install.sh` では `--clean` を付けます（[オプションを付ける場合](#インストールコマンド推奨)）。導入先に入った `tools/install.py` を `--target .` で実行すると、導入先と toolkit のソースが同じになるため実行しません。
 
 | 対象 | `--clean` での扱い |
 |---|---|
@@ -388,7 +393,7 @@ PowerShell では `-Clean`、`install.sh` では `--clean` です。
 
 - 2 回続けて実行しても、2 回目は何も変わりません。
 - 旧版のデータ層のファイル（0.5.x の `docs/run-history.md` など）はデータとして残ります。不要なら手で削除します。
-- 0.5.x の run が残した worktree と `work/*` ブランチは消しません。`git worktree list`・`git branch --list "work/*"` で確認し、手で削除します。
+- 0.5.x の run が残した worktree と `work/*`・`run/*` ブランチは消しません。`git worktree list`・`git branch --list "work/*" "run/*"` で確認し、手で削除します。
 - `--clean` を使わずに同じインストールコマンドで更新すると、旧版のファイル（hook を含む）は残ります。旧版の hook が残ると削除された `gate.py` を呼び、Copilot がツールを拒否することがあるので、旧版からは `--clean` を使います。
 
 0.5.x からの使い方の変化:
@@ -422,7 +427,7 @@ PowerShell では `-Clean`、`install.sh` では `--clean` です。
 |---|---|---|
 | Product Manager | ダッシュボードで進捗・承認・未回答の質問を確認し、次に投資する目的を決める | [S5. Product Manager 向け](users-guide/studio/05-product-manager.md) |
 | Architect | 2D/3D マップ・図式・配置・構造で、依存・境界・置き場所と層の欠けを確かめる | [S6. Architect 向け](users-guide/studio/06-architect.md) |
-| Software Engineer | 表・ソース対応・詳細パネルで、要求から実装ファイルとテストまでをたどる | [S7. Software Engineer 向け](users-guide/studio/07-software-engineer.md) |
+| Software Engineer | 表・ソースコード構造・詳細パネルで、要求から実装ファイルとテストまでをたどる | [S7. Software Engineer 向け](users-guide/studio/07-software-engineer.md) |
 | 全員 | **初めての方は、各画面の見かたを図で説明する S9 から** | [S9. 画面ツアー（図解）](users-guide/studio/09-visual-tour.md) |
 | 全員 | どの画面が、どのファイルの何を読み、どう計算するか | [S8. データリファレンス](users-guide/studio/08-data-reference.md) |
 

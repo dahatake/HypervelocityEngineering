@@ -2,7 +2,7 @@
 
 # 5. スクリプトリファレンス
 
-すべてのスクリプトは、Python 3.9 以上の標準ライブラリだけで動きます。リポジトリのどこから実行しても、git のルートを基準に動作します。オプションの正確な一覧は `python scripts/<名前>.py --help` で表示できます。出力は短く、LLM がそのまま読める形式です（1 行に 1 指摘、最後に 1 行の要約）。
+すべてのスクリプトは、Python 3.9 以上の標準ライブラリだけで動きます。リポジトリのどこから実行しても、git のルートを基準に動作します。オプションの正確な一覧は `python scripts/<名前>.py --help` で表示できます。`verify.py`・`rdcheck.py`・`rdfix.py`・`next-id.py`・`ledger.py`・`adopt.py` は `--root DIR` で対象のリポジトリのルートを指定できます（`rdcheck.py`・`ledger.py`・`adopt.py` ではサブコマンドの前に書きます。`entities.py` は `--repo DIR`）。出力は短く、LLM がそのまま読める形式です（1 行に 1 指摘、最後に 1 行の要約）。
 
 | スクリプト | 役目 | 書き込むもの |
 |---|---|---|
@@ -15,7 +15,7 @@
 | `scripts/next-id.py` | ID の採番 | `docs/id-registry.md` と採番の記録 |
 | `scripts/ledger.py` | System Test の台帳の唯一の書き手 | `tests/system/ledger.json` |
 | `scripts/summarize.py` | 長いログの要約 | なし |
-| `scripts/adopt.py` | 既存アプリの導入 | `docs/baseline/`・`tests/system/golden/`・`work/import/` |
+| `scripts/adopt.py` | 既存アプリの導入 | `docs/baseline/`・`tests/system/golden/`・`work/import/`（設定の `work.dir` に従う） |
 | `tools/install.py` | 導入・更新・削除 | 導入先のリポジトリ |
 | `tools/uninstall.py` | どの版の HVE でも削除する（`install.py --uninstall`・`--purge` の実体） | 導入先のリポジトリ |
 
@@ -36,7 +36,7 @@ python scripts/verify.py --base main              # 差分の検査の基準（�
 ./scripts/verify.sh   /  .\scripts\verify.ps1     # 同じもの（Python を探して verify.py に引数を渡すラッパー）
 ```
 
-exit 0 なら合格です。`AGENTS.md` の規則では、完了の前にこれを exit 0 にします。検査のつまみは検査プロファイル（`--profile`）だけです（0.5.x から撤去したオプションは [9 章](09-versioning.md) を参照）。CI の `ebak-verify` は `scripts/verify.sh --show-warnings` を実行します。ログの全文は `/work/logs` に保存され、画面には要約だけが出ます。プロジェクトのビルド・テストのコマンドは `scripts/ebak.config.json` の `verify.commands` に書きます（[4. カスタマイズ](04-customization.md)）。
+exit 0 なら合格、1 なら不合格です。最後の行は `verify: PASS|FAIL failed=<失敗した段階> elapsed=<秒>s HEAD=<commit>` です（段階は `rdcheck`・`config`・`verify.commands` の name）。管理データの検査が失敗すると、`HINT rdfix:` の行で修復のコマンドを示します（自動で直せる不整合があるときは、その件数の行も出ます）。`AGENTS.md` の規則では、完了の前にこれを exit 0 にします。検査のつまみは検査プロファイル（`--profile`）だけです（0.5.x から撤去したオプションは [9 章](09-versioning.md) を参照）。CI の `ebak-verify` は `scripts/verify.sh --show-warnings` を実行します。ログの全文は `/work/logs` に保存され、画面には要約だけが出ます。プロジェクトのビルド・テストのコマンドは `scripts/ebak.config.json` の `verify.commands` に書きます（[4. カスタマイズ](04-customization.md)）。
 
 **検査プロファイル:** `scripts/ebak.config.json` の `checks.profile` が `lite`（既定）か `full` かで、報告する CHK が変わります。
 
@@ -47,7 +47,7 @@ exit 0 なら合格です。`AGENTS.md` の規則では、完了の前にこれ�
 
 書式の警告まで見るときは `python scripts/verify.py --docs-only --profile full --show-warnings` です。
 
-**キャッシュ:** 作業ツリーが clean（commit していない変更も、追跡していないファイルもない）のときの PASS は、`/work/.ebak/verify-cache.json` に記録されます。キーは HEAD・引数・`scripts/ebak.config.json` です。同じ commit に同じ verify を実行すると、キャッシュから即座に `PASS (cached …)` を返します。FAIL は記録しません。無効にするには `--no-cache` か、環境変数 `EBAK_VERIFY_NO_CACHE=1` を使います。
+**キャッシュ:** 作業ツリーが clean（commit していない変更も、追跡していないファイルもない）のときの PASS は、`/work/.ebak/verify-cache.json` に記録されます。キーは HEAD のツリー・引数・`scripts/ebak.config.json`・toolkit の版で、記録は 24 時間で失効します。同じ commit に同じ verify を実行すると、キャッシュから即座に `PASS (cached …)` を返します。FAIL は記録しません。`--show-warnings` を付けたときはキャッシュを使いません（CI の `ebak-verify` も毎回実行します）。無効にするには `--no-cache` か、環境変数 `EBAK_VERIFY_NO_CACHE=1` を使います。
 
 ## rdcheck.py（要求定義書のパーサー）
 
@@ -58,8 +58,9 @@ python scripts/rdcheck.py list --state 承認済み --priority MUST
 python scripts/rdcheck.py list --state 承認待ち         # 承認待ちの要求
 python scripts/rdcheck.py list --level system          # System Test の対象になる AC
 python scripts/rdcheck.py list --area 受付              # 領域で絞る（--by-area で領域ごとにまとめる。廃止は含めない）
+python scripts/rdcheck.py list --kind FR               # 種類で絞る
 python scripts/rdcheck.py index FR-012 [--kind 検証] [--json]   # 種類（上位・出典・参照・実装・検証・使用）つきの関係。保存せず都度生成
-python scripts/rdcheck.py hierarchy                    # 種類→区分→領域→項目の階層（都度生成）
+python scripts/rdcheck.py hierarchy [--json]           # 種類→区分→領域→項目の階層（都度生成）
 python scripts/rdcheck.py stats                        # 監査のメトリクス（JSON）
 python scripts/rdcheck.py similar "入力を中断して再開できる"   # 新規に作る前に、似た既存の要求・AC を探す（--kind FR|AC|CASE|CAT、--top N）
 python scripts/rdcheck.py similar --pairs [--min 0.35] # 似た項目の組（統合の候補）
@@ -69,13 +70,13 @@ python scripts/rdcheck.py trace G-002 申請 PARAM-004   # 目的・エンティ
 python scripts/rdcheck.py trace INT-001                # 外部連携を参照する要求と受入基準
 ```
 
-`check` の出力は 1 行に 1 指摘（`<ERROR|WARN> <CHK-ID> <場所> <内容>`）と、最後の要約行です。
+`check` の出力は 1 行に 1 指摘（`<ERROR|WARN> <CHK-ID> <場所> <内容>`）と、最後の要約行です。`--errors-only` は ERROR だけを表示します（要約行の件数は変わりません）。拡張の検査を登録していれば、拡張ごとに `EXT <名前> target=… result=… findings=N source=…` の行も出ます。拡張の指摘（既定の ID は `EXT-<名前>`）はプロファイルで絞られず、lite でも報告されます。
 
 ```text
 rdcheck: errors=0 warnings=2 base=… profile=lite
 ```
 
-`--profile` は `scripts/ebak.config.json` の `checks.profile` より優先します。exit 0 = エラーなし、1 = エラーが 1 件以上です。`--base` の既定値は `base_branch`（既定 `main`）との分岐点（merge-base）で、差分の検査に使います。`none` で比較しません。プロファイルは `rdcheck.py check`・`verify.py`・`rdfix.py` に同じように効きます。
+`--profile` は `scripts/ebak.config.json` の `checks.profile` より優先します（`checks.profile` が `lite`・`full` 以外の値なら `full` として扱います）。exit 0 = エラーなし、1 = エラーが 1 件以上です。`--base` の既定値は `base_branch`（既定 `main`。なければ `origin/main`）との分岐点（merge-base）で、差分の検査（CHK-12・CHK-13）に使います。`none` で比較しません。HEAD が base のブランチと同じ commit のときも比較しません。プロファイルは `rdcheck.py check`・`verify.py`・`rdfix.py` に同じように効きます。
 
 ## rdfix.py（データ層の不整合の自動修正）
 
@@ -98,7 +99,7 @@ python scripts/rdfix.py --full --apply --json     # 同じ結果を JSON で（�
 python scripts/rdfix.py --full --apply --lock-wait 60   # 排他の待ち秒を変える（既定 30 秒 = PARAM-027）
 ```
 
-**出力:** `FIX <CHK> <場所> <内容>`（自動で直す）と `MANUAL <CHK> <場所> <内容>（担当: <作業の種類>）次の行動: …`（判断が要る）の行と、最後の `rdfix: fix=N manual=M mode=…` の 1 行です。「担当」は役割名ではなく、直す作業の種類です。
+**出力:** `FIX <CHK> <場所> <内容>`（自動で直す）と `MANUAL <CHK> <場所> <内容>（担当: <作業の種類>）次の行動: …`（判断が要る）の行と、最後の 1 行です。最後の行は、`--full` なしなら `rdfix: fix=N manual=M mode=dry-run|applied`、`--full` なら `rdfix: fix=N manual=M mode=check|apply rounds=R result=<結果>` です（結果は `pass`・`plan`・`repaired`・`manual`・`not-converged`・`lock-timeout`・`cancelled`・`error`）。「担当」は役割名ではなく、直す作業の種類です。繰り返しの上限と排他の待ち秒の既定は、`scripts/ebak.config.json` の `repair.max_rounds`（既定 3）・`repair.lock_wait_sec`（既定 30）で変えられます。
 
 | 担当 | 直すもの |
 |---|---|
@@ -170,25 +171,27 @@ ID はこのスクリプトでだけ採番します（`AGENTS.md` の規則）�
 
 ## ledger.py（System Test の台帳）
 
-`tests/system/ledger.json` の唯一の書き手です。ケースは削除せず、止めるときは `block` します。`command`・`ac_ids` の変更には `--reason` が必須で、履歴に残ります。pass / fail は、実行したコマンドの終了コードからだけ記録します。`--by` で履歴に残す実行者（自分の名前、`ci` など）を指定できます。
+`tests/system/ledger.json` の唯一の書き手です。ケースは削除せず、止めるときは `block` します。`command`・`ac_ids` の変更には `--reason` が必須で、履歴に残ります。pass / fail は、実行したコマンドの終了コードからだけ記録します（`set` で pass・fail を付けるときは `--evidence` に実行ログが必須、`blocked` には `--reason` が必須です）。`--by` で履歴に残す実行者（自分の名前、`ci` など。既定 `script`）を、サブコマンドの前に指定できます。誤った引数や拒否は `ERROR ledger: …` を出して exit 1 で終わります。
 
 ```bash
 python scripts/ledger.py summary [-v]
-python scripts/ledger.py add --req FR-012 --ac AC-031 --title "…" --layer e2e --command "…" [--canary] [--serial]
-                                                    # 同じ AC の有効なケースがあれば拒否（update で広げる。例外は --new-case-reason "理由"）
-python scripts/ledger.py update E2E-001 --command "…" --reason "…"     # --title・--ac・--req・--canary も変更できる。理由は必須
+python scripts/ledger.py add --req FR-012 --ac AC-031 --title "…" --layer e2e --command "…" [--canary] [--serial] [--reason "…"]
+                                                    # 同じ AC の有効なケース、または同じ要求・同じ層の有効なケースがあれば拒否（update で広げる。例外は --new-case-reason "理由"）
+                                                    # --layer は e2e・api・contract・data・nonfunctional・ai_eval。--reason は履歴の理由（既定「受入基準からケースを作成」）
+python scripts/ledger.py update E2E-001 --command "…" --reason "…"     # --title・--ac・--req・--canary true|false・--serial true|false も変更できる。理由は必須
 python scripts/ledger.py block E2E-001 --reason "…"                   # 削除の代わりに使う
 python scripts/ledger.py set E2E-001 pass|fail|blocked|not_run [--evidence PATH] [--reason "…"]
 python scripts/ledger.py digests [--update]                           # AC のダイジェスト（PARAM を展開した本文）
 python scripts/ledger.py repair [--apply]                             # 要求定義書に合わせて台帳を直す（rdfix.py から使う）
-python scripts/ledger.py preflight [--cases ID,..] [--all]            # pytest を collect-only で確認（構文・import の誤り、0 件の選択）
+python scripts/ledger.py preflight [--cases ID,..] [--all] [--jobs N|auto] [--timeout 300]
+                                                    # pytest を collect-only で確認（構文・import の誤り、0 件の選択）。既定は not_run・fail のケース、--all で pass 済みも
 python scripts/ledger.py cost [--top N] [--check]                     # ケース数・テストファイル数・統合できる数・遅いコマンド・予算（--check は超過で exit 1）
 python scripts/ledger.py consolidate [--apply] [--reason "…"]         # 同じテストファイル・層・要求のケースを 1 つに統合（既定は計画だけ）
-python scripts/ledger.py run --select changed|failed|all [--base REF] [--canary-first] [--stop-on-canary-fail] [--max-minutes N] [--jobs N|auto]
+python scripts/ledger.py run --select changed|failed|all [--base REF] [--canary-first] [--stop-on-canary-fail] [--max-minutes N] [--case-timeout 1800] [--jobs N|auto] [--no-batch]
 python scripts/ledger.py run --cases E2E-001,IT-002 [--no-record]     # 指定したケースだけ。--no-record は台帳を書き換えない
 ```
 
-`--select changed` は、git diff の追加・変更行に現れる要求 ID・AC ID に対応するケースを優先して選び、ケースごとに `select <ケース ID>: <理由>` を出力します。共通コードの変更などで絞れないときは広げ、理由に「広げた」と出します。`run` の出力は `<id> <requirement_ids> <pass|fail> <秒> <証跡>` の行と `結果: …` の行です。結果の詳細は `work/system-test/results.json` に保存されます（`--results PATH` で場所を指定できます。`--no-record` のときは台帳を書き換えず、結果は `--results` のファイルにだけ書きます）。同じ commit・きれいな作業ツリーですでに pass または fail したケースは再実行を省きます（強制は `--rerun-passed`・`--rerun-failed`）。
+`run` の既定は `--select changed` です。`--case-timeout` は 1 ケースの制限秒（既定 1800）、`--jobs` は同時に実行するケース数（既定は `system_test.jobs`、なければ 1。`"serial": true` のケースは単独で実行）、`--no-batch` は同じ pytest ファイルのケースを 1 プロセスにまとめません。`--select changed` は、git diff の追加・変更行に現れる要求 ID・AC ID に対応するケースを優先して選び、ケースごとに `select <ケース ID>: <理由>` を出力します。共通コードの変更などで絞れないときは広げ、理由に「広げた」と出します。`run` の出力は `<id> <requirement_ids> <pass|fail> <秒> <証跡>` の行と、最後の `ledger run: pass=N fail=N skipped=N … results=<パス> 結果: …` の行です。fail がなく、中止（canary の失敗・時間予算）も、前回の失敗による実行の省略もなければ exit 0、それ以外は exit 1 です。結果の詳細は `work/system-test/results.json` に保存されます（`--results PATH` で場所を指定できます。`--no-record` のときは台帳を書き換えず、結果は `--results` のファイルにだけ書きます）。同じ commit・きれいな作業ツリーですでに pass または fail したケースは再実行を省きます（強制は `--rerun-passed`・`--rerun-failed`）。
 
 ## summarize.py（ログの要約）
 
@@ -197,7 +200,7 @@ python scripts/summarize.py work/logs/verify-…-unit.log [--max-lines 15] [--ta
 npm test 2>&1 | python scripts/summarize.py -
 ```
 
-テストランナーの集計行、最初の数件の（重複しない）エラー行、末尾の数行だけを出力します。
+見出しの 1 行、テストランナーの集計行、最初の数件の（重複しない）エラー行、末尾の数行だけを出力します。
 
 ## adopt.py（既存アプリの導入）
 
@@ -205,9 +208,9 @@ npm test 2>&1 | python scripts/summarize.py -
 python scripts/adopt.py scan [--since-days 365] [--json]          # 棚卸し → docs/baseline/inventory.{json,md}
 python scripts/adopt.py request [--clusters 6] [--cluster NAME] [--implement] [--stdout]
                                                                   # Copilot のチャットに貼る依頼文 → work/import/adopt-<日時>.md
-python scripts/adopt.py anchor SRC-003 src/a.py:10-48 [--note "…"] # 出典の証跡を固定 → docs/baseline/evidence.json
+python scripts/adopt.py anchor SRC-003 src/a.py:10-48 [src/b.py ...] [--note "…"] # 出典の証跡を固定 → docs/baseline/evidence.json
 python scripts/adopt.py check [--strict] [--json]                 # 証跡のずれ・回収率・逆生成の要求の検査（exit 1 = 誤り）
-python scripts/adopt.py golden add NAME -- CMD ARG...             # 特性化テスト（golden master）
+python scripts/adopt.py golden add NAME [--stdin TEXT] [--cwd DIR] [--env K=V ...] -- CMD ARG...   # 特性化テスト（golden master）。--env は繰り返せる
 python scripts/adopt.py golden record|check|list [NAME] [--update]
 ```
 
@@ -243,7 +246,7 @@ python tools/install.py --version
 | `--allow-non-git` | git リポジトリでない場所にも導入する |
 | `--version` | toolkit の版を表示して終了する |
 
-行うこと（何度実行しても同じ結果）: 配布物（rd-auditor、skills、`ebak-verify.yml`、`scripts/*`、HVE-Studio。Studio のテスト `HVE-Studio/tests/` は入れません）を入れ、変更していなければ更新します。管理データのひな形（要求定義書・カタログ・外部連携カタログ・ID 台帳・台帳）は、ないときだけ作ります。`scripts/ebak.config.json` は新しいキーを足し、利用者の値を残します（新しい導入の `verify.commands` は空の `[]`）。`.gitignore` に `/work/`（見出し `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`）、`.gitattributes` に `docs/id-registry.md merge=union`、`AGENTS.md` と `.github/copilot-instructions.md` に規則のブロックを足し、`.github/ebak-toolkit.json` に版とハッシュを記録します。最後に `rdfix.py --full --apply` を 1 回実行します（要求定義書は変更せず、修復は commit しません）。
+行うこと（何度実行しても同じ結果）: 配布物（rd-auditor、skills、`ebak-verify.yml`、`scripts/*`、HVE-Studio。Studio のテスト `HVE-Studio/tests/` は入れません）を入れ、変更していなければ更新します。管理データのひな形（要求定義書・カタログ・外部連携カタログ・ID 台帳・台帳）は、ないときだけ作ります。`scripts/ebak.config.json` は新しいキーを足し、利用者の値を残します（新しい導入の `verify.commands` は空の `[]`）。`.gitignore` に `/work/` と `/.hve-studio/`（見出し `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`）、`.gitattributes` に `docs/id-registry.md merge=union` と `*.sh` の改行を LF にする行、`AGENTS.md` と `.github/copilot-instructions.md` に規則のブロックを足し、`.github/ebak-toolkit.json` に版とハッシュを記録します。続けて `rdfix.py --full --apply` を 1 回実行します（要求定義書は変更せず、修復は commit しません）。最後に HVE Studio の表示用データ `.hve-studio/managed-data.json` を作成・同期します（`--no-repair`・`--skip-verify` でも同期し、`--dry-run`・`--check`・`--uninstall`・`--purge` では同期しません）。同期に失敗するとインストーラは exit 1 で終わります（導入した toolkit は残ります）。
 
 更新は、この版が配布するファイルだけを扱います。旧版が入れて今の版が配布しないファイルは削除せず、マニフェストにも残し（`--clean` で見つけられるように）、件数を「注意」で表示します。旧版からの移行の処理（版ごとの削除リストや設定の書き換え）は持ちません。旧版（0.5.x など）から更新するときは `--clean` を使います。`--clean` の後も、旧版のデータ層のファイル（0.5.x の `docs/run-history.md` など）と、0.5.x の run が残した worktree・`run/*` ブランチは残ります。worktree と取り込み済みのブランチは `python tools/uninstall.py --target <導入先> --runs` で削除でき、データ層のファイルは不要なら手で削除します（[9.4](09-versioning.md#94-旧版から更新するクリーンインストール)）。
 
@@ -276,7 +279,7 @@ python tools/uninstall.py --target <導入先> --purge --runs     # 管理デー
 インストールすると、導入先の `HVE-Studio/` に入ります。データ層（要求定義書・カタログ・台帳）を図・表・検索で見る、ローカルの読み取り専用の Web アプリです（日本語・英語）。HVE を入れていない git リポジトリも、HVE の clone から `python HVE-Studio/studio.py --repo <任意の git リポジトリ>` で見られます（コードのモード。FR-1086）。
 
 ```text
-python HVE-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--no-remote] [--check]
+python HVE-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--no-remote] [--check | --sync-data | --delete-data | --data-status]
 ```
 
 | オプション | 動作 |
@@ -286,8 +289,11 @@ python HVE-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--no-remote]
 | `--no-open` | ブラウザーを自動で開かない |
 | `--no-remote` | GitHub の Issue・PR・Actions を gh で読まない（生成 AI の設定には影響しない） |
 | `--check` | 管理データのファイルの有無と、解析できた件数・警告を表示して終了。データ層があるか、コードのモードで見られれば exit 0（`mode: code (...) requirement-docs=… requirements=… linked-to-code=… code-files=… test-files=… components=…` の行が出ます）、どちらでもなければ exit 1 |
+| `--sync-data` | 表示用データ `.hve-studio/managed-data.json` を進捗つきで作成・同期して終了（要求の正本は変更しない）。状態を JSON で表示し、競合（`conflict`）か失敗なら exit 1 |
+| `--delete-data` | Studio が生成した表示用データだけを削除して終了 |
+| `--data-status` | 表示用データの有無と同期の状態を JSON で表示して終了 |
 
 - ラッパー: `HVE-Studio/start.ps1 [-Repo DIR] [-Port N] [-Check] [-NoOpen]`、`HVE-Studio/start.sh [DIR] [PORT] [studio.py のオプション…]`。
 - コードのモードでは、Markdown の表の先頭の列と見出しにある要求 ID（`FR-…`・`NFR-…`。`docs/PRD.md` などを先に読む）、その ID を書いたコードとテスト、コンポーネントにまとめたソースを読み取りだけで導出します。台帳と受入基準は空です。対象は git リポジトリのルートだけで、空のフォルダーや git でないフォルダーは exit 1 です。
-- データ層があるときはソースコードを読まず、127.0.0.1 だけで待ち受けます。書き込むのは「整合性保守」で確認して実行した `docs/catalog.md` の題名・決定状態だけです。
+- データ層があるときはソースコードを読まず、127.0.0.1 だけで待ち受けます。書き込むのは「整合性保守」で確認して実行した `docs/catalog.md` の題名・決定状態と、表示用データの操作（`--sync-data`・`--delete-data`・画面の「作成・同期」）による `.hve-studio/managed-data.json` だけです。`--check`・`--sync-data`・`--delete-data`・`--data-status` は同時に指定できません。
 - 役割別のガイドは [studio/README.md](studio/README.md) にあります。

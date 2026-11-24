@@ -28,21 +28,23 @@ python HVE-Studio/studio.py              # opens the browser (from work step 1)
 
 ## 1. The screen layout (common to every screen)
 
-![HVE Studio layout: header, screen tabs, search, role, language, the New here button, main view and detail panel](images/fig-shell.en.svg)
+![HVE Studio layout: header, screen tabs, search, display switch (2D / 3D / Graph), language, the New here button, main view and detail panel](images/fig-shell.en.svg)
+
+The figure draws the nine screen tabs in one row. In the app, a band of work steps (1–6) sits below the header, and below it only the tabs of the screens used in the chosen step appear ([S2 Work steps](02-screens.en.md#work-steps-the-product-managers-order-of-work)).
 
 | No. | Place | What it is for |
 |---|---|---|
 | 1 | Top-left brand | The "HVE Studio" name. |
-| 2 | Search box | Type a word to search requirements, parts, tests and more at once. The `/` key jumps here, and `Ctrl+K` opens commands (go to a screen, etc.). |
-| 3 | Target repository | The path of the repository you are viewing; switch it from the menu at the top right. |
-| 4 | Role | `Product Manager`, `Architect`, `Software Engineer`. It decides the first screen (PM: Dashboard, Architect: 2D map, SWE: Tables). You can switch at any time. |
+| 2 | Search box | Type a word to search requirements, parts, tests and more at once. The `/` key or `Ctrl+K` jumps here. Start with `>` to list commands (go to a screen or step, switch the display, etc.). |
+| 3 | Target repository | The path of the repository you are viewing. Press it to switch with the OS folder dialog. The "Repository list" next to it adds and removes repositories. |
+| 4 | Display switch | `2D`, `3D`, `GRAPH`. Modes the current screen does not support are disabled with a reason. The role buttons were removed on 2026-11-20 and replaced by the work steps. |
 | 5 | `JA \| EN` | Switches the UI language (requirement text stays as written). |
 | 6 | **New here?** | A step-by-step tour of the current screen ([section 2](#2-the-new-here-tour-wizard)). |
 | 7 | Screen description | One line on the purpose of the selected tab. |
 | 8 | Main view | The content of the selected tab. |
 | 9 | Detail panel | Opens when you select a dot, row or card; shows its contents and the related requirements, parts and tests. |
 
-There are nine screen tabs, from the left: **Dashboard, Impl. status, Map, Diagrams, Entities, Integrations, Source Map, Tables, Maintenance**. Pick by what you want to know.
+There are nine screens: **Dashboard, Impl. status, Map, Diagrams, Entities, Integrations, Source Map, Tables, Maintenance**. Choosing a work step shows the tabs of the screens used in that step; you can also type a screen name in the search box. Pick by what you want to know.
 
 | I want to know | Open |
 |---|---|
@@ -68,14 +70,14 @@ Press the yellow **"New here?"** button at the top right. The page dims, **only 
 - Reopen it any time. Switching the language (JA / EN) switches the tour text too.
 - The floorplan (section 7) has its own tour of the same name that explains the map.
 
-## 3. Dashboard (the first screen for Product Managers)
+## 3. Dashboard (the screen of work step 1)
 
 ![Dashboard: cards for requirement count, approval and test-pass rates; donuts for decision state and priority; progress bars per goal](images/fig-dashboard.en.svg)
 
-- 1: **Number cards**: requirements, approved %, implemented %, acceptance criteria, tests passed %, open questions, BLOCKED requirements. Select a card to jump to the matching list. **Open questions** and **BLOCKED** should ideally be 0.
+- 1: **Number cards**: requirements, approved %, implementation registered %, acceptance criteria, tests passing %, open questions, BLOCKED requirements. Select a card to highlight the matching requirements on the Map (2D) (the acceptance criteria card is not selectable). **Open questions** and **BLOCKED** should ideally be 0.
 - 2: **Donuts**: the overall breakdown (decision state, priority); the center number is the total.
 - 3: **Per-goal progress bars**: for each goal (G-ID such as `G-001`), implemented requirements / total. **A short bar is a goal that is behind.**
-- How to read it per role is written at the top of the screen. Details: [S5 For Product Managers](05-product-manager.en.md).
+- Details: [S5 For Product Managers](05-product-manager.en.md).
 
 ## 4. Impl. status
 
@@ -86,7 +88,7 @@ Press the yellow **"New here?"** button at the top right. The page dims, **only 
 - 3: **Kanban**: requirement cards in three columns; use it to decide what to do next.
 - Requirements that are pending, on hold, rejected or retired are out of scope here.
 
-## 5. Map (the first screen for Architects)
+## 5. Map (a screen of work step 3)
 
 ![Map: goals, requirements, parts/APIs/tables, files and tests connect left to right; the selected requirement's connections are orange](images/fig-map.en.svg)
 
@@ -102,17 +104,17 @@ Press the yellow **"New here?"** button at the top right. The page dims, **only 
 | Diagrams | Choose the diagram kind with the top tabs (context, goal tree, state transition, data relation, component, placement); select an element to jump to its requirement. | [S2 Diagrams](02-screens.en.md) |
 | Entities | Rows are entities; columns are requirements and scenarios. A cell symbol shows Create / Read / Update / Delete. | [S2 Entities](02-screens.en.md) |
 | Integrations | Partner, direction, method and data class; select one for details. Reads `docs/integrations.md`. | [Integration catalog](../11-integration-catalog.en.md) |
-| Tables | Switch kinds with tabs, sort with headings, export CSV. The first screen for Software Engineers. | [S2 Tables](02-screens.en.md) · [S7](07-software-engineer.en.md) |
+| Tables | Switch kinds with tabs, sort with headings, export CSV. The default screen of work step 2 (the requirements tab). | [S2 Tables](02-screens.en.md) · [S7](07-software-engineer.en.md) |
 
 ## 7. Source Map — function relations, floorplan, network view
 
-This screen has two tabs: **"See how functions relate"** (the floorplan and the network view) and **"Source map"** (a treemap by file size, mapped to requirements, parts and tests).
+This screen has three tabs: **"See how functions relate"** (the floorplan and the network view), **"Source map"** (a treemap by file size, mapped to requirements, parts and tests) and **"Between repositories"** (when several repositories are open). Opened from work step 3, the floorplan is the default.
 
 ### 7.1 Floorplan
 
 ![Floorplan: cards for parts, files and endpoints in three columns — uses, inside, used by](images/fig-floorplan.en.svg)
 
-- 1: The two tabs switch between function relations (floorplan / network view) and the source map.
+- 1: The tabs switch between function relations (floorplan / network view), the source map and the relations between repositories.
 - 2: **The left column is what the middle card uses; the right column is what uses it.** Lines are orthogonal.
 - 3: **Double-click (Enter) to go inside; Backspace, the breadcrumb or the browser Back goes back.** The dashed box is the part that is open. The place can be shared by URL (`#/floorplan?v=&s=`).
 - 4: Bottom area: **Health** (a quick check for secrets, big files and unused files; not a security audit), **Recent work** (uncommitted git changes and recent commits), **what is behind each screen**, **flows**, and an **ask box** (answers by following map lines, not by AI).
@@ -130,10 +132,10 @@ This screen has two tabs: **"See how functions relate"** (the floorplan and the 
 
 ## 8. Maintenance
 
-![Maintenance: differences between catalog titles and requirements-document titles shown in red, fixed with "Align to source"](images/fig-maintenance.en.svg)
+![Maintenance: differences between catalog titles and requirements-document titles shown in red, fixed with "Confirm and apply"](images/fig-maintenance.en.svg)
 
 - 1: Rows where the catalog title or decision state differs from the requirements document (the source of truth) are red.
-- 2: Review, then select **"Align to source"**. **This confirmed action is the only time Studio edits an original.**
+- 2: Selecting a row opens the **"Maintenance preview"**. Review the before and after, then select **"Confirm and apply"**. **This confirmed action is the only time Studio edits an original.**
 - 3: Reading the structure and consistency check results is read-only. For anything else, ask Copilot in chat or use `python scripts/rdfix.py --full --apply` ([Quality gates](../06-quality-gates.en.md)).
 
 ## 9. A suggested first 10 minutes

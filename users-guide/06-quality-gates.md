@@ -26,7 +26,7 @@ HVE Lite には hook も、依頼への定型文の自動付与もありませ�
 | `full` | CHK-00〜34 のすべて | 節目の監査（rd-auditor は `--profile full --show-warnings` で実行します）、書式の警告を見たいとき、新しく書いた要求定義書を整えるとき |
 
 - 範囲は `scripts/ebak.config.json` の `checks.profile` で決めます。1 回だけ変えるときは `--profile lite|full` を付けます（設定より優先）。検査のつまみはプロファイルだけです。例: `python scripts/verify.py --docs-only --profile full --show-warnings`。
-- lite では、範囲外の CHK は出力にも終了コードにも影響しません。lite は構造と追跡性（ID の重複・再利用、参照先の実在、AC とテストのつながり、System Test の保護）だけを見ます。
+- lite では、範囲外の CHK は出力にも終了コードにも影響しません。lite は構造と追跡性（ID の重複・再利用、参照先の実在、AC とテストのつながり、System Test の保護）だけを見ます。拡張の検査（`extensions.checks`・`scripts/ext/`）の指摘はプロファイルで絞られず、lite でも報告されます。
 - 要約の行は `rdcheck: errors=N warnings=M base=… profile=lite` です。
 - プロファイルは `rdcheck.py check`・`verify.py`・`rdfix.py`（`--full` を含む）に同じように効き、例外はありません。そのため `rdfix.py --full` は、同じプロファイルの `verify.py --docs-only` が合格するときに合格します（カタログの同期などの機械的な修復は、どのプロファイルでも同じように行います）。
 
@@ -37,18 +37,18 @@ HVE Lite には hook も、依頼への定型文の自動付与もありませ�
 | ID | lite | 検査内容 | 重大度 | 直し方 |
 |---|---|---|---|---|
 | CHK-00 | | 要求定義書がない | warn | 要求定義書を作る（skill `requirement-definition`） |
-| CHK-01 | ● | ID の重複。ID 台帳にない ID（手で振った ID） | error | `next-id.py` で振り直す。既存のドキュメントは `next-id.py --sync --adopt` |
+| CHK-01 | ● | ID の重複。ID 台帳にない ID（手で振った ID）。ID 台帳がない（warn） | error / warn | `next-id.py` で振り直す。既存のドキュメントや ID 台帳がないときは `next-id.py --sync --adopt` |
 | CHK-02 | ● | 削除済み・欠番の ID の再利用 | error | `next-id.py` で新しい ID を採番する |
 | CHK-03 | ● | AC が実在する要求を参照していない | error | 要求の見出しの下に書くか、`対応する要求:` を付ける |
 | CHK-04 | | 要求に上位の G-ID（または既定制約）がない。存在しない G-ID を参照している。承認済みの要求を持たない G-ID がある | error / warn | 上位の欄を直す |
 | CHK-05 | ● | MUST 要求に AC も未回答の Q もない | error | AC を追加するか、Q を挙げる |
 | CHK-06 | | 承認済みの要求に決定記録（根拠と日付）がない | error | `承認済み（依頼 YYYY-MM-DD）` の形にする |
-| CHK-07 | | カタログの要求 ID が要求定義書にない／決定状態・題名が一致しない／承認済み・承認待ち・保留の要求の行がない／同じ要求の行が重複している／機能の表がない | error | `rdfix.py --apply` で要求定義書に合わせる（6.4） |
+| CHK-07 | | カタログの要求 ID が要求定義書にない／決定状態・題名が一致しない／承認済み・承認待ち・保留の要求の行がない／同じ要求の行が重複している／機能の表がない。カタログがない（warn） | error / warn | `rdfix.py --apply` で要求定義書に合わせる（6.4） |
 | CHK-08 | | カタログに書かれたファイルが存在しない | error | パスを直すか「未実装」にする。名前の変更・削除は `rdfix.py --apply` で追従できる |
-| CHK-09 | ● | 実装済みの MUST 要求の ID が、テストコードにも manual-tests にもない（未実装なら warn） | error / warn | テスト名かコメントに `FR-012 AC-031` を書く |
-| CHK-10 | | system の AC と台帳のケースが双方向に対応していない | warn | 台帳にケースを追加する（`ledger.py`）。対象外になった AC のケースは `ledger.py block` |
-| CHK-11 | | `ac_digests` が AC の本文と一致しない | 同上 | ケースを見直し、`ledger.py digests --update` を実行する |
-| CHK-12 | ● | 台帳のケースの削除、理由のない command・ac_ids の変更、tests/system の assert の減少 | error | 元に戻す。変更は `ledger.py update --reason` で行う |
+| CHK-09 | ● | 実装済みの MUST 要求の ID が、テストコードにも manual-tests にもない（未実装なら warn）。テストに ID がある MUST 要求の行がカタログの機能の表にない | error / warn | テスト名かコメントに `FR-012 AC-031` を書く。カタログの行は `rdfix.py --only catalog --apply` で足せる |
+| CHK-10 | | system の AC と台帳のケースが双方向に対応していない（ケースのない AC は warn）。台帳のケースが存在しない AC・要求や、System Test の対象外の AC を参照している（error） | error / warn | 台帳にケースを追加する（`ledger.py`）。対象外になった AC のケースは `ledger.py block` か `ledger.py update` |
+| CHK-11 | | `ac_digests` がない、または AC の本文と一致しない | warn | ケースを見直し、`ledger.py digests --update` を実行する |
+| CHK-12 | ● | 台帳のケースの削除、理由のない command・ac_ids の変更、tests/system の assert の減少（差分の基準 `--base` との比較。基準がないときは検査しない） | error | 元に戻す。変更は `ledger.py update --reason` で行う |
 | CHK-13 | | 新規・変更した要求・AC に曖昧な語がある | warn | 観察可能な表現に言い換える |
 | CHK-14 | | 数値と単位がハードコードされている | warn | PARAM にして `{PARAM-xxx}` で参照する |
 | CHK-15 | | 用語集の禁止同義語を使っている | warn | 正しい用語に直す |
@@ -73,7 +73,7 @@ HVE Lite には hook も、依頼への定型文の自動付与もありませ�
 
 CHK-24〜27 は、要求定義書とカタログを「体系として」保つための検査です。縦のつながり（目的 → 要求 → 受入基準 → 台帳 → 実装・テスト）に加えて、要求と用語・状態・PARAM・出典・カタログの資産の横のつながりも、参照先が実在し双方向で一致していることを確かめます。つながりは `python scripts/rdcheck.py trace <ID または名前>` でたどれます（[5. スクリプト](05-scripts-reference.md)）。
 
-出力は 1 行に 1 指摘（`ERROR CHK-07 docs/catalog.md:12 …`）で、最後に要約の 1 行が出ます。`--show-warnings` を付けると warn も表示します。
+出力は 1 行に 1 指摘（`ERROR CHK-07 docs/catalog.md:12 …`）で、最後に要約の 1 行が出ます。`verify.py` は ERROR を最大 25 行まで表示し、残りは `... (+N errors)` と件数だけを示します（全文は `/work/logs/verify-<日時>-rdcheck.log`）。`--show-warnings` を付けると warn も表示します。
 
 ## 6.4 データ層の不整合の自動修正（rdfix）
 
@@ -82,7 +82,7 @@ CHK-24〜27 は、要求定義書とカタログを「体系として」保つ�
 - 呼び出し元は、インストーラ（既定で導入後に 1 回。`--no-repair` で計画だけ、`--skip-verify` で何もしない）と手動の 2 つで、結果は同じです。CI は修復しません（6.5）。
 - 終了コードは 0（合格・修復済み）、1（手動の対応が残る・計画がある）、2（実行しなかった・取り消した）です。2 になるのは、排他の待ち時間切れ、書き込みの失敗、要求定義書・外部連携カタログの変化、新しいエラー、想定外のエラーのときで、変更はすべて元に戻します。
 - 正本は要求定義書です。rdfix は要求定義書を変更しません。ID 台帳は `next-id.py`、台帳は `ledger.py` を通して直し、台帳の変更は `history` に残します。
-- verify が失敗し、自動で直せる不整合があるときは、`HINT rdfix: …` の行が出ます。
+- verify の管理データの検査が失敗すると、`HINT rdfix:` の行で `rdfix.py --full`・`rdfix.py --full --apply` を示します。自動で直せる不整合があるときは、その件数を示す `HINT rdfix:` の行も出ます。
 - 判断が要る不整合は直さず、`MANUAL <CHK> <位置> <内容>（担当: <作業の種類>）次の行動: …` の行で示します。担当は `要求定義書`、`System Test の台帳`、`コードとカタログ`、`リポジトリ` のどれかで、どのファイルを直す作業かを表します。例: AC の本文が変わった（CHK-11。台帳のケースの見直し）、削除済み・欠番の ID の再利用（CHK-02）、ID 台帳にない ID（CHK-01。手で振った ID かもしれない）。
 
 | 対象（`--only`） | 自動で直すもの | 対応する検査 |

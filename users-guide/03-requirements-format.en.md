@@ -14,7 +14,7 @@ The sections of the template (created at install time) are as follows.
 
 Document information and change history / Overview (goal `G-001`) / Scope and out of scope / Premises and constraints (**default constraints**, **PARAM**, **glossary**, states) / **Personas** / Usage scenarios / **Requirements** / Information presentation by workspace and persona / External integrations, masters, and IDs / Decision log / Assumptions and open issues (**questionnaire**, approval requests, ASSUMPTION / TBD / conflicts, **audit findings**, proposals and hypotheses) / Source ledger (`SRC-001`)
 
-When requirements exceed 150 items, 300 KB, or 3 business boundaries, the requirements definition document becomes an index and is split into per-boundary files `docs/requirements/<boundary name>.md`. verify reads both.
+When requirements exceed 150 items or 300 KB, or there are 3 or more business boundaries, the requirements definition document becomes an index and is split into per-boundary files `docs/requirements/<boundary name>.md`. verify reads both.
 
 ### One requirement, one heading, and structured fields (Rule B)
 
@@ -39,7 +39,7 @@ When requirements exceed 150 items, 300 KB, or 3 business boundaries, the requir
 | Heading | ○ | `#### <requirement ID> <short title>`. Functional requirements are `FR-001`; non-functional requirements are `NFR-<category>-001` (categories: PERF, SEC, OPS, A11Y, UX, etc.) |
 | 要求 (requirement) | ○ | In the form "[Target person/system] satisfies [result] in [situation/condition]." Write only one subject per requirement |
 | 決定状態 (decision state) | ○ | One of `承認済み（依頼 YYYY-MM-DD）` (approved by request), `承認済み（Q-### YYYY-MM-DD）` (approved by questionnaire answer), `承認済み（承認依頼 YYYY-MM-DD）` (approved by approval request), `承認済み（包括承認 YYYY-MM-DD・approval_policy）` (blanket approval), `AI提案／承認待ち` (AI proposal / awaiting approval), `保留` (on hold), `却下` (rejected), `廃止（依頼 YYYY-MM-DD）` (retired by request) |
-| 出自 (origin) | ○ | 依頼原文 (original request) / 利用者決定 (user decision) / AI提案 (AI proposal) |
+| 出自 (origin) | | 依頼原文 (original request) / 利用者決定 (user decision) / AI提案 (AI proposal) (requirements recovered from an existing app use 逆生成 (recovered); [chapter 10](10-adopting-existing-apps.en.md)) |
 | 優先度 (priority) | ○ | MUST / SHOULD / MAY, and the reason |
 | 上位 (parent) | ○ | A goal such as `G-001`, or "既定制約" (default constraints) |
 | 出典 (source) | | `SRC-xxx §…` (an ID defined in the source ledger. CHK-24) or "依頼原文" (original request), etc. |
@@ -153,7 +153,7 @@ Procedure:
 
 ## 3.3 ID registry (`docs/id-registry.md`)
 
-Only `scripts/next-id.py` may add rows. Do not assign numbers or add rows by hand (so that IDs do not collide even when several people or PCs work in parallel). Hand-written numbers and duplicates are detected by CHK-01 and CHK-02.
+Only `scripts/next-id.py` may add rows. Do not assign numbers or add rows by hand (so that IDs do not collide even when several people or PCs work in parallel). Hand-written numbers and duplicates are detected by CHK-01 and CHK-02. The table columns are `| ID | 種別 | 状態 | 採番日時 | 採番元 | メモ |` (ID, kind, state, allocated at, allocated by, note); the note holds the value of `next-id.py --note`.
 
 | State | Meaning |
 |---|---|
@@ -198,6 +198,7 @@ So that parallel branches do not conflict when adding rows at the same time, `me
 | `layer` | e2e, api, contract, data, nonfunctional, ai_eval |
 | `command` | A command that can be run non-interactively from the repository root and returns exit 0 on success |
 | `canary` | The main flow run first (smoke test) |
+| `serial` | Optional. `true` runs the case alone, never in parallel (cases that use a fixed port or shared data; `ledger.py add --serial`, `update --serial true` / `false`) |
 | `status` | not_run, pass, fail, blocked (pass/fail are set only by actual execution results) |
 | `evidence` | The log of the last run (under `/work`. It is not tracked by git, so it is absent on other PCs or after you delete it. Re-run to recreate it if needed) |
 | `ac_digests` | Digest of the AC body (with PARAM expanded). CHK-11 detects when an AC changes |
@@ -206,4 +207,4 @@ So that parallel branches do not conflict when adding rows at the same time, `me
 
 The ledger is updated only via `scripts/ledger.py` (do not edit it directly; the `by` in `history` is set with `--by`, default `script`). Cases cannot be deleted. A case that is no longer needed is set to blocked with `ledger.py block --reason`, and the reason is left in history.
 
-Keep the number of requirements, acceptance criteria, and cases optimal (so as not to increase the amount to read, tokens, and test execution time). When a request overlaps an existing requirement, the writer (usually Copilot) looks for similar items with `rdcheck.py similar` and changes the existing item instead of creating a new one. `ledger.py add` refuses to add if there is a valid case that already guarantees the same acceptance criterion (extend the existing case with `ledger.py update`. Add `--new-case-reason "reason"` only when the layer differs and a separate case is truly needed).
+Keep the number of requirements, acceptance criteria, and cases optimal (so as not to increase the amount to read, tokens, and test execution time). When a request overlaps an existing requirement, the writer (usually Copilot) looks for similar items with `rdcheck.py similar` and changes the existing item instead of creating a new one. `ledger.py add` refuses to add if there is a valid case that already guarantees the same acceptance criterion, or a valid case for the same requirement in the same layer (extend the existing case with `ledger.py update`. Add `--new-case-reason "reason"` only when a separate case is truly needed).

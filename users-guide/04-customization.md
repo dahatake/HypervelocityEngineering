@@ -16,7 +16,7 @@
 }
 ```
 
-省略したキーには、`scripts/ebaklib.py` の `DEFAULT_CONFIG` の既定値が使われます。`_note` で始まるキーは説明文で、動作には影響しません。
+省略したキーには、`scripts/ebaklib.py` の `DEFAULT_CONFIG` の既定値が使われます。`_` で始まるキー（`_note`・`_id_scan_exclude_note` など）は説明文で、動作には影響しません。
 
 ## 4.1 依頼に毎回付けたい前提
 
@@ -36,12 +36,15 @@ HVE Lite には hook も定型文の自動付与もありません。毎回伝�
 
 既存のディレクトリ構成に合わせて変更できます。変更したら `python scripts/verify.py --docs-only` で、検査が新しいパスを読めるかを確かめます。
 
+- インストーラは、雛形（要求定義書・カタログ・外部連携カタログ・ID 台帳・System Test の台帳）を、この設定のパスに、ファイルがないときだけ作ります（`CREATE`）。設定がない、またはリポジトリの外を指すときは既定のパスに作ります。新しく導入するリポジトリでパスを変えたいときは、先に `scripts/ebak.config.json` に `management_files` だけを書いてからインストールします。
+- アンインストーラの `--purge` は、この設定のパス（旧版の設定のキー `files` も）にある管理データを削除します。
+
 ## 4.3 基準のブランチと作業フォルダー（`base_branch` / `work`）
 
 | キー | 既定値 | 意味 |
 |---|---|---|
 | `base_branch` | `main` | 差分の検査（CHK-12 など）で比べる基準のブランチ。rd-auditor の差分の監査も、このブランチとの差分を見ます |
-| `work.dir` | `work` | 一時ファイル（ログ・証跡・実行結果・監査の結果）の置き場所。git の管理対象外です。HVE Lite は `/work` を自動では消しません。不要になったら手で削除します |
+| `work.dir` | `work` | 一時ファイル（ログ・証跡・実行結果・監査の結果・`adopt.py request` の依頼文）の置き場所。git の管理対象外です。HVE Lite は `/work` を自動では消しません。不要になったら手で削除します |
 
 ## 4.4 検査の範囲（`checks`）
 
@@ -120,6 +123,8 @@ HVE Lite には hook も定型文の自動付与もありません。毎回伝�
 
 toolkit の更新では、利用者が `scripts/*.py` に直接足した配線を `tools/install.py` が調べます。更新で脱落するものは `WARN-WIRING  <ファイル>:<行>` で表示します。表示されたら、上の方法で登録し直します。
 
+`--clean`（クリーンインストール）は設定を既定に戻すので、`extensions.checks` の登録も消えます。`git diff scripts/ebak.config.json` で確かめて戻します。`scripts/ext/*.py` と、自分で足したモジュールは消えません。
+
 ## 4.8 撤去した設定のキー（0.5.x から更新した場合）
 
 0.6.0（HVE Lite）では、run と hook を前提にした次のキーがなくなりました。インストーラは旧版の設定を書き換えません。通常の更新ではこれらのキーが残りますが、もう読みません。消すときは `--clean`（クリーンインストール）で設定を既定から作り直すか、手で削除します（[9.4](09-versioning.md#94-旧版から更新するクリーンインストール)）。
@@ -150,15 +155,32 @@ toolkit の更新では、利用者が `scripts/*.py` に直接足した配線�
 
 - **規則**: インストーラは `AGENTS.md` と `.github/copilot-instructions.md` に、`<!-- ebak-abk:begin -->` 〜 `<!-- ebak-abk:end -->` の区切りで規則のブロックを書きます。区切りの中は更新のたびに書き直されます。プロジェクト独自の規則は、区切りの外に書きます。
 - **画面の見た目**: HVE はデザインシステムを指定しません。使いたいもの（例: 「Web は Fluent 2」「社内のブランドガイドに従う」）は、要求定義書の既定制約に書くか、依頼に書きます。
-- **エージェントと手順書**: `.github/agents/rd-auditor.agent.md` と `.github/skills/*/SKILL.md` は直接編集してかまいません。インストーラを再実行しても、ローカルで変更したファイルは上書きされません（`KEEP-LOCAL`）。新しい版を取り込むときは、`--dry-run` で確認してから、差分を手でマージするか `--force`（`.ebak-backup-*` を残します）を使います。
+- **エージェントと手順書**: `.github/agents/rd-auditor.agent.md` と `.github/skills/*/SKILL.md` は直接編集してかまいません。インストーラを再実行しても、ローカルで変更したファイルは上書きされません（`KEEP-LOCAL`）。新しい版を取り込むときは、`--dry-run` で確認してから、差分を手でマージするか `--force`（`.ebak-backup-*` を残します）を使います。`--clean` は、変更したファイルも消して配布物に戻します。
+- **独自のエージェントと手順書**: `.github/agents/` と `.github/skills/` に新しく足したファイル（例: `.github/skills/my-skill/SKILL.md`）は、配布物ではないので、更新・`--clean`・アンインストールのどれでも変更も削除もされません。
 - **モデル**: HVE はモデルを指定しません。rd-auditor を特定のモデルに固定したい場合は、frontmatter に `model:` を書きます。
 
 ## 4.11 CI
 
-`.github/workflows/ebak-verify.yml`（ebak-verify）は、pull request と main への push で `scripts/verify.sh --show-warnings` を実行します。検査の範囲は `checks.profile` に従います（既定は lite）。手元の `python scripts/verify.py` と同じ検査なので、AGENTS.md の規則が、人や PC に関係なく push のたびに確かめられます。アプリのビルドに必要なツールチェーン（`actions/setup-node` など）は、verify のステップの前に追加します。CodeQL や依存関係のスキャンも、このワークフローに追記できます。
+`.github/workflows/ebak-verify.yml`（ebak-verify）は、pull request と main への push で `scripts/verify.sh --show-warnings` を実行します。検査の範囲は `checks.profile` に従います（既定は lite）。手元の `python scripts/verify.py` と同じ検査なので、AGENTS.md の規則が、人や PC に関係なく push のたびに確かめられます。アプリのビルドに必要なツールチェーン（`actions/setup-node` など）は、verify のステップの前に追加します。CodeQL や依存関係のスキャンも、このワークフローに追記できます。このワークフローは配布物なので、編集すると更新では `KEEP-LOCAL` になり、`--clean` では配布物に戻ります（4.10 と同じ）。
 
 ### データ層の修復（CI では修復しない）
 
 CI は検査だけを行い、データ層を修復しません（`ebak-verify` の権限は contents の read だけです）。データ層の検査が不合格なら、手元で共通の入口 `python scripts/rdfix.py --full --apply` を実行して再検査し、修復を同じ変更に含めて push します（終了コード 0/1/2 は [05](05-scripts-reference.md)）。要求定義書と `docs/integrations.md` は変更しません。インストーラも導入後にこの入口を 1 回呼びます。`--no-repair` で検査と計画だけ（書き込まない）、`--skip-verify` で検査も修復もしません。
 
-CI が修復しない理由: 読むだけの CI には書き込みの権限が要りません。また、bot が誰かの PR のブランチへ修復を push すると、ほかの人・PC のブランチと食い違います。以前の版で配っていた `.github/workflows/ebak-data-layer.yml`（自動修復の commit と Issue）は、旧版から `--clean`（クリーンインストール）で更新すると削除されます（[9. 版の管理](09-versioning.md)）。ワークフローを入れたくない場合は、インストール時に `--no-ci` を指定します。
+CI が修復しない理由: 読むだけの CI には書き込みの権限が要りません。また、bot が誰かの PR のブランチへ修復を push すると、ほかの人・PC のブランチと食い違います。以前の版で配っていた `.github/workflows/ebak-data-layer.yml`（自動修復の commit と Issue）は、旧版から `--clean`（クリーンインストール）で更新すると削除されます（[9. バージョンアップの手順](09-versioning.md)）。ワークフローを入れたくない場合は、インストール時に `--no-ci` を指定します。
+
+## 4.12 データ層の修復と企業データカタログ（`repair` / `enterprise_data_catalog`）
+
+どちらも既定の設定ファイルにはないキーです。使うときだけ足します。
+
+| キー | 既定値 | 意味 |
+|---|---|---|
+| `repair.max_rounds` | `3` | `rdfix.py --full --apply` の「検査→修復」の繰り返しの上限（PARAM-026。1 以上） |
+| `repair.lock_wait_sec` | `30` | 同時に起動された修復の排他の待ち秒（PARAM-027。0 以上）。`--lock-wait` の指定が優先します |
+| `enterprise_data_catalog.source` | なし | `entities.py check`・`todo` が照合する企業データカタログ。リポジトリのルートからのパスか、http(s) の URL です。なし、または `"利用しない"` なら照合しません |
+| `enterprise_data_catalog.name_column` | なし | エンティティ名の列（JSON はキー）。なければ「エンティティ名」「name」などの列を探します |
+| `enterprise_data_catalog.format` | `auto` | `csv`・`json`・`markdown`・`html` か `auto`（拡張子と内容で判定） |
+| `enterprise_data_catalog.similarity_threshold` | `0.8` | 名称の揺れ候補とみなす類似度の下限（0 より大きく 1 以下。toolkit の PARAM-015）。範囲外は既定を使います |
+| `enterprise_data_catalog.timeout_sec` | `10` | URL の取得を待つ秒数（0 より大きい数。toolkit の PARAM-016）。範囲外は既定を使います |
+
+参照元は読むだけで、本文を保存も転記もしません（[05](05-scripts-reference.md)）。類似度の下限と待ち秒は、導入先の要求定義書の PARAM（導入先のアプリ自身のパラメータ）からは読みません。URL に認証情報を含めません。

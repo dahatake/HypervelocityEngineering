@@ -14,8 +14,9 @@ Project commands come from scripts/ebak.config.json -> verify.commands:
 Full logs go to /work (never to /docs or tests); only a short summary is printed.
 
 Cache: when the working tree is clean (no tracked or untracked changes), a PASS is stored in
-/work/.ebak/verify-cache.json under a key made of HEAD, the arguments and scripts/ebak.config.json. The same verify on the same commit (e.g. a local run, then CI) is then
-answered from the cache. FAIL is never cached. Disable with --no-cache or EBAK_VERIFY_NO_CACHE=1.
+/work/.ebak/verify-cache.json under a key made of the tree of HEAD, the arguments, scripts/ebak.config.json and the toolkit version (entries expire after
+24 hours). Running the same verify again on the same commit is then answered from the cache. --show-warnings (used by CI) never
+uses the cache. FAIL is never cached. Disable with --no-cache or EBAK_VERIFY_NO_CACHE=1.
 """
 from __future__ import annotations
 
@@ -233,7 +234,7 @@ def main(argv=None) -> int:
         except Exception:  # the hint must never break verify
             n = 0
         if n:
-            print(f"HINT rdfix: データ層の不整合のうち {n} 件は `python scripts/rdfix.py --apply` で自動修正できます（要求定義書は変更しません）")
+            print(f"HINT rdfix: データ層の不整合のうち {n} 件（検査プロファイルの範囲外のものを含む）は `python scripts/rdfix.py --apply` で自動修正できます（要求定義書は変更しません）")
         # FR-1046 AC-243: the same two commands on Windows, macOS and Linux (run at the repository root)
         print("HINT rdfix: 確認だけ `python scripts/rdfix.py --full`、確認と修復 `python scripts/rdfix.py --full --apply`"
               "（リポジトリのルートで実行します。手動対応は検査項目 ID・位置・担当の役割つきで表示されます）")
@@ -255,7 +256,7 @@ def main(argv=None) -> int:
         for p in problems:
             failed.append("config")
             print(f"FAIL config {p}")
-            print('  書き方: "commands": [{"name": "unit", "run": "python -m pytest -q"}]（HVE-docs/04-customization.md 4.1）')
+            print('  書き方: "commands": [{"name": "unit", "run": "python -m pytest -q"}]（HVE-docs/04-customization.md 4.6）')
         if not cmds and not problems:
             print("INFO verify.commands が空です（scripts/ebak.config.json にビルド・静的検査・テストのコマンドを登録します）")
         runnable = []

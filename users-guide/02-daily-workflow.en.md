@@ -13,7 +13,7 @@ In HVE Lite, every change goes through the following five steps. All of them use
 (any time)                 view the status in HVE Studio
 ```
 
-> Migrating from 0.5.x: runs, stages, integration branches, `run-report.md` and the automatic merge into main no longer exist. Changes are merged through ordinary branches and PRs. Worktrees and `work/*` branches left by 0.5.x runs are not removed automatically; check them with `git worktree list` and `git branch --list "work/*"` and delete them by hand ([9. Versioning](09-versioning.en.md)).
+> Migrating from 0.5.x: runs, stages, integration branches, `run-report.md` and the automatic merge into main no longer exist. Changes are merged through ordinary branches and PRs. Worktrees and `work/*`/`run/*` branches left by 0.5.x runs are not removed automatically; check them with `git worktree list` and `git branch --list "work/*" "run/*"` and delete them by hand ([9. Version upgrade procedure](09-versioning.en.md)).
 
 ## 2.1 Ask
 
@@ -54,7 +54,8 @@ Exit 0 means pass. Copilot normally runs it before finishing, but run it yoursel
 |---|---|
 | `ERROR CHK-07`, `CHK-08`, `CHK-17` etc. (inconsistencies in catalog, ledger or ID registry) | Fix automatically with `python scripts/rdfix.py --apply` (the requirements definition is never changed). Fix remaining `MANUAL` lines according to their "担当" (area in charge) and "次の行動" (next action) |
 | `ERROR CHK-01` (duplicated ID, ID missing from the registry) | Re-allocate following [2.7](#27-several-people-and-several-pcs) |
-| `ERROR CHK-12` (AC text changed but the ledger digest is old) | After confirming the tests verify the new AC, run `python scripts/ledger.py digests --update` |
+| `ERROR CHK-12` (a ledger case deleted, `command` or `ac_ids` changed without a reason, fewer System Test checks) | Never delete a case: block it with `python scripts/ledger.py block <case ID> --reason "..."`, and record changes with `ledger.py update ... --reason "..."` |
+| `CHK-11` (AC text changed but the ledger digest is old; reported with `--profile full`) | After confirming the tests verify the new AC, run `python scripts/ledger.py digests --update` |
 | A build or test command failed | Full logs are in `/work`. `python scripts/summarize.py <log>` shows only the key lines |
 
 The default check profile is `lite`, which reports only the structure and traceability checks (`CHK-01, 02, 03, 05, 09, 12, 17, 19, 24`). To see writing-style warnings too (vague words, hard-coded numbers, forbidden synonyms), use `full`.
@@ -63,7 +64,7 @@ The default check profile is `lite`, which reports only the structure and tracea
 python scripts/verify.py --docs-only --profile full --show-warnings
 ```
 
-The list of checks is in [6. Quality Gates and Checks](06-quality-gates.en.md); the options are in [5. Scripts Reference](05-scripts-reference.en.md).
+The list of checks is in [6. Checks and CI](06-quality-gates.en.md); the options are in [5. Scripts Reference](05-scripts-reference.en.md).
 
 ## 2.4 Push and PR (CI)
 
@@ -73,11 +74,11 @@ git push -u origin feature/draft-save
 gh pr create --base main
 ```
 
-One workflow runs on push and PR.
+One workflow runs on PRs and on pushes to `main` (a push to a work branch alone does not trigger it).
 
 | Workflow | When | What it does |
 |---|---|---|
-| `ebak-verify` (`.github/workflows/ebak-verify.yml`) | push, PR | Runs `scripts/verify.sh --show-warnings`, the same checks as a local `verify.py`. It runs with read permission only and creates no repair commits and no Issues |
+| `ebak-verify` (`.github/workflows/ebak-verify.yml`) | push to `main`, PR | Runs `scripts/verify.sh --show-warnings`, the same checks as a local `verify.py`. It runs with read permission only and creates no repair commits and no Issues |
 
 If the data-layer check fails in CI, run `python scripts/rdfix.py --full --apply` locally and push the repair in the same change (the requirements definition is never changed). CI does not repair because CI that only reads needs no write permission, and a bot pushing fixes onto someone's PR branch would make the branches of other people and PCs diverge.
 

@@ -6,7 +6,7 @@ HVE Lite has no dedicated agent and no request format. You ask the usual Copilot
 
 Copilot follows the rules that the installer wrote into `AGENTS.md` and `.github/copilot-instructions.md`. In a change that alters behavior, it updates the requirements definition, the catalog and the tests in the same change, and finally brings `python scripts/verify.py` to exit 0. The rules live in the repository, so you do not need to copy them into personal custom instructions or memory.
 
-> Migrating from 0.5.x: `/build`, `/build-template` and `<run_options>` no longer exist. Ask the default agent directly and give approvals in chat ([9. Versioning](09-versioning.en.md)).
+> Migrating from 0.5.x: `/build`, `/build-template` and `<run_options>` no longer exist. Ask the default agent directly and give approvals in chat ([9. Version upgrade procedure](09-versioning.en.md)).
 
 ## 1.1 What the rules say
 

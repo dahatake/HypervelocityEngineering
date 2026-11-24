@@ -282,9 +282,11 @@ class Uninstaller:
                 cfg = json.loads((self.target / c).read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 continue
-            files = cfg.get("files") or {}
-            if isinstance(files, dict):
-                data_paths += [v for v in files.values() if isinstance(v, str) and v]
+            # current versions use "management_files"; "files" is the key of older versions
+            for key in ("management_files", "files"):
+                files = cfg.get(key) or {}
+                if isinstance(files, dict):
+                    data_paths += [v for v in files.values() if isinstance(v, str) and v]
             w = (cfg.get("work") or {}).get("dir") if isinstance(cfg.get("work"), dict) else None
             if isinstance(w, str) and w:
                 work.append(w)

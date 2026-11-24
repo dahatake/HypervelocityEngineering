@@ -97,7 +97,7 @@ These few lines are the only always-loaded instructions. Long procedures live in
 .github/
   agents/        rd-auditor.agent.md … read-only auditor you choose and ask at milestones
   skills/        requirement-definition (requirements procedure; anyone may use it) / rd-audit / adopt-existing
-  workflows/     ebak-verify.yml … runs verify on push and PR (check only; repair locally with rdfix)
+  workflows/     ebak-verify.yml … runs verify on push to main and PR (check only; repair locally with rdfix)
 scripts/         deterministic scripts (Python 3.9+, standard library only)
   verify.py / verify.ps1 / verify.sh   data-layer checks (check profile) + build / test commands
   rdcheck.py  rdfix.py  next-id.py  ledger.py  summarize.py  adopt.py  entities.py  extpoints.py  ebaklib.py
@@ -116,7 +116,7 @@ HVE Lite has no hooks and does not add any preamble to requests automatically. T
 | Layer | Implementation | When it runs |
 |---|---|---|
 | Local | `python scripts/verify.py` (data-layer checks + build / test in `verify.commands`). `--docs-only` for the data layer only | Before finishing (rule in `AGENTS.md`) |
-| CI | `.github/workflows/ebak-verify.yml` (`scripts/verify.sh --show-warnings`) | Every push and PR |
+| CI | `.github/workflows/ebak-verify.yml` (`scripts/verify.sh --show-warnings`) | Every push to `main` and every PR |
 | Milestone | `rd-auditor` (semantic audit, read-only) | When you ask |
 
 The check profile is set by `checks.profile` in `scripts/ebak.config.json`.
@@ -188,7 +188,7 @@ curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/m
 curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.sh | bash -s -- --dry-run
 ```
 
-To use a specific version (tag, branch, or commit), set the environment variable `EBAK_REF` (e.g. `EBAK_REF=v0.6.0`). To use a fork, set `EBAK_REPO=<owner>/<repo>`.
+To use a specific version (tag, branch, or commit), set the environment variable `EBAK_REF` (e.g. `EBAK_REF=v0.6.0`; check the available tags with `git ls-remote --tags https://github.com/dahatake/HypervelocityEngineering`, and if there is no tag, give a branch name or a commit SHA). To use a fork, set `EBAK_REPO=<owner>/<repo>`. With `curl … | bash`, put it on the `bash` side, as in `curl -fsSL …/install.sh | EBAK_REF=<ref> bash` (placed before `curl`, it does not reach install.sh). In PowerShell, run `$env:EBAK_REF = '<ref>'` first.
 
 **If you have cloned the toolkit**
 
@@ -208,18 +208,21 @@ python tools/install.py --target /path/to/your-repo
 | `--no-ci` | `-NoCi` | Does not install `.github/workflows/ebak-verify.yml` |
 | `--no-repair` | `-NoRepair` | Only shows the data-layer check and repair plan. Toolkit installation and display-data generation still run |
 | `--skip-verify` | — | Neither checks nor repairs the data layer; display-data generation still runs |
+| `--allow-non-git` | — | Installs into a directory that is not a git repository |
 | `--uninstall` | `-Uninstall` | Removes unmodified toolkit files, the blocks in `AGENTS.md` etc., the manifest, and emptied folders (keeps management data and settings). Also available as `uninstall.ps1` / `uninstall.sh` |
 | `--purge` | `-Purge` | In addition to `--uninstall`, removes management data (the requirements definition, catalog, integration catalog, ID registry, etc. under `docs/`, and `tests/system/ledger.json`), `scripts/ebak.config.json`, `/work`, lines appended to `.gitignore` / `.gitattributes`, and `*.ebak-backup-*` |
+
+Options with "—" in the PowerShell column cannot be passed through the PowerShell one-liner. Use `install.sh` (`bash -s -- <options>`) or clone the toolkit and pass them to `python tools/install.py`.
 
 ### Installed files
 
 | Kind | Files | On re-run |
 |---|---|---|
-| Toolkit files | `.github/agents/rd-auditor.agent.md`, `.github/skills/` (`requirement-definition`, `rd-audit`, `adopt-existing`), `.github/workflows/ebak-verify.yml`, `scripts/*.py`, `verify.ps1`, `verify.sh`, `HVE-Studio/` (the viewer; Studio's tests are not installed), `HVE-docs/` (same content as this repository's `users-guide/`; the HVE Studio guide is `HVE-docs/studio/`; the target's own `users-guide/` is not touched) | Updated to the new version if unmodified. If modified locally, **left as is** (`KEEP-LOCAL`; `--force` overwrites) |
+| Toolkit files | `.github/agents/rd-auditor.agent.md`, `.github/skills/` (`requirement-definition`, `rd-audit`, `adopt-existing`), `.github/workflows/ebak-verify.yml`, `scripts/*.py`, `metadata.json`, `verify.ps1`, `verify.sh`, `tools/install.py`, `HVE-Studio/` (the viewer; Studio's tests are not installed), `HVE-docs/` (same content as this repository's `users-guide/`; the HVE Studio guide is `HVE-docs/studio/`; the target's own `users-guide/` is not touched) | Updated to the new version if unmodified. If modified locally, **left as is** (`KEEP-LOCAL`; `--force` overwrites) |
 | Management data templates | `docs/requirements-definition.md`, `docs/catalog.md`, `docs/integrations.md` (integration catalog, optional), `docs/id-registry.md`, `tests/system/ledger.json` | Created **only if missing**. Existing files are never overwritten |
 | Display data | `.hve-studio/managed-data.json` | Created/synchronized with progress after installation/update. A disposable analysis snapshot, not an authoritative requirements migration. Normal uninstall preserves it; `--purge` removes it |
 | Settings | `scripts/ebak.config.json` | Created if missing. If present, only new keys are added; values you set are not changed |
-| Appended lines | `/work/` and `/.hve-studio/` in `.gitignore` (header `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`); `docs/id-registry.md merge=union` in `.gitattributes` | Only missing lines are appended |
+| Appended lines | `/work/` and `/.hve-studio/` in `.gitignore` (header `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`); `docs/id-registry.md merge=union`, `scripts/*.sh text eol=lf` and `HVE-Studio/*.sh text eol=lf` in `.gitattributes` (header `# Enterprise App Build Kit: append-only records`) | Only missing lines are appended |
 | Block | The rules enclosed in `<!-- ebak-abk:begin -->` … `end` in `AGENTS.md` and `.github/copilot-instructions.md` ([Rules above](#rules-the-block-that-goes-into-agentsmd)) | Only the inside of the block is replaced. Text outside the block is not changed |
 | Manifest | `.github/ebak-toolkit.json` | The version and hashes of installed files (used to decide updates and removals) |
 
@@ -344,7 +347,8 @@ So the customizations (`AGENTS.md`, `.github/`) and `scripts/` are placed direct
    - Windows: `irm https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.ps1 | iex`
    - macOS / Linux: `curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.sh | bash`
 2. Register build and test commands in `verify.commands` of `scripts/ebak.config.json`.
-3. Then develop with the "Recommended workflow" below.
+3. At the root of your repository, run `python scripts/verify.py`. If the last line is `verify: PASS …` and the exit code is 0, you are ready (an `INFO` line appears while `verify.commands` is still empty). If it fails, see [Troubleshooting](users-guide/07-troubleshooting.en.md).
+4. Then develop with the "Recommended workflow" below.
 
 ![The first three steps](users-guide/images/fig-quickstart.en.svg)
 
@@ -354,7 +358,7 @@ So the customizations (`AGENTS.md`, `.github/`) and `scripts/` are placed direct
 2. **Copilot updates everything in the same change, following the rules.** Following the rules in `AGENTS.md`, it updates the requirements and acceptance criteria in the requirements definition, the catalog, the tests, and the code in the same change, and makes `python scripts/verify.py` exit 0. New IDs come from `next-id.py`; the ledger is updated with `ledger.py`. Review the diff and approve, in chat, any requirements that need approval.
 3. **On push / PR, CI runs the same checks.** `ebak-verify` runs the same checks as locally (check only; it never commits repairs). If the data layer fails, run `python scripts/rdfix.py --full --apply` locally and include the repair in the same change.
 4. **Ask rd-auditor for an audit at milestones.** When a group of features is done, before a release, and so on, choose `rd-auditor` as the agent and ask, for example, "audit the diff" or "audit everything 3 times". The diff defaults to the diff against `base_branch` (default `main`). On clients that support subagents, the requested number of runs execute in parallel and are decided by majority. Results go to `work/audit/<datetime>/report.md`. You decide whether to apply the findings, and fix them in a separate change.
-5. **Watch the status in HVE Studio** (optional). Use `python HVE-Studio/studio.py --role pm` and the like to see the state of requirements, the catalog, and tests as diagrams and tables ([HVE Studio](#hve-studio-data-layer-viewer)).
+5. **Watch the status in HVE Studio** (optional). Open it with `python HVE-Studio/studio.py` and, following the work steps at the top of the screen, see the state of requirements, the catalog, and tests as diagrams and tables ([HVE Studio](#hve-studio-data-layer-viewer)).
 
 For details, see [Daily workflow](users-guide/02-daily-workflow.en.md) and [Writing requests](users-guide/01-writing-requests.en.md).
 
@@ -372,12 +376,13 @@ The installer has no migration code for older versions. When updating from an ol
 
 ```bash
 git status                                    # no uncommitted changes (otherwise it refuses)
-python tools/install.py --target . --clean --dry-run   # review the list to delete (CLEAN)
-python tools/install.py --target . --clean
-git diff                                      # review and commit (git restore undoes it)
+# run at the root of the toolkit clone (--target is the root of the repository to update)
+python tools/install.py --target /path/to/your-repo --clean --dry-run   # review the list to delete (CLEAN)
+python tools/install.py --target /path/to/your-repo --clean
+git diff                                      # review in the updated repository and commit (git restore undoes it)
 ```
 
-Use `-Clean` in PowerShell and `--clean` with `install.sh`.
+To run it with one command at the root of the repository to update, add `-Clean` in PowerShell or `--clean` with `install.sh` ([With options](#installation-command-recommended)). Running the installed `tools/install.py` with `--target .` is refused, because the target and the toolkit source are the same.
 
 | Item | With `--clean` |
 |---|---|
@@ -388,7 +393,7 @@ Use `-Clean` in PowerShell and `--clean` with `install.sh`.
 
 - Running it twice in a row changes nothing the second time.
 - Data-layer files from older versions (such as `docs/run-history.md` from 0.5.x) are kept as data. Delete them by hand if you do not need them.
-- Worktrees and `work/*` branches left by 0.5.x runs are not removed. Check with `git worktree list` / `git branch --list "work/*"` and remove them by hand.
+- Worktrees and `work/*`/`run/*` branches left by 0.5.x runs are not removed. Check with `git worktree list` / `git branch --list "work/*" "run/*"` and remove them by hand.
 - If you update with the plain installation command instead of `--clean`, files from the older version (including hooks) remain. A leftover old hook calls the deleted `gate.py` and can make Copilot deny tools, so use `--clean` when coming from an older version.
 
 How usage changed from 0.5.x:
@@ -420,7 +425,7 @@ For details, see [Version upgrades](users-guide/09-versioning.en.md) and [CHANGE
 |---|---|---|
 | Product Manager | Check progress, approvals, and unanswered questions on the dashboard, and decide which goal to invest in next | [S5. For Product Managers](users-guide/studio/05-product-manager.en.md) |
 | Architect | Check dependencies, boundaries, placement, and missing layers with the 2D/3D map, diagrams, placement, and structure views | [S6. For Architects](users-guide/studio/06-architect.en.md) |
-| Software Engineer | Trace from requirements to implementation files and tests with tables, source mapping, and the detail panel | [S7. For Software Engineers](users-guide/studio/07-software-engineer.en.md) |
+| Software Engineer | Trace from requirements to implementation files and tests with tables, Source Map, and the detail panel | [S7. For Software Engineers](users-guide/studio/07-software-engineer.en.md) |
 | Everyone | **First time? Start with S9, which explains each screen with figures** | [S9. Visual tour](users-guide/studio/09-visual-tour.en.md) |
 | Everyone | Which screen reads what from which file, and how it computes it | [S8. Data reference](users-guide/studio/08-data-reference.en.md) |
 
@@ -432,10 +437,10 @@ At the root of a repository where the toolkit is installed, run:
 
 ```bash
 python HVE-Studio/studio.py --check      # check that the data layer can be read (files found and items parsed)
-python HVE-Studio/studio.py --role pm    # opens the browser. --role is pm / architect / swe
+python HVE-Studio/studio.py              # opens the browser, starting at work step 1 at the top of the screen
 ```
 
-On Windows you can also use `.\HVE-Studio\start.ps1 -Role pm`, and on macOS / Linux `./HVE-Studio/start.sh . 8765 --role pm`. Details are in [HVE-Studio/README.md](HVE-Studio/README.md); script options are in the [Scripts reference](users-guide/05-scripts-reference.en.md).
+On Windows you can also use `.\HVE-Studio\start.ps1`, and on macOS / Linux `./HVE-Studio/start.sh . 8765`. Details are in [HVE-Studio/README.md](HVE-Studio/README.md); script options are in the [Scripts reference](users-guide/05-scripts-reference.en.md).
 
 ### Using Studio without HVE (code mode)
 

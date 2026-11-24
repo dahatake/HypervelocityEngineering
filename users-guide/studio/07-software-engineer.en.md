@@ -13,7 +13,7 @@ Choose work step 2 "Settle requirements" at the top of the screen to open the ta
 | Tables → requirements, acceptance criteria | Requirement body, acceptance criteria, verification level, BLOCKED, whether an implementation exists | Requirements definition, catalog |
 | Tables → test cases | Case layer, status, last run, run command | Ledger |
 | Tables → files | Implementation and test paths, and the number of requirements tied to them | Catalog, `command` in the ledger |
-| Source mapping | Per-file mapping to requirements, shared components, and tests | Catalog paths |
+| Source Map | Per-file mapping to requirements, shared components, and tests | Catalog paths |
 | Detail panel | Requirement → implementation files, tests, components, APIs, tables | Catalog |
 | Consistency | Gaps in requirement → AC → test → catalog → implementation | Requirements, ledger, catalog |
 
@@ -23,7 +23,7 @@ Choose work step 2 "Settle requirements" at the top of the screen to open the ta
    ```powershell
    python HVE-Studio/studio.py
    ```
-2. **Choose a requirement to work on** (2 minutes). Open `Tables` → `Requirements`. In the `status: all` filter choose `approved`, and in the `impl` filter choose `none` (implementation files empty) or `unlisted` (no row in the catalog). Look at priority starting from `MUST`.
+2. **Choose a requirement to work on** (2 minutes). Open `Tables` → `Requirements`. In the `Status: all` filter choose `approved`, and in the `Impl.: all` filter choose `none` (implementation files empty) or `unlisted` (no row in the catalog). Look at priority starting from `MUST`.
 
    ![Tables](images/tables.png)
 3. **Read the requirement** (2 minutes). Click a row. The detail panel on the right shows the body, acceptance criteria (verification level: system / integration / unit / manual), and BLOCKED. Acceptance criteria marked BLOCKED cannot proceed because a question is unanswered.
@@ -34,9 +34,9 @@ Choose work step 2 "Settle requirements" at the top of the screen to open the ta
 
    Selecting a row shows the run command (`command`), the last commit, and the evidence in the detail panel. You can run that case locally with the command written here. The System Test ledger is updated only with `python scripts/ledger.py` (do not edit it directly).
 6. **Jump to where the implementation is** (2 minutes). From the chips for "Implementation files," "Tests," and "Shared components, APIs, tables" in the requirement's detail panel, you can jump to the related files. Pressing the `↗ VS Code` link opens the file or definition line in VS Code (it uses `vscode://file/…`, so it works on a PC with VS Code installed).
-7. **Trace back from a file to requirements** (2 minutes). Open `Source mapping` and enter a file name in the path filter. A file with a large area is tied to many requirements. This gives a rough measure of how large the impact is when you change it.
+7. **Trace back from a file to requirements** (2 minutes). Open the `Source map` tab of `Source Map` (`#/source`; reachable from the tabs of work step 3) and enter a file name in the path filter. A file with a large area is tied to many requirements. This gives a rough measure of how large the impact is when you change it.
 
-   ![Source mapping](images/source.png)
+   ![Source Map](images/source.png)
 8. **Look for missing layers** (2 minutes). Open `#/consistency`. A requirement judged "one layer missing" lacks one of requirement, AC, test, catalog, or implementation file. The missing layer is the entry point of your work.
 
    ![Consistency](images/consistency.png)
@@ -62,7 +62,7 @@ Choose work step 2 "Settle requirements" at the top of the screen to open the ta
 | Decision | Screen to base it on | Next action |
 |---|---|---|
 | Which requirement to implement next | `Tables` → `Requirements` (approved, MUST, impl is none/unlisted), presence of BLOCKED | Write the requirement ID to implement in your request to Copilot (for example "implement FR-031") |
-| Which files to change | Implementation files and shared components in the detail panel, area in source mapping | Run the tests of the affected requirements |
+| Which files to change | Implementation files and shared components in the detail panel, area in Source Map | Run the tests of the affected requirements |
 | Which tests to run | `command`, layer, and status in `Tables` → `Test cases` | Run and record with `python scripts/ledger.py` |
 | Whether it can be called implemented | Consistency (5 layers) and the test `status` | Fill in the missing layers |
 | Basis of a value | `Tables` → `Parameters`, `{PARAM-nnn}` in the AC body | When changing a value, request that the PARAM decision be updated |

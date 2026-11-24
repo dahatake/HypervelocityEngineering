@@ -8,7 +8,7 @@
 
 - `python tools/install.py` で、雛形 `docs/integrations.md`（書式の説明と空の索引表）が、**まだないときに限り**作られます。すでにある導入先のカタログは上書きされず、更新（再実行・`--force`）でも内容は変わりません。
 - 検査は toolkit の `scripts/rdcheck.py`（CHK-28）と `scripts/next-id.py`（`INT` の採番）に入っていて、既存の配布と同じ手順（再実行）で更新されます。この章も `HVE-docs/` に配布されます。`--no-ci` の挙動（workflow を入れない）は変わりません。
-- ファイル名は `scripts/ebak.config.json` の `management_files.integrations` で変えられます（既定は `docs/integrations.md`）。
+- ファイル名は `scripts/ebak.config.json` の `management_files.integrations` で変えられます（既定は `docs/integrations.md`）。インストーラはこの設定を見ないので、変えた後も、`docs/integrations.md` がなければ再実行のたびに雛形を作ります（[4.2](04-customization.md#42-管理データのパスmanagement_files)）。
 
 ## 11.2 書式
 
@@ -45,17 +45,19 @@
 
 ## 11.4 検査（`python scripts/verify.py --docs-only`）
 
-違反は ID と位置つきで報告され、exit 1 で終わります。違反がなければ exit 0 です。
+外部連携カタログの検査は CHK-28 です。CHK-28 は既定の検査プロファイル `lite` の範囲（`checks.lite_checks`）に入っていないので、既定では報告されず、終了コードにも影響しません。常に検査するには `lite_checks` に `"CHK-28"` を足し、1 回だけ確かめるには `python scripts/verify.py --docs-only --profile full` を使います（[4.4](04-customization.md#44-検査の範囲checks)）。
+
+検査の範囲に入っていれば、違反は ID と位置つきで報告され、exit 1 で終わります。違反がなければ exit 0 です。
 
 | 違反 | 区分 |
 |---|---|
-| ID の重複、ID 形式の誤り（`INT-001` 形式でない） | error |
-| 必須欄の欠落、16 観点の欄の欠落、空の欄 | error |
+| ID の重複、ID 形式の誤り（`INT-001` 形式でない）、ID 台帳で削除済み・欠番の ID の再利用、名前（見出しの ID の後ろ）がない | error |
+| 必須欄の欠落、16 観点の欄の欠落、空の欄、同じ欄の重複 | error |
 | 値が「値／なし／TBD（Q-xxx）」の形式でない、TBD の Q-ID が質問票にない | error |
 | 方向・状態の値が定義外 | error |
 | 関連する要求の ID が要求定義書にない、認証情報の値らしい文字列・欄 | error |
 | 要求定義書が参照する `INT-xxx` がカタログにない（未定義参照） | error |
-| 状態が「運用中」なのに、関連する要求がすべて承認済みではない、索引表と項目の不一致 | warn |
+| 状態が「運用中」なのに、関連する要求がすべて承認済みではない、索引表と項目の不一致、ID が ID 台帳にない | warn |
 
 `python scripts/rdcheck.py trace INT-xxx` は、その連携を参照する要求と受入基準を一覧します。
 

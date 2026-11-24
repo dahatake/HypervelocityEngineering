@@ -1,6 +1,6 @@
 **日本語** | [English](09-versioning.en.md)
 
-# バージョンアップの手順
+# 9. バージョンアップの手順
 
 Enterprise App Build Kit の版の付け方と、版を上げる手順（配布元の保守者向け）、導入済みリポジトリを新しい版に更新する手順（利用者向け）です。
 
@@ -28,9 +28,9 @@ Enterprise App Build Kit の版の付け方と、版を上げる手順（配布�
    ```bash
    python tools/bump-version.py minor     # 0.1.0 -> 0.2.0
    ```
-   `TOOLKIT_VERSION` が書き換わり、`CHANGELOG.md` の `[Unreleased]` の下に新しい版の見出しが入ります。引数なしで実行すると、現在の版を表示するだけです。
+   `TOOLKIT_VERSION` が書き換わり、`CHANGELOG.md` の `[Unreleased]` の下に新しい版の見出しが入ります。続けて `tools/build-uninstall-catalog.py` を実行し、アンインストーラのカタログ `tools/uninstall-catalog.json`（版と、配布するファイルの内容の記録）を作り直します。引数なしで実行すると、現在の版を表示するだけです。
 4. `CHANGELOG.md` で、`[Unreleased]` に書いた内容を新しい版の見出しの下へ移します。
-5. 配布物（ファイル）を追加・改名・削除した場合は、`tools/install.py` の `MANAGED`・`TEMPLATES` と、この `users-guide/` を合わせて直します。`users-guide/` の全ファイルは `MANAGED` に列挙し、導入先では `HVE-docs/` に保存されます（導入先の `users-guide/` は編集しません）。
+5. 配布物（ファイル）を追加・改名・削除した場合は、`tools/install.py` の `MANAGED`・`TEMPLATES` と、この `users-guide/` を合わせて直します。`users-guide/` の全ファイルは `MANAGED` に列挙し、導入先では `HVE-docs/` に保存されます（導入先の `users-guide/` は編集しません）。手順 3 の後に配布物の一覧か内容を変えたら、`python tools/build-uninstall-catalog.py` をもう一度実行します（カタログが古いと `tests/toolkit/test_uninstall.py` が失敗します）。
 6. 版を確認し、commit してタグを付けます。
    ```bash
    python tools/install.py --version     # 例: 0.4.0
@@ -52,8 +52,9 @@ Enterprise App Build Kit の版の付け方と、版を上げる手順（配布�
    何が変わるかを見たいときは `--dry-run` を使います（PowerShell は `-Check`・`-DryRun`）。
 3. 更新します。インストールコマンドをもう一度実行するだけです。特定の版にしたいときは `EBAK_REF=v0.2.0` を付けます。
    ```bash
-   EBAK_REF=v0.2.0 curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.sh | bash
+   curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.sh | EBAK_REF=v0.2.0 bash
    ```
+   `EBAK_REF` は `bash` の側に付けます（`curl` の前に付けると、install.sh に渡りません）。
    PowerShell は `$env:EBAK_REF = "v0.2.0"` を設定してから、README のコマンドを実行します。
 4. 結果の表示を確認します。
 
@@ -100,16 +101,18 @@ Enterprise App Build Kit の版の付け方と、版を上げる手順（配布�
 1. 0.5.x の run が動いていないことを確かめ、作業ツリーをきれいにします（未 commit の変更があると `--clean` は実行しません）。
 2. 削除する一覧（`CLEAN`）を確かめてから、クリーンインストールします。PowerShell では `-Clean` です。
    ```bash
-   python tools/install.py --target . --clean --dry-run
-   python tools/install.py --target . --clean
+   # toolkit の clone のルートで実行します（--target は更新するリポジトリのルート）
+   python tools/install.py --target /path/to/your-repo --clean --dry-run
+   python tools/install.py --target /path/to/your-repo --clean
    ```
+   更新するリポジトリのルートで 1 行で実行するときは、インストールコマンドに PowerShell では `-Clean`、`install.sh` では `--clean` を付けます。導入先に入った `tools/install.py` を `--target .` で実行すると、導入先と toolkit のソースが同じになるため実行しません。
    toolkit が入れたファイル（conductor などの agent、build などの skill、hook のファイル `.github/hooks/*.json`・`scripts/hooks/gate.py`、撤去したスクリプト、`.github/workflows/ebak-data-layer.yml`。変更したものも）・`.ebak-backup-*`・設定・ブロック・`.gitignore`/`.gitattributes` に追記した行・マニフェストを削除し、この版を入れ直します。管理データ・`/work`・アプリのコードとテストは残ります。設定は既定に戻るので、以前の値は `git diff scripts/ebak.config.json` で確かめて戻します。2 回続けて実行しても、2 回目は何も変わりません。
    - 旧版のデータ層のファイル（0.5.x の `docs/run-history.md`）と `.github/ebak-prompt-prefix.md` は残りますが、もう読みません。不要なら手で削除します。
 3. AGENTS.md と `.github/copilot-instructions.md` のブロックが「Enterprise App Build Kit Lite」の規則に置き換わったことを確かめます。
-4. 0.5.x の run が残した worktree と `work/*` ブランチは自動では消えません。確認して、不要なら手で消します。
+4. 0.5.x の run が残した worktree と `work/*`・`run/*` ブランチは、`--clean` では消えません。確認して、不要なら手で消します（`python tools/uninstall.py --target <repo> --dry-run` も `RUN-WORKTREE`・`RUN-BRANCH` として一覧を表示します。`uninstall.py --runs` は toolkit のアンインストールと一緒に削除するので、更新では使いません）。
    ```bash
    git worktree list
-   git branch --list "work/*"
+   git branch --list "work/*" "run/*"
    git worktree remove <パス>      # 不要な worktree
    git branch -D <ブランチ>        # 不要なブランチ
    ```

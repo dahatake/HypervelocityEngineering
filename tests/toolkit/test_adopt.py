@@ -52,6 +52,19 @@ def test_request_draft_is_unapproved_and_scope_none(repo):
     assert "`orders`" in out and "orders-design.md" in out
 
 
+# FR-1102 AC-551: the request draft goes under the configured work.dir
+def test_request_draft_follows_work_dir(repo):
+    make_app(repo)
+    cfg = json.loads(repo.read("scripts/ebak.config.json"))
+    cfg["work"]["dir"] = "tmp/scratch"
+    repo.write("scripts/ebak.config.json", json.dumps(cfg, ensure_ascii=False))
+    repo.py("adopt.py", "scan", check=True)
+    out = repo.py("adopt.py", "request", check=True).stdout
+    drafts = list((repo.path / "tmp/scratch/import").glob("adopt-*.md"))
+    assert len(drafts) == 1 and "WROTE tmp/scratch/import/adopt-" in out
+    assert not (repo.path / "work/import").exists()
+
+
 def test_anchor_drift_and_whitespace_insensitive(repo):
     make_app(repo)
     repo.py("adopt.py", "scan", check=True)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""rdcheck.py - parse and check the management data (plan §10, CHK-01..27).
+"""rdcheck.py - parse and check the management data (plan §10, CHK-00..34).
 
 Usage:
   python scripts/rdcheck.py check [--base REF] [--profile lite|full] [--json]

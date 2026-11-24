@@ -3,10 +3,10 @@
     {
       "screen_id": "dashboard",
       "image": "images/dashboard.png",
-      "sha256": "a6c39700a157159b919969987a0b4db51e4399db7a8b3ca4b155ffb35a7102d5",
-      "commit": "1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "sha256": "31a5bc1b9c9c4d5a66316c7eba411f58047d648ea26b02689280f8f5e26fc3f2",
+      "commit": "c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "working_tree": true,
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "required_elements": [
         "対象リポジトリ名",
         "ペルソナ",
@@ -21,10 +21,10 @@
     {
       "screen_id": "map2d",
       "image": "images/map2d.png",
-      "sha256": "9833747b47cc283d3f5caffe4e9eabe638724463963ee3b607e88ddcabacd98a",
-      "commit": "1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "sha256": "0b113a45c7158215e5ca7f558ff2f1f4a692781fc4595e68226285a251fdb724",
+      "commit": "c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "working_tree": true,
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "required_elements": [
         "ノード",
         "関係",
@@ -35,10 +35,10 @@
     {
       "screen_id": "map3d",
       "image": "images/map3d.png",
-      "sha256": "2f18dfaf397a09cdbabdac33a8bc7c20902e7fea07824bccce29d661fe059bd2",
-      "commit": "1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "sha256": "1d7cd219391fc2295ab07d0cc5af2ca45c71ef93bfb040535a077f9ff660e2e1",
+      "commit": "c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "working_tree": true,
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "required_elements": [
         "ノード",
         "関係",
@@ -50,10 +50,10 @@
     {
       "screen_id": "diagrams",
       "image": "images/diagrams.png",
-      "sha256": "4e3975de917b06846d7b364b683b7d996c4401ac6958e9bc22cd28707c1c3cff",
-      "commit": "1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "sha256": "cb1faa287064cb7657dac13ac4799105029ff79ae9c28c8fe36183c30f49972f",
+      "commit": "c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "working_tree": true,
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "required_elements": [
         "図式の種別",
         "ノード",
@@ -64,10 +64,10 @@
     {
       "screen_id": "placement",
       "image": "images/placement.png",
-      "sha256": "277a28e5d75f4b3a4b1f45faf2e9c49e1441dae842f0f12f901b090d58e3ec84",
-      "commit": "1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "sha256": "f3eef5642ce1020511dad4c6f6fc60210cda1235e8d544e454ddc717ad4872ba",
+      "commit": "c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "working_tree": true,
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "required_elements": [
         "ファイルまたはディレクトリ",
         "配置関係",
@@ -77,10 +77,10 @@
     {
       "screen_id": "source",
       "image": "images/source.png",
-      "sha256": "fcd56e586e86c38fa16e873ef2ca4626a2518a3f2b05d2e9327e728745b6d7eb",
-      "commit": "1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "sha256": "4229bb240fd1671bac6a31d61d4a527a73bf2e6bb25901369aa4579e0d7ff175",
+      "commit": "c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "working_tree": true,
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "required_elements": [
         "管理データID",
         "対応する実装ファイル",
@@ -90,10 +90,10 @@
     {
       "screen_id": "tables",
       "image": "images/tables.png",
-      "sha256": "5c7735f3eedd846a6facbecd5142b32f5f25963dc9cb69944c4f82ee65cc9a0f",
-      "commit": "1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "sha256": "940b7c5de1bec69a73a2ccfd66d195464dcd3d1f4c28528057d84984aa0659ef",
+      "commit": "c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "working_tree": true,
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "required_elements": [
         "対象種別",
         "検索",
@@ -105,10 +105,10 @@
     {
       "screen_id": "structure",
       "image": "images/structure.png",
-      "sha256": "42cc93a6a3684199345db4f45b9f71040bd809091a650d381d69bad2013d63a7",
-      "commit": "1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "sha256": "ec1efe4369c207e6e61337d3bae52cab412edfbb27fba2fa3e1b7083e8296fba",
+      "commit": "c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "working_tree": true,
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "required_elements": [
         "現状対理想構造"
       ]
@@ -116,10 +116,10 @@
     {
       "screen_id": "consistency",
       "image": "images/consistency.png",
-      "sha256": "01e39c03571c6b16d7da501e5ac9115efb4d8586949c531b92494bafd616142c",
-      "commit": "1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "sha256": "4a822c1dbf85e636f663c5d3a288128f713b1c57d3a95e0ae6a5afa8f38f940d",
+      "commit": "c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "working_tree": true,
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "required_elements": [
         "層一貫性",
         "行一覧"
@@ -128,10 +128,10 @@
     {
       "screen_id": "maintenance",
       "image": "images/maintenance.png",
-      "sha256": "36eabbfe66366bd4bd834ae74373cf0580056f91926df930ad286eecefa97623",
-      "commit": "1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "sha256": "eccb7a643fabf7019e70f7cf4220000c93c7aeb8390c475397602c94e62ceda2",
+      "commit": "c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "working_tree": true,
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "required_elements": [
         "整合性保守",
         "変更候補"
@@ -140,10 +140,10 @@
     {
       "screen_id": "runtime",
       "image": "images/runtime.png",
-      "sha256": "0055d3f0f43dd98f92f54f636fcc1b48a97060b92e7453f64deeec09b9853915",
-      "commit": "1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "sha256": "fbf4f6ec5c6a8239fc1cdf4b241a66d7b0e220f3f3530cf40d81a41ec17c4d84",
+      "commit": "c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "working_tree": true,
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "required_elements": [
         "実行環境の配置",
         "ブラウザー",
@@ -153,10 +153,10 @@
     {
       "screen_id": "cases",
       "image": "images/cases.png",
-      "sha256": "4dc782a800511191a0125715620f7f8a24a121ec46ad52fbdcc5c3c512d868b0",
-      "commit": "1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "sha256": "5cca29e3d82bcd94a9f85742cf97d7825ef297eae624c029698f0477dabef977",
+      "commit": "c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "working_tree": true,
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "required_elements": [
         "試験ケース",
         "行一覧",
@@ -166,10 +166,10 @@
     {
       "screen_id": "states",
       "image": "images/states.png",
-      "sha256": "f9f91609941c16a9fec832ba7e850a2165867d9fe338cb0bebb9b65e7a07fb8b",
-      "commit": "1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "sha256": "b6fc3460e9d86f6502e51b454d55e130d4a2e1e02b91c6e4924fb8264ac73396",
+      "commit": "c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "working_tree": true,
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "required_elements": [
         "図式の種別",
         "状態",
@@ -179,10 +179,10 @@
     {
       "screen_id": "header",
       "image": "images/header.png",
-      "sha256": "9993ae1fa2f12c87b2bd40a6234f9d4e3412dad58c2d61c52b32b1061e610010",
-      "commit": "1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "sha256": "c4910e84ac29a342e472126352df58af589024a5d3f98d069bf223d72feeadd0",
+      "commit": "c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "working_tree": true,
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 1f574ed63ab550a93893cdac97882a63c03dd83c",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit c0a8bc8e85057c1af68b53cc667e10616dca7c3b",
       "required_elements": [
         "HVE Studio"
       ]

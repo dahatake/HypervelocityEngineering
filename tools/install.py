@@ -471,18 +471,40 @@ class Installer:
         for rel in self.orphans:
             self.new_hashes[rel] = self.manifest["files"][rel]
 
+    def template_dest(self, rel: str) -> str:
+        """FR-1102 AC-549: where a template goes - the target's own management_files path when it set one."""
+        key = next((k for k, v in DEFAULT_FILES.items() if v == rel), None)
+        try:
+            cfg = json.loads((self.target / CONFIG).read_text(encoding="utf-8")) if (self.target / CONFIG).is_file() else {}
+        except (OSError, ValueError):
+            return rel
+        mf = cfg.get("management_files") if isinstance(cfg, dict) else None
+        dest = mf.get(key) if key and isinstance(mf, dict) else None
+        if not isinstance(dest, str) or not dest.strip():
+            return rel
+        dest = dest.strip().replace("\\", "/")
+        p = (self.target / dest).resolve()
+        if Path(dest).is_absolute() or not p.is_relative_to(self.target.resolve()):
+            return rel
+        return dest
+
     def install_templates(self) -> None:
-        for rel in TEMPLATES:
+        for src_rel in TEMPLATES:
+            rel = self.template_dest(src_rel)
             if (self.target / rel).exists():
                 self.note("EXISTS", rel)
             else:
                 self.note("CREATE", rel)
-                self.write_bytes(rel, (self.source / "tools" / "templates" / rel).read_bytes())
+                self.write_bytes(rel, (self.source / "tools" / "templates" / src_rel).read_bytes())
 
     def install_config(self) -> None:
         src = json.loads((self.source / CONFIG).read_text(encoding="utf-8"))
         # the source's verify.commands are this repository's own (Studio tests); a target registers its own
         src.setdefault("verify", {})["commands"] = []
+        # FR-1102 AC-550: the source's id_scan_exclude lists this repository's own files; a target uses the defaults
+        # of scripts/ebaklib.py (an explicit list would replace them and miss later default changes)
+        for k in ("id_scan_exclude", "_id_scan_exclude_note"):
+            (src.get("checks") or {}).pop(k, None)
         dest_p = self.target / CONFIG
         if not dest_p.exists():
             self.note("CREATE", CONFIG)

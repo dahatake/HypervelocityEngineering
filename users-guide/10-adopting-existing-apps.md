@@ -22,7 +22,7 @@ python scripts/adopt.py request                           # ② Copilot への�
 | コマンド | 役割 | 書く場所 |
 |---|---|---|
 | `adopt.py scan [--since-days N]` | ファイル・役割・言語・ルート・テーブル・テスト・設計書・churn を集め、機能のまとまりを hotspot 順に並べる | `docs/baseline/inventory.{json,md}` |
-| `adopt.py request [--clusters N] [--cluster 名前] [--implement]` | 未回収のまとまりを選び、チャットに貼る依頼文にする。`<constraints>` の既定は「実装: しない」「承認: 厳格」（`--implement` で「実装: 承認済みの要求すべて」）。`--stdout` で画面に出す | `work/import/` |
+| `adopt.py request [--clusters N] [--cluster 名前] [--implement]` | 未回収のまとまりを選び、チャットに貼る依頼文にする。`<constraints>` の既定は「実装: しない」「承認: 厳格」（`--implement` で「実装: 承認済みの要求すべて」）。`--stdout` で画面に出す | `work/import/`（設定の `work.dir` の下の `import/`） |
 | `adopt.py anchor SRC-xxx ファイル:開始-終了` | 要求の出典（SRC）に、コードの範囲のハッシュを固定する（空白だけの変更は無視） | `docs/baseline/evidence.json` |
 | `adopt.py check [--strict] [--json]` | 証跡のずれ（DRIFT）・回収率・出典のない逆生成の要求・包括承認の誤り・golden の状態を確認 | なし（exit 1 = 誤り） |
 | `adopt.py golden add／record／check／list` | 現状の挙動（終了コード・標準出力・標準エラー）を記録して再生する特性化テスト | `tests/system/golden/` |
@@ -87,3 +87,4 @@ python scripts/adopt.py request                           # ② Copilot への�
 - 回収したまとまりは `docs/baseline/evidence.json` に残ります。コードを変更した後は `adopt.py check`（verify の外で実行。`--strict` は警告も失敗にする）で DRIFT を確認します。
 - `docs/baseline/` と `tests/system/golden/` は git で管理します（チームで共有する）。
 - `adopt.py scan` は何度でも実行できます（上書き）。基準の commit が HEAD と違えば、`check` が STALE を出します。
+- golden のケースは `tests/system/golden/golden.json` に、記録は `tests/system/golden/snapshots/<NAME>.json` に置きます。時刻・UUID・アドレス・リポジトリのパスは自動で置き換えます。それ以外の変わる値は、ケースに `"normalize": [{"regex": "…", "replace": "<X>"}]` を足して置き換えます。ケースの `"timeout"` は秒です（既定 60）。コマンドは環境変数 `PYTHONHASHSEED=0`・`TZ=UTC`・`LC_ALL=C.UTF-8` を付けて実行し、ケースの `"env"`（`golden add --env K=V`）が優先します。`"stdin"`（`--stdin`）は標準入力、`"cwd"`（`--cwd`）はリポジトリのルートからの作業フォルダーです。

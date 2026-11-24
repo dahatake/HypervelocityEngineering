@@ -17,9 +17,10 @@ The ledger is derived from what the management data already has; no entity file 
                    `エンティティの使い方: 注文（作成）、顧客（参照/更新）` (作成・参照・更新・削除) and
                    `利用シナリオ: 1、2` (numbers of the numbered list in section 5)
 Optional setting in scripts/ebak.config.json (the enterprise data catalog; absent or "利用しない" = not used: no check, no ToDo):
-  "enterprise_data_catalog": {"source": "<file path or http(s) URL>", "name_column": "<column / key of the entity name>"}
+  "enterprise_data_catalog": {"source": "<file path or http(s) URL>", "name_column": "<column / key of the entity name>",
+                              "similarity_threshold": 0.8, "timeout_sec": 10}   (the last two are optional)
 The source is read only (never written, never cached; the body is not copied: only names and positions are shown).
-URLs: http / https only, no credentials in the URL, at most PARAM-016 seconds (default 10).
+URLs: http / https only, no credentials in the URL, at most timeout_sec seconds (default 10 = the toolkit's PARAM-016).
 
 Exit code: 0 (also for differences and 照合不能); with `check --strict`, 1 when there are differences or the source is
 unusable; 2 for a usage error.  The commands never write to the target repository.
@@ -996,19 +997,24 @@ def _format_from(name: str, ctype: str = "") -> str:
 
 
 def params(root: Path, cfg: dict) -> Tuple[float, float]:
-    """(PARAM-015 similarity threshold, PARAM-016 timeout seconds) from the requirements; defaults when absent."""
+    """(similarity threshold, timeout seconds). FR-1023 AC-552: defaults are the toolkit's PARAM-015 / PARAM-016;
+    a target overrides them with enterprise_data_catalog.similarity_threshold / timeout_sec. The target's own
+    requirements are not read - its PARAM-015 / PARAM-016 are its own parameters with other meanings."""
     thr, tmo = DEFAULT_THRESHOLD, DEFAULT_TIMEOUT
-    try:
-        doc = h.parse_requirements(root, cfg)
-        for pid, cur in (("PARAM-015", "t"), ("PARAM-016", "o")):
-            v = re.search(r"\d+(?:\.\d+)?", doc.params.get(pid, {}).get("value", ""))
-            if v:
-                if cur == "t" and 0 < float(v.group(0)) <= 1:
-                    thr = float(v.group(0))
-                elif cur == "o" and float(v.group(0)) > 0:
-                    tmo = float(v.group(0))
-    except Exception:  # noqa: BLE001
-        pass
+    conf = cfg.get("enterprise_data_catalog")
+    if isinstance(conf, dict):
+        try:
+            v = float(conf.get("similarity_threshold", thr))
+            if 0 < v <= 1:
+                thr = v
+        except (TypeError, ValueError):
+            pass
+        try:
+            v = float(conf.get("timeout_sec", tmo))
+            if v > 0:
+                tmo = v
+        except (TypeError, ValueError):
+            pass
     return thr, tmo
 
 

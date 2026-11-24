@@ -3,9 +3,9 @@
 # S3 "In This Situation, How Do I Look at It?"
 
 ## I want to report progress
-1. Look at "Approved," "Implementation registered," and "Tests passed" on the Dashboard.
-2. In "Implementation progress by goal," check which goals are behind.
-3. On the 2D map, set the color to "Implementation status." Red dots are requirements whose implementation has not yet been registered.
+1. Look at "Approved," "Implementation registered," and "Tests passing" on the Dashboard.
+2. In "Implementation per goal," check which goals are behind.
+3. On the 2D map, set the color to "By implementation." Red dots are requirements whose implementation has not yet been registered.
 
 > "Implementation registered" only means whether implementation files are written in the catalog. It does not guarantee that things work. Confirm behavior with "Tests passed" and the "Test cases" table.
 
@@ -19,7 +19,7 @@ In the goal tree (Diagrams), look at the colors of each goal's requirements. Cli
 
 ## I want to find everything that's "stalled"
 - Click "BLOCKED requirements" on the Dashboard → they are highlighted on the map.
-- In the "Questionnaire" table, filter for questions whose status is "Unanswered." Once the answers are decided, the stalled requirements can move forward (ask HVE's agent to record the answers).
+- In the "Questions" tab of Tables, filter for questions whose status is "Unanswered." Once the answers are decided, the stalled requirements can move forward (ask HVE's agent to record the answers).
 - In the "Audit findings" table, check the unresolved findings.
 
 ## I want to see what's awaiting approval (AI proposals)

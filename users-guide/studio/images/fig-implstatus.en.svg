@@ -12,11 +12,11 @@
 <rect x="1008" y="18" width="52" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
 <text x="1034" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">JA | EN</text>
 <rect x="865.2" y="18" width="126.80000000000001" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
-<text x="928.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Software Engineer</text>
+<text x="928.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">GRAPH</text>
 <rect x="783.6" y="18" width="75.6" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
-<text x="821.4" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Architect</text>
+<text x="821.4" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">3D</text>
 <rect x="663.6" y="18" width="114.0" height="24" rx="12" fill="#e8f1fb" stroke="#c8c8c8" stroke-width="1" />
-<text x="720.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Product Manager</text>
+<text x="720.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">2D</text>
 <text x="61.599999999999994" y="76" font-size="12" fill="#444" font-weight="normal" text-anchor="middle">Dashboard</text>
 <rect x="105.19999999999999" y="56" width="103.6" height="30" rx="6" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
 <rect x="111.19999999999999" y="83" width="91.6" height="3" rx="1" fill="#0f5fa8" stroke="#0f5fa8" stroke-width="1" />
@@ -42,8 +42,8 @@
 <text x="315.0" y="143" font-size="12" fill="#0f5fa8" font-weight="bold" text-anchor="middle">Kanban</text>
 <rect x="353" y="126" width="57" height="26" rx="13" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
 <text x="381.5" y="143" font-size="12" fill="#333" font-weight="normal" text-anchor="middle">Table</text>
-<rect x="416" y="126" width="57" height="26" rx="13" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
-<text x="444.5" y="143" font-size="12" fill="#333" font-weight="normal" text-anchor="middle">Gantt</text>
+<rect x="416" y="126" width="92" height="26" rx="13" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
+<text x="462.0" y="143" font-size="12" fill="#333" font-weight="normal" text-anchor="middle">Gantt chart</text>
 <text x="44" y="188" font-size="12" fill="#444" font-weight="bold" text-anchor="start">Overall split (select a segment to highlight or filter)</text>
 <rect x="24" y="198" width="261.0" height="34" rx="4" fill="#9e9e9e" stroke="none" stroke-width="1" />
 <text x="34" y="220" font-size="12" fill="#fff" font-weight="bold" text-anchor="start">Not started 25%</text>
@@ -94,7 +94,7 @@
 <circle cx="24" cy="252" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
 <text x="24" y="256.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">3</text>
 <rect x="24" y="556" width="517.5999999999999" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
-<text x="32" y="571" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">1 Switch the view (overall / by goal / by priority / kanban / table / Gantt)</text>
+<text x="32" y="571" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">1 Switch the view (overall / by goal / by priority / kanban / table / Gantt chart)</text>
 <rect x="24" y="584" width="577.0" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
 <text x="32" y="599" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">2 Colors: gray = not started, yellow = implementation registered, green = test passed</text>
 <rect x="24" y="612" width="445.0" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />

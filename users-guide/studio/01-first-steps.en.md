@@ -9,11 +9,11 @@ If you meet the following, you can use HVE Studio. Items that have been confirme
 | Item | Prerequisite | Basis / confirmation status |
 |---|---|---|
 | Python | Python 3.9 or later is required. | Confirmed: [`README.md`](../../HVE-Studio/README.md) |
-| Additional installation | No additional Python packages are needed. three.js for 3D display is bundled. Git repository analysis requires the `git` command. | Confirmed: [`README.md`](../../HVE-Studio/README.md), `repo_scan.py` |
+| Additional installation | No additional Python packages are needed. three.js for 3D display is bundled. Git repository analysis requires the `git` command. Only optional features need more: an authenticated `gh` CLI for GitHub Issues, PRs and Actions; the Azure CLI (`az login`) for Entra ID in "Ask AI"; `pip install microsoft-copilot-sdk` for the GitHub Copilot SDK. | Confirmed: [`README.md`](../../HVE-Studio/README.md), `repo_scan.py`, `remote_github.py`, `ai.py` |
 | Launch script | You can use `start.ps1` on Windows and `start.sh` on macOS/Linux. The range of operation checks per OS version is unconfirmed. | Confirmed: [`start.ps1`](../../HVE-Studio/start.ps1), [`start.sh`](../../HVE-Studio/start.sh) |
 | Browser | A browser that can open a local URL is required. Supported browser names and versions are unconfirmed. | Confirmed: the specification opens a browser at launch. Supported range is unconfirmed. |
 | Target repository | Specify a repository that has HVE management data (any location where `docs/requirements-definition.md` or `docs/catalog.md` can be found), or a git repository without HVE (code mode; see "Using Studio without HVE" below). | Confirmed: [`README.md`](../../HVE-Studio/README.md) |
-| Network | No internet connection is needed. Studio listens only on `127.0.0.1`, and the default port is `8765`. | Confirmed: [`README.md`](../../HVE-Studio/README.md) |
+| Network | No internet connection is needed (only for the GitHub fetch and AI). Studio listens only on `127.0.0.1`, and the default port is `8765` (if in use, up to 20 following numbers are tried). | Confirmed: [`README.md`](../../HVE-Studio/README.md), `studio.py` |
 | Permissions / network settings | Whether administrator rights, firewall/proxy settings, or permission to use a local port are required is unconfirmed. If they become necessary, ask your organization's device or network administrator. | Unconfirmed |
 
 ## Launching
@@ -34,21 +34,20 @@ The Product Manager's work steps (1 Understand the whole … 6 Tidy up and recor
 
 ```powershell
 python HVE-Studio/studio.py --check
-python HVE-Studio/studio.py --check
 ```
 
 The browser opens and shows `http://127.0.0.1:8765/` (if that port is in use, the next number; check the URL shown in the terminal). To stop, press `Ctrl+C` in the terminal.
 
 The startup splash shows application loading, source and project data analysis, and preparation of the initial view. Progress represents completed stages, not an estimate of files or remaining time. If loading fails, the error and a retry action are shown.
 
-On Windows you can also launch with `.\HVE-Studio\start.ps1 <repository>`, and on macOS / Linux with `./HVE-Studio/start.sh <repository>`. Options can be passed as `-Check`, `-NoOpen` in PowerShell, and in the shell like `./HVE-Studio/start.sh . 8765 --no-open`.
+On Windows you can also launch with `.\HVE-Studio\start.ps1 <repository>`, and on macOS / Linux with `./HVE-Studio/start.sh <repository>`. Options can be passed as `-Check`, `-NoOpen` in PowerShell, and in the shell like `./HVE-Studio/start.sh . 8765 --no-open`. In the HVE distribution repository, you can also double-click `start-hve-studio.cmd` (Windows) or `start-hve-studio.command` (macOS) at the root; it opens that folder on port 8765.
 
 Role-specific walkthroughs are in [05-product-manager.en.md](05-product-manager.en.md), [06-architect.en.md](06-architect.en.md), and [07-software-engineer.en.md](07-software-engineer.en.md).
 
 ## Your first 10 minutes
 
 First press the yellow **"New here?"** button at the top right and go through the tour to the end (with figures: [S9 Visual tour](09-visual-tour.en.md)).
-The global **Display data** banner always shows whether the generated file exists, its path and synchronization state. **Create / sync** reports actual stages and processed counts. After viewing a reference-only repository, **Delete** removes only that generated file; browsing continues from originals. Opening or browsing alone creates nothing.
+The global **HVE Studio display data** banner always shows whether the generated file exists, its path and synchronization state. **Create / sync** reports actual stages and processed counts. After viewing a reference-only repository, **Delete generated data** removes only that generated file; browsing continues from originals. Opening or browsing alone creates nothing.
 
 The same actions are available from the CLI without starting a server:
 
@@ -61,7 +60,7 @@ python HVE-Studio/studio.py --repo C:\path\to\your-repo --delete-data
 Installation and updates also synchronize with progress. The file is `.hve-studio/managed-data.json`, not a migration into authoritative requirements or invented test passes. See the [data reference](08-data-reference.en.md#display-data-fr-1090) for preservation and conflict behavior.
 
 1. Look at the **Dashboard**. It shows the number of requirements, the share approved, the share with implementation registered, unanswered questions, and BLOCKED (stalled requirements).
-2. Click a bar in "Implementation progress by goal." The requirements belonging to that goal are highlighted on the map.
+2. Click a bar in "Implementation per goal." The requirements belonging to that goal are highlighted on the map.
 3. On the **2D map**, scroll the wheel to zoom in and out, and drag to move. Point at a dot and the items directly connected to it light up.
 4. Click a dot. Details (requirement text, acceptance criteria, implementation files, tests) appear on the right. Press `Esc` to clear.
 5. In the search box at the top of the screen (press `/` to jump to it), enter a word you're curious about (e.g., "login") and pick a result. Related items are highlighted in the diagram.

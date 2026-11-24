@@ -12,11 +12,11 @@
 <rect x="1008" y="18" width="52" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
 <text x="1034" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">JA | EN</text>
 <rect x="865.2" y="18" width="126.80000000000001" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
-<text x="928.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Software Engineer</text>
+<text x="928.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">GRAPH</text>
 <rect x="783.6" y="18" width="75.6" height="24" rx="12" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
-<text x="821.4" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Architect</text>
+<text x="821.4" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">3D</text>
 <rect x="663.6" y="18" width="114.0" height="24" rx="12" fill="#e8f1fb" stroke="#c8c8c8" stroke-width="1" />
-<text x="720.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">Product Manager</text>
+<text x="720.6" y="35" font-size="11" fill="#333" font-weight="normal" text-anchor="middle">2D</text>
 <rect x="20" y="56" width="83.19999999999999" height="30" rx="6" fill="#fff" stroke="#c8c8c8" stroke-width="1" />
 <rect x="26" y="83" width="71.19999999999999" height="3" rx="1" fill="#0f5fa8" stroke="#0f5fa8" stroke-width="1" />
 <text x="61.599999999999994" y="76" font-size="12" fill="#0f5fa8" font-weight="bold" text-anchor="middle">Dashboard</text>
@@ -40,21 +40,21 @@
 <text x="186" y="180" font-size="11" fill="#555" font-weight="normal" text-anchor="start">Approved %</text>
 <rect x="320" y="126" width="138" height="64" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
 <text x="334" y="159" font-size="24" fill="#222" font-weight="bold" text-anchor="start">60.1%</text>
-<text x="334" y="180" font-size="11" fill="#555" font-weight="normal" text-anchor="start">Implemented %</text>
+<text x="334" y="180" font-size="11" fill="#555" font-weight="normal" text-anchor="start" textLength="120" lengthAdjust="spacingAndGlyphs">Implementation registered %</text>
 <rect x="468" y="126" width="138" height="64" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
 <text x="482" y="159" font-size="24" fill="#222" font-weight="bold" text-anchor="start">396</text>
 <text x="482" y="180" font-size="11" fill="#555" font-weight="normal" text-anchor="start">Acceptance criteria</text>
 <rect x="616" y="126" width="138" height="64" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
 <text x="630" y="159" font-size="24" fill="#222" font-weight="bold" text-anchor="start">52%</text>
-<text x="630" y="180" font-size="11" fill="#555" font-weight="normal" text-anchor="start">Tests passed %</text>
+<text x="630" y="180" font-size="11" fill="#555" font-weight="normal" text-anchor="start">Tests passing %</text>
 <rect x="764" y="126" width="138" height="64" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
 <text x="778" y="159" font-size="24" fill="#107c10" font-weight="bold" text-anchor="start">0</text>
 <text x="778" y="180" font-size="11" fill="#555" font-weight="normal" text-anchor="start">Open questions</text>
 <rect x="912" y="126" width="138" height="64" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
 <text x="926" y="159" font-size="24" fill="#107c10" font-weight="bold" text-anchor="start">0</text>
-<text x="926" y="180" font-size="11" fill="#555" font-weight="normal" text-anchor="start">BLOCKED reqs</text>
+<text x="926" y="180" font-size="11" fill="#555" font-weight="normal" text-anchor="start">BLOCKED requirements</text>
 <rect x="24" y="206" width="330" height="290" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
-<text x="40" y="232" font-size="14" fill="#222" font-weight="bold" text-anchor="start">Decision state</text>
+<text x="40" y="232" font-size="14" fill="#222" font-weight="bold" text-anchor="start">Decision status</text>
 <circle cx="130" cy="352" r="66" fill="none" stroke="#107c10" stroke-width="24" stroke-dasharray="269.5 145.1" stroke-dashoffset="-0.0" transform="rotate(-90 130 352)"/>
 <circle cx="130" cy="352" r="66" fill="none" stroke="#666" stroke-width="24" stroke-dasharray="132.7 282.0" stroke-dashoffset="-269.5" transform="rotate(-90 130 352)"/>
 <circle cx="130" cy="352" r="66" fill="none" stroke="#8a5a00" stroke-width="24" stroke-dasharray="12.4 402.2" stroke-dashoffset="-402.2" transform="rotate(-90 130 352)"/>
@@ -78,7 +78,7 @@
 <circle cx="582" cy="368" r="6" fill="#c0309b" stroke="none" stroke-width="1"/>
 <text x="594" y="372" font-size="12" fill="#222" font-weight="normal" text-anchor="start">SHOULD 60</text>
 <rect x="716" y="206" width="360" height="290" rx="8" fill="#fff" stroke="#d8d8d8" stroke-width="1" />
-<text x="732" y="232" font-size="14" fill="#222" font-weight="bold" text-anchor="start">Implementation progress by goal</text>
+<text x="732" y="232" font-size="14" fill="#222" font-weight="bold" text-anchor="start">Implementation per goal</text>
 <text x="732" y="262" font-size="12" fill="#0f5fa8" font-weight="bold" text-anchor="start">G-001</text>
 <text x="1050" y="262" font-size="12" fill="#222" font-weight="bold" text-anchor="end">49/57</text>
 <rect x="732" y="270" width="318" height="9" rx="4" fill="#e8e8e8" stroke="none" stroke-width="1" />
@@ -104,8 +104,8 @@
 <text x="40" y="210.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">2</text>
 <circle cx="716" cy="206" r="12" fill="#d83b01" stroke="#fff" stroke-width="2"/>
 <text x="716" y="210.5" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle">3</text>
-<rect x="24" y="520" width="412.0" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
-<text x="32" y="535" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">1 Select a card to jump to the matching list of requirements</text>
+<rect x="24" y="520" width="452" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
+<text x="32" y="535" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">1 Select a card to highlight the matching requirements on the map</text>
 <rect x="24" y="548" width="398.79999999999995" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />
 <text x="32" y="563" font-size="12" fill="#5c4400" font-weight="normal" text-anchor="start">2 Donuts: the overall breakdown (decision state, priority)</text>
 <rect x="24" y="576" width="398.79999999999995" height="22" rx="4" fill="#fff4ce" stroke="#d8a800" stroke-width="1" />

@@ -9,11 +9,11 @@
 | 項目 | 前提条件 | 根拠・確認状況 |
 |---|---|---|
 | Python | Python 3.9 以上が必要です。 | 確認済み: [`README.md`](../../HVE-Studio/README.md) |
-| 追加インストール | 追加インストール不要です（Python パッケージ）。3D 表示用の three.js は同梱されています。Git リポジトリの解析には `git` コマンドが必要です。 | 確認済み: [`README.md`](../../HVE-Studio/README.md)、`repo_scan.py` |
+| 追加インストール | 追加インストール不要です（Python パッケージ）。3D 表示用の three.js は同梱されています。Git リポジトリの解析には `git` コマンドが必要です。任意の機能だけ追加が必要です: GitHub の Issue・PR・Actions の取得には認証済みの `gh` CLI、「AI に聞く」の Entra ID には Azure CLI（`az login`）、GitHub Copilot SDK には `pip install microsoft-copilot-sdk`。 | 確認済み: [`README.md`](../../HVE-Studio/README.md)、`repo_scan.py`、`remote_github.py`、`ai.py` |
 | 起動スクリプト | Windows では `start.ps1`、macOS/Linux では `start.sh` を利用できます。各 OS の版別の動作確認範囲は未確認です。 | 確認済み: [`start.ps1`](../../HVE-Studio/start.ps1)、[`start.sh`](../../HVE-Studio/start.sh) |
 | ブラウザー | ローカル URL を開くブラウザーが必要です。対応するブラウザー名・版は未確認です。 | 確認済み: 起動時にブラウザーを開く仕様。対応範囲は未確認。 |
 | 対象リポジトリ | HVE の管理データがあるリポジトリ（`docs/requirements-definition.md` または `docs/catalog.md` が見つかる場所）か、HVE のない git リポジトリ（コードのモード。下の「HVE なしで Studio を使う」）を指定します。 | 確認済み: [`README.md`](../../HVE-Studio/README.md) |
-| ネットワーク | インターネット接続は不要です。Studio は `127.0.0.1` だけで待ち受け、既定ポートは `8765` です。 | 確認済み: [`README.md`](../../HVE-Studio/README.md) |
+| ネットワーク | インターネット接続は不要です（GitHub の取得と AI を使うときだけ必要です）。Studio は `127.0.0.1` だけで待ち受け、既定ポートは `8765` です（使用中なら次の番号を 20 個まで試します）。 | 確認済み: [`README.md`](../../HVE-Studio/README.md)、`studio.py` |
 | 権限・ネットワーク設定 | 管理者権限、ファイアウォール／プロキシの設定、ローカルポート利用許可が必要かどうかは未確認です。必要になった場合は、組織の端末・ネットワーク管理者に確認してください。 | 未確認 |
 
 ## 起動
@@ -34,21 +34,20 @@ python HVE-Studio/studio.py --repo C:\path\to\your-repo
 
 ```powershell
 python HVE-Studio/studio.py --check
-python HVE-Studio/studio.py --check
 ```
 
 ブラウザーが開き、`http://127.0.0.1:8765/` を表示します（使用中なら次の番号。ターミナルに出る URL を見てください）。止めるときはターミナルで `Ctrl+C` です。
 
 起動中はスプラッシュ画面にアプリの読込み、ソース・管理データの解析、初期画面の準備を表示します。進捗は完了した段階を示し、ファイル数や残り時間の推定ではありません。読込みに失敗した場合は原因と再試行を確認できます。
 
-Windows は `.\HVE-Studio\start.ps1 <リポジトリ>`、macOS / Linux は `./HVE-Studio/start.sh <リポジトリ>` でも起動できます。オプションは、PowerShell では `-Check`・`-NoOpen`、シェルでは `./HVE-Studio/start.sh . 8765 --no-open` のように渡せます。
+Windows は `.\HVE-Studio\start.ps1 <リポジトリ>`、macOS / Linux は `./HVE-Studio/start.sh <リポジトリ>` でも起動できます。オプションは、PowerShell では `-Check`・`-NoOpen`、シェルでは `./HVE-Studio/start.sh . 8765 --no-open` のように渡せます。HVE の配布元のリポジトリでは、ルートの `start-hve-studio.cmd`（Windows）・`start-hve-studio.command`（macOS）をダブルクリックしても、そのフォルダーを対象にポート 8765 で起動します。
 
 役割別の進め方は [05-product-manager.md](05-product-manager.md)・[06-architect.md](06-architect.md)・[07-software-engineer.md](07-software-engineer.md) にあります。
 
 ## 最初の 10 分
 
 まず画面右上の黄色い **「初めての方へ」** を押して、案内を最後まで進めてください（図つきの説明は [S9 画面ツアー](09-visual-tour.md)）。
-画面上部の **表示用管理データ** に、生成ファイルの有無・場所・同期状態を常に表示します。必要なときに **作成・同期** を押すと、段階と処理数の進捗を確認できます。参照後は **削除** で生成ファイルだけを除き、原本からの閲覧を続けられます。起動・閲覧だけでは作成しません。
+画面上部の **表示用管理データ** に、生成ファイルの有無・場所・同期状態を常に表示します。必要なときに **作成・同期** を押すと、段階と処理数の進捗を確認できます。参照後は **生成データを削除** で生成ファイルだけを除き、原本からの閲覧を続けられます。起動・閲覧だけでは作成しません。
 
 CLI でも同じ操作を行えます（サーバーは起動しません）。
 

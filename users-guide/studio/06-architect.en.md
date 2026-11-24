@@ -4,7 +4,7 @@
 
 This guide shows you how to verify the **connections, boundaries, and placement** between requirements and implementation from a design perspective. It takes about 15 minutes.
 
-Choose work step 3 "Check the impact" at the top of the screen to open the 2D map (the role selector was replaced by the work steps on 2026-11-20).
+Choose work step 3 "Check the impact" at the top of the screen to open Source Map (the floorplan); Map and Diagrams open from the same step's tabs (the role selector was replaced by the work steps on 2026-11-20).
 
 ## S6.1 Screens to view and the data they read
 
@@ -12,9 +12,9 @@ Choose work step 3 "Check the impact" at the top of the screen to open the 2D ma
 |---|---|---|
 | 2D / 3D map | Dependencies of goal → requirement → data, components, APIs, tables → files → tests. Isolation and concentration | Requirements definition, catalog, ledger |
 | Diagrams | Boundary (context), state transitions, data relationships, components | Tables in the requirements definition, catalog paths |
-| Placement | Which requirements and data are implemented in which components | Requirements, catalog paths |
+| Placement diagram in Diagrams (formerly "Placement") | Which requirements and data are implemented in which components | Requirements, catalog paths |
 | Placement (runtime) | What Studio reads, what it writes, and what it sends outside | Files read, external integrations |
-| Source mapping | How densely files map to requirements | Catalog paths (code is not read) |
+| Source Map | How densely files map to requirements (source map); how functions and parts relate (floorplan, network view) | The source map uses catalog paths only; the floorplan and network view analyze the source read-only (never run) |
 | Structure | The gap between current and ideal for the 6 data layers | All data layers |
 | Consistency | Gaps in requirement → AC → test → catalog → implementation | Requirements, ledger, catalog |
 
@@ -24,17 +24,17 @@ Choose work step 3 "Check the impact" at the top of the screen to open the 2D ma
    ```powershell
    python HVE-Studio/studio.py
    ```
-2. **Get an overview** (2 minutes). The 2D map runs from left to right: "goal → requirement → data, shared components, APIs, tables → source files → test cases." Zoom with the wheel and pan by dragging. Double-click or use `Bird's-eye view` to return to the whole view.
+2. **Get an overview** (2 minutes). The 2D map runs from left to right: "goal → requirement → data, shared components, APIs, tables → source files → test cases." Zoom with the wheel and pan by dragging. Double-click or use `Bird's-eye` to return to the whole view.
 
    ![2D map](images/map2d.png)
 
-   With `Layers` you can add acceptance criteria, parameters, and questions. Setting the color switch to `Implementation status` immediately shows requirements with no implementation files (red).
+   With `Layers` you can add acceptance criteria, parameters, and questions. Setting the color switch to `By implementation` immediately shows requirements with no implementation files (red).
 3. **See the impact range of one requirement** (2 minutes). Click a requirement's dot. Relations up to two hops away (data, components, files, tests) are highlighted, and details appear on the right. This gives you a sense of "where a change would ripple." Press `Esc` to clear.
 4. **View in 3D** (1 minute). In `3D map`, the same relationships appear as layers. Use `Side` to check how the layers stack, and `Top` to check how the placement spreads.
 5. **Check the boundaries** (2 minutes). In `Diagrams` → `Context diagram`, check the users (personas) and external integrations (method, source of truth). Next, in `State transition diagram`, check the states and transitions of each entity.
 
    ![State transition diagram](images/states.png)
-6. **Check where things are placed** (2 minutes). Open `Placement`. The number at the intersection of a row (goal, boundary, kind) and a column (component) is how many of that row's requirements have an implementation in that component. Look for concentration in particular columns, and for a single requirement scattered across many components.
+6. **Check where things are placed** (2 minutes). Open `Diagrams` → `Placement diagram` (formerly "Placement"). The number at the intersection of a row (goal, boundary, kind) and a column (component) is how many of that row's requirements have an implementation in that component. Look for concentration in particular columns, and for a single requirement scattered across many components.
 
    ![Placement](images/placement.png)
 
@@ -81,6 +81,6 @@ Choose work step 3 "Check the impact" at the top of the screen to open the 2D ma
 - The position (coordinates) of a dot on the map has no meaning. What matters is whether it is connected by a line, and which column or layer it is in.
 - A component is determined by the first one or two levels of the path written in the catalog ([S8.5.2](08-data-reference.en.md)). It is not necessarily an actual build unit.
 - The basis for a relationship is only what is **written** in the requirements and catalog. For relationships in the ER diagram, when there is no `関係` (relationship) description, it does not guess and shows "relationship information is insufficient."
-- Source code is not read. Actual code dependencies (such as imports) cannot be determined with this tool.
+- The Map, Diagrams and source map do not read source code. Actual calls and imports are shown, as the result of a read-only analysis, under "See how functions relate" (floorplan, network view) in Source Map.
 
 Next, proceed to [07-software-engineer.en.md](07-software-engineer.en.md) or [08-data-reference.en.md](08-data-reference.en.md).

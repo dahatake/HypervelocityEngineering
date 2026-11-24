@@ -13,7 +13,7 @@ HVE Lite の 1 回の変更は、次の 5 段階で進みます。どれも、�
 （いつでも）           状況は HVE Studio で見る
 ```
 
-> 0.5.x から移行した方へ: run・工程・統合ブランチ・`run-report.md`・自動の main への取り込みはありません。変更はふつうのブランチと PR で取り込みます。0.5.x の run が残した worktree と `work/*` ブランチは自動では消えません。`git worktree list` と `git branch --list "work/*"` で確かめて、手で削除します（[9. 版の管理](09-versioning.md)）。
+> 0.5.x から移行した方へ: run・工程・統合ブランチ・`run-report.md`・自動の main への取り込みはありません。変更はふつうのブランチと PR で取り込みます。0.5.x の run が残した worktree と `work/*`・`run/*` ブランチは自動では消えません。`git worktree list` と `git branch --list "work/*" "run/*"` で確かめて、手で削除します（[9. バージョンアップの手順](09-versioning.md)）。
 
 ## 2.1 依頼する
 
@@ -54,7 +54,8 @@ exit 0 なら合格です。通常は Copilot が完了の前に実行してい�
 |---|---|
 | `ERROR CHK-07`・`CHK-08`・`CHK-17` などカタログ・台帳・ID 台帳の不整合 | `python scripts/rdfix.py --apply` で自動修正します（要求定義書は変更しません）。残った `MANUAL` の行は、行に書かれた「担当」と「次の行動」に従って直します |
 | `ERROR CHK-01`（ID の重複・台帳にない ID） | [2.7](#27-複数の人複数の-pc-で使う) の手順で採番し直します |
-| `ERROR CHK-12`（AC の本文が変わったのに台帳のダイジェストが古い） | テストが新しい AC を検証していることを確かめてから、`python scripts/ledger.py digests --update` |
+| `ERROR CHK-12`（台帳のケースの削除、理由のない `command`・`ac_ids` の変更、System Test の検証の減少） | ケースは消さずに `python scripts/ledger.py block <ケース ID> --reason "..."`、変更は `ledger.py update ... --reason "..."` で理由を残します |
+| `CHK-11`（AC の本文が変わったのに台帳のダイジェストが古い。`--profile full` のときに出ます） | テストが新しい AC を検証していることを確かめてから、`python scripts/ledger.py digests --update` |
 | ビルド・テストのコマンドの失敗 | ログの全文は `/work` にあります。`python scripts/summarize.py <ログ>` で要点だけを読めます |
 
 既定の検査プロファイルは `lite` で、構造と追跡性の検査（`CHK-01, 02, 03, 05, 09, 12, 17, 19, 24`）だけを報告します。曖昧な語・数値の直書き・禁止された同義語などの書式の警告まで見たいときは、次のように `full` を指定します。
@@ -63,7 +64,7 @@ exit 0 なら合格です。通常は Copilot が完了の前に実行してい�
 python scripts/verify.py --docs-only --profile full --show-warnings
 ```
 
-検査項目の一覧は [6. 品質ゲートと検査項目](06-quality-gates.md)、オプションは [5. スクリプトリファレンス](05-scripts-reference.md) にあります。
+検査項目の一覧は [6. 検査と CI](06-quality-gates.md)、オプションは [5. スクリプトリファレンス](05-scripts-reference.md) にあります。
 
 ## 2.4 push と PR（CI）
 
@@ -73,11 +74,11 @@ git push -u origin feature/draft-save
 gh pr create --base main
 ```
 
-push と PR で、1 つのワークフローが動きます。
+PR と `main` への push で、1 つのワークフローが動きます（作業ブランチへの push だけでは動きません）。
 
 | ワークフロー | いつ動くか | すること |
 |---|---|---|
-| `ebak-verify`（`.github/workflows/ebak-verify.yml`） | push・PR | `scripts/verify.sh --show-warnings` を実行します。手元の `verify.py` と同じ検査です。読み取りの権限だけで動き、修復の commit も Issue も作りません |
+| `ebak-verify`（`.github/workflows/ebak-verify.yml`） | `main` への push・PR | `scripts/verify.sh --show-warnings` を実行します。手元の `verify.py` と同じ検査です。読み取りの権限だけで動き、修復の commit も Issue も作りません |
 
 CI のデータ層の検査が不合格なら、手元で `python scripts/rdfix.py --full --apply` を実行し、修復を同じ変更に含めて push し直します（要求定義書は変更しません）。CI が修復しないのは、読むだけの CI には書き込みの権限が要らず、bot が誰かの PR のブランチへ修復を push すると、ほかの人・PC のブランチと食い違うためです。
 

@@ -1,6 +1,6 @@
 [日本語](09-versioning.md) | **English**
 
-# Version upgrade procedure
+# 9. Version upgrade procedure
 
 This chapter covers how Enterprise App Build Kit versions are assigned, the procedure for bumping the version (for maintainers of the distribution source), and the procedure for updating an installed repository to a new version (for users).
 
@@ -28,9 +28,9 @@ This chapter covers how Enterprise App Build Kit versions are assigned, the proc
    ```bash
    python tools/bump-version.py minor     # 0.1.0 -> 0.2.0
    ```
-   `TOOLKIT_VERSION` is rewritten, and a heading for the new version is inserted under `[Unreleased]` in `CHANGELOG.md`. Running it with no argument only displays the current version.
+   `TOOLKIT_VERSION` is rewritten, and a heading for the new version is inserted under `[Unreleased]` in `CHANGELOG.md`. It then runs `tools/build-uninstall-catalog.py` and regenerates the uninstaller's catalog `tools/uninstall-catalog.json` (which records the version and the content of every shipped file). Running it with no argument only displays the current version.
 4. In `CHANGELOG.md`, move what you wrote under `[Unreleased]` to below the new version's heading.
-5. If you added, renamed, or removed distributed files, update `MANAGED` and `TEMPLATES` in `tools/install.py`, and this `users-guide/`, accordingly. List every file in `users-guide/` in `MANAGED`; in the target repository they are saved to `HVE-docs/` (the target's own `users-guide/` is not edited).
+5. If you added, renamed, or removed distributed files, update `MANAGED` and `TEMPLATES` in `tools/install.py`, and this `users-guide/`, accordingly. List every file in `users-guide/` in `MANAGED`; in the target repository they are saved to `HVE-docs/` (the target's own `users-guide/` is not edited). If you changed the list or the content of shipped files after step 3, run `python tools/build-uninstall-catalog.py` again (with a stale catalog, `tests/toolkit/test_uninstall.py` fails).
 6. Check the version, commit, and tag.
    ```bash
    python tools/install.py --version     # e.g. 0.4.0
@@ -52,8 +52,9 @@ The installed version is recorded in `version` in `.github/ebak-toolkit.json`.
    To see what would change, use `--dry-run` (in PowerShell, `-Check` and `-DryRun`).
 3. Update. Just run the install command again. To pin a specific version, add `EBAK_REF=v0.2.0`.
    ```bash
-   EBAK_REF=v0.2.0 curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.sh | bash
+   curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.sh | EBAK_REF=v0.2.0 bash
    ```
+   Put `EBAK_REF` on the `bash` side (placed before `curl`, it does not reach install.sh).
    In PowerShell, set `$env:EBAK_REF = "v0.2.0"` and then run the command in the README.
 4. Check the displayed results.
 
@@ -100,16 +101,18 @@ Steps:
 1. Make sure no 0.5.x run is in progress, and clean the working tree (`--clean` refuses to run with uncommitted changes).
 2. Review the list to delete (`CLEAN`), then do the clean install. Use `-Clean` in PowerShell.
    ```bash
-   python tools/install.py --target . --clean --dry-run
-   python tools/install.py --target . --clean
+   # run from the root of the toolkit clone (--target is the root of the repository to update)
+   python tools/install.py --target /path/to/your-repo --clean --dry-run
+   python tools/install.py --target /path/to/your-repo --clean
    ```
+   To run it in one line from the root of the repository to update, add `-Clean` (PowerShell) or `--clean` (`install.sh`) to the install command. Running the installed `tools/install.py` with `--target .` is refused, because the target and the toolkit source are the same.
    It deletes the files the toolkit installed (agents such as conductor, skills such as build, the hook files `.github/hooks/*.json` and `scripts/hooks/gate.py`, removed scripts, `.github/workflows/ebak-data-layer.yml`; modified ones too), `.ebak-backup-*`, the settings, the blocks, the lines appended to `.gitignore`/`.gitattributes`, and the manifest, then installs this version again. The management data, `/work`, and your application code and tests remain. The settings return to defaults, so check the previous values with `git diff scripts/ebak.config.json` and restore them. Running it twice in a row changes nothing the second time.
    - Data-layer files from older versions (`docs/run-history.md` from 0.5.x) and `.github/ebak-prompt-prefix.md` remain but are no longer read. Delete them by hand if you do not need them.
 3. Confirm that the block in AGENTS.md and `.github/copilot-instructions.md` has been replaced with the "Enterprise App Build Kit Lite" rules.
-4. Worktrees and `work/*` branches left by 0.5.x runs are not removed automatically. Check them and remove the ones you no longer need by hand.
+4. Worktrees and `work/*`/`run/*` branches left by 0.5.x runs are not removed by `--clean`. Check them and remove the ones you no longer need by hand (`python tools/uninstall.py --target <repo> --dry-run` also lists them as `RUN-WORKTREE` and `RUN-BRANCH`. `uninstall.py --runs` removes them together with uninstalling the toolkit, so do not use it when updating).
    ```bash
    git worktree list
-   git branch --list "work/*"
+   git branch --list "work/*" "run/*"
    git worktree remove <path>      # an unneeded worktree
    git branch -D <branch>          # an unneeded branch
    ```

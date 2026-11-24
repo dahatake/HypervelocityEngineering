@@ -8,7 +8,7 @@ This is a data-layer file that records, one item per integration, the app's inte
 
 - `python tools/install.py` creates the template `docs/integrations.md` (an explanation of the format and an empty index table) **only if it does not exist yet**. An existing catalog in the target is not overwritten, and its content does not change on update (rerun or `--force`).
 - The checks are built into the toolkit's `scripts/rdcheck.py` (CHK-28) and `scripts/next-id.py` (numbering of `INT`), and are updated by the same procedure as existing distributions (rerun). This chapter is also distributed to `HVE-docs/`. The behavior of `--no-ci` (do not install the workflow) is unchanged.
-- The file name can be changed with `management_files.integrations` in `scripts/ebak.config.json` (default `docs/integrations.md`).
+- The file name can be changed with `management_files.integrations` in `scripts/ebak.config.json` (default `docs/integrations.md`). The installer does not read this setting, so even after you change it, every rerun creates the template when `docs/integrations.md` is missing ([4.2](04-customization.en.md#42-management-data-paths-management_files)).
 
 ## 11.2 Format
 
@@ -47,17 +47,19 @@ Adding, changing, and retiring are done within the same change that alters the i
 
 ## 11.4 Checks (`python scripts/verify.py --docs-only`)
 
-Violations are reported with ID and location, and it ends with exit 1. If there are no violations, it exits 0.
+The check for the external integration catalog is CHK-28. CHK-28 is not in the scope of the default check profile `lite` (`checks.lite_checks`), so by default it is not reported and does not affect the exit code. To check it always, add `"CHK-28"` to `lite_checks`; to check it once, use `python scripts/verify.py --docs-only --profile full` ([4.4](04-customization.en.md#44-check-scope-checks)).
+
+When it is in scope, violations are reported with ID and location, and it ends with exit 1. If there are no violations, it exits 0.
 
 | Violation | Severity |
 |---|---|
-| Duplicate ID, malformed ID (not of the `INT-001` form) | error |
-| Missing required field, missing field for any of the 16 aspects, empty field | error |
+| Duplicate ID, malformed ID (not of the `INT-001` form), reuse of an ID marked deleted or skipped in the ID registry, missing name (after the ID in the heading) | error |
+| Missing required field, missing field for any of the 16 aspects, empty field, duplicated field | error |
 | Value not in the "value / none / TBD (Q-xxx)" form, TBD whose Q-ID is not in the question sheet | error |
 | Direction or status value outside the definition | error |
 | Related requirement ID not in the requirements definition, credential-like string or field | error |
 | `INT-xxx` referenced by the requirements definition is not in the catalog (undefined reference) | error |
-| Status is "in operation" but not all related requirements are approved; mismatch between the index table and the entries | warn |
+| Status is "in operation" but not all related requirements are approved; mismatch between the index table and the entries; ID not in the ID registry | warn |
 
 `python scripts/rdcheck.py trace INT-xxx` lists the requirements and acceptance criteria that reference that integration.
 

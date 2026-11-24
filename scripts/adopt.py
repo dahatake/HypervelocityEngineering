@@ -19,7 +19,7 @@ Usage:
   python scripts/adopt.py golden list
 
 Never edits docs/requirements-definition.md and never assigns toolkit IDs.
-Writes only under docs/baseline/ (facts, evidence), tests/system/golden/ (pinned behaviour) and work/import/ (request drafts).
+Writes only under docs/baseline/ (facts, evidence), tests/system/golden/ (pinned behaviour) and <work.dir>/import/ (request drafts; work.dir defaults to work).
 """
 from __future__ import annotations
 
@@ -545,9 +545,10 @@ def cmd_request(root: Path, a) -> int:
     if a.stdout:
         print(text)
         return 0
-    out = root / "work" / "import" / f"adopt-{time.strftime('%Y%m%d%H%M')}.md"
+    # FR-1102 AC-551: drafts go to the configured work folder (work.dir), like every other temporary file
+    out = h.work_dir(root, h.load_config(root)) / "import" / f"adopt-{time.strftime('%Y%m%d%H%M')}.md"
     h.write_text_atomic(out, "# 既存アプリの導入: Copilot への依頼文（チャットに貼り付ける）\n\n```text\n" + text + "```\n")
-    print(f"WROTE {out.relative_to(root).as_posix()}（{len(todo)} まとまり）。内容を Copilot のチャット（既定のエージェント）に貼り付けます")
+    print(f"WROTE {os.path.relpath(out, root).replace(os.sep, '/')}（{len(todo)} まとまり）。内容を Copilot のチャット（既定のエージェント）に貼り付けます")
     return 0
 
 

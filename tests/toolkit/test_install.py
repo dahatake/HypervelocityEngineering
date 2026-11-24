@@ -31,6 +31,8 @@ def test_fresh_install_layout(empty_repo):
     cfg = json.loads((empty_repo / "scripts/ebak.config.json").read_text(encoding="utf-8"))
     assert cfg["checks"]["profile"] == "lite" and not {"gates", "limits", "credits", "worktree_share", "prompt_prefix"} & set(cfg)
     assert cfg["verify"]["commands"] == [] and "retention_days" not in cfg["work"]  # the target registers its own
+    # FR-1102 AC-550: the source repository's own id_scan_exclude is not shipped (the ebaklib defaults apply)
+    assert "id_scan_exclude" not in cfg["checks"] and "_id_scan_exclude_note" not in cfg["checks"]
     assert "run_history" not in cfg["management_files"]
     assert not (empty_repo / ".github/prompts").exists()
     assert "/work/" in (empty_repo / ".gitignore").read_text(encoding="utf-8")
@@ -271,6 +273,37 @@ def test_purge_removes_everything_the_toolkit_added(empty_repo):
         assert (empty_repo / rel).exists(), rel
     # the repository can be installed again afterwards
     assert install(empty_repo).returncode == 0 and (empty_repo / ".github/ebak-toolkit.json").exists()
+
+
+# FR-1102 AC-549 AC-550 / FR-1087 AC-475: templates go to the target's management_files paths (never outside the
+# repository), the user's id_scan_exclude survives an update, and --purge removes the data at the configured paths
+def test_templates_and_purge_follow_configured_paths(empty_repo):
+    (empty_repo / "scripts").mkdir()
+    cfg = {"management_files": {"catalog": "spec/catalog.md"}, "checks": {"id_scan_exclude": ["legacy/**"]}}
+    (empty_repo / "scripts/ebak.config.json").write_text(json.dumps(cfg), encoding="utf-8")
+    proc = install(empty_repo)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert (empty_repo / "spec/catalog.md").exists() and not (empty_repo / "docs/catalog.md").exists()
+    assert (empty_repo / "docs/requirements-definition.md").exists()
+    merged = json.loads((empty_repo / "scripts/ebak.config.json").read_text(encoding="utf-8"))
+    assert merged["checks"]["id_scan_exclude"] == ["legacy/**"] and "_id_scan_exclude_note" not in merged["checks"]
+    assert "docs/catalog.md" not in install(empty_repo, "--dry-run").stdout
+    assert not (empty_repo / "docs/catalog.md").exists()
+    proc = install(empty_repo, "--purge")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert not (empty_repo / "spec/catalog.md").exists() and not (empty_repo / "docs/requirements-definition.md").exists()
+
+
+def test_template_dest_never_leaves_the_repository(empty_repo):
+    sys.path.insert(0, str(SOURCE / "tools"))
+    import install as inst
+    (empty_repo / "scripts").mkdir()
+    for bad in ("../outside.md", str(empty_repo.parent / "abs.md"), "", 3):
+        (empty_repo / "scripts/ebak.config.json").write_text(json.dumps({"management_files": {"catalog": bad}}), encoding="utf-8")
+        ins = inst.Installer(SOURCE, empty_repo, True, False, False)
+        assert ins.template_dest("docs/catalog.md") == "docs/catalog.md", bad
+    (empty_repo / "scripts/ebak.config.json").write_text("{broken", encoding="utf-8")
+    assert inst.Installer(SOURCE, empty_repo, True, False, False).template_dest("docs/catalog.md") == "docs/catalog.md"
 
 
 # FR-1087 AC-478: the wrappers run tools/uninstall.py with its catalog (local clone or the two downloaded files)

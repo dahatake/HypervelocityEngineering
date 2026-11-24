@@ -301,7 +301,7 @@ def sync(root: Path, cfg: dict, adopt: bool, finalize: bool) -> int:
 def main(argv=None) -> int:
     h.setup_io()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("kind", nargs="?", help="FR, NFR-<区分>, AC, Q, PARAM, G, SRC, E2E, IT")
+    ap.add_argument("kind", nargs="?", help="FR, NFR-<区分>, AC, Q, PARAM, G, SRC, E2E, IT, INT")
     ap.add_argument("--count", type=int, default=1)
     ap.add_argument("--note", default="")
     ap.add_argument("--peek", action="store_true", help="採番せずに次の ID を表示する")

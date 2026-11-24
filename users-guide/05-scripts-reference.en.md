@@ -2,7 +2,7 @@
 
 # 5. Scripts Reference
 
-All scripts run on the Python 3.9+ standard library only. They can be run from anywhere in the repository and operate relative to the git root. The exact list of options is shown by `python scripts/<name>.py --help`. Output is short and in a form an LLM can read as is (one finding per line, with a one-line summary at the end).
+All scripts run on the Python 3.9+ standard library only. They can be run from anywhere in the repository and operate relative to the git root. The exact list of options is shown by `python scripts/<name>.py --help`. `verify.py`, `rdcheck.py`, `rdfix.py`, `next-id.py`, `ledger.py` and `adopt.py` accept `--root DIR` to set the root of the target repository (for `rdcheck.py`, `ledger.py` and `adopt.py`, put it before the subcommand; `entities.py` uses `--repo DIR`). Output is short and in a form an LLM can read as is (one finding per line, with a one-line summary at the end).
 
 | Script | Purpose | What it writes |
 |---|---|---|
@@ -15,7 +15,7 @@ All scripts run on the Python 3.9+ standard library only. They can be run from a
 | `scripts/next-id.py` | ID allocation | `docs/id-registry.md` and the allocation log |
 | `scripts/ledger.py` | The only writer of the System Test ledger | `tests/system/ledger.json` |
 | `scripts/summarize.py` | Summary of long logs | Nothing |
-| `scripts/adopt.py` | Adopting an existing app | `docs/baseline/`, `tests/system/golden/`, `work/import/` |
+| `scripts/adopt.py` | Adopting an existing app | `docs/baseline/`, `tests/system/golden/`, `work/import/` (follows the `work.dir` setting) |
 | `tools/install.py` | Install, update, uninstall | The target repository |
 | `tools/uninstall.py` | Remove HVE installed by any version (what `install.py --uninstall` / `--purge` run) | The target repository |
 
@@ -36,7 +36,7 @@ python scripts/verify.py --base main              # base of the diff checks (def
 ./scripts/verify.sh   /  .\scripts\verify.ps1     # the same (wrappers that find Python and pass the arguments to verify.py)
 ```
 
-Exit 0 means pass. The `AGENTS.md` rules require exit 0 before a change is finished. The only check knob is the check profile (`--profile`) (for removed 0.5.x options, see [chapter 9](09-versioning.en.md)). CI `ebak-verify` runs `scripts/verify.sh --show-warnings`. Full logs are saved to `/work/logs`; only a summary is printed. The project's build and test commands go into `verify.commands` in `scripts/ebak.config.json` ([4. Customization](04-customization.en.md)).
+Exit 0 means pass, 1 means fail. The last line is `verify: PASS|FAIL failed=<failed steps> elapsed=<seconds>s HEAD=<commit>` (steps are `rdcheck`, `config`, or the name of a `verify.commands` entry). When the management-data check fails, `HINT rdfix:` lines show the repair commands (when some inconsistencies can be fixed automatically, a line with their count is also printed). The `AGENTS.md` rules require exit 0 before a change is finished. The only check knob is the check profile (`--profile`) (for removed 0.5.x options, see [chapter 9](09-versioning.en.md)). CI `ebak-verify` runs `scripts/verify.sh --show-warnings`. Full logs are saved to `/work/logs`; only a summary is printed. The project's build and test commands go into `verify.commands` in `scripts/ebak.config.json` ([4. Customization](04-customization.en.md)).
 
 **Check profile:** `checks.profile` in `scripts/ebak.config.json`, `lite` (default) or `full`, decides which CHKs are reported.
 
@@ -47,7 +47,7 @@ Exit 0 means pass. The `AGENTS.md` rules require exit 0 before a change is finis
 
 To see the writing-style warnings: `python scripts/verify.py --docs-only --profile full --show-warnings`.
 
-**Cache:** when the working tree is clean (no uncommitted changes and no untracked files), a PASS is recorded in `/work/.ebak/verify-cache.json`. The key is HEAD, the arguments and `scripts/ebak.config.json`. Running the same verify on the same commit returns `PASS (cached …)` immediately. FAIL is never recorded. Disable it with `--no-cache` or the environment variable `EBAK_VERIFY_NO_CACHE=1`.
+**Cache:** when the working tree is clean (no uncommitted changes and no untracked files), a PASS is recorded in `/work/.ebak/verify-cache.json`. The key is the tree of HEAD, the arguments, `scripts/ebak.config.json` and the toolkit version; an entry expires after 24 hours. Running the same verify on the same commit returns `PASS (cached …)` immediately. FAIL is never recorded. With `--show-warnings` the cache is not used (so CI `ebak-verify` always runs). Disable it with `--no-cache` or the environment variable `EBAK_VERIFY_NO_CACHE=1`.
 
 ## rdcheck.py (requirements definition parser)
 
@@ -58,8 +58,9 @@ python scripts/rdcheck.py list --state 承認済み --priority MUST
 python scripts/rdcheck.py list --state 承認待ち         # requirements awaiting approval
 python scripts/rdcheck.py list --level system          # ACs covered by System Tests
 python scripts/rdcheck.py list --area 受付              # filter by area (--by-area groups by area; retired items excluded)
+python scripts/rdcheck.py list --kind FR               # filter by kind
 python scripts/rdcheck.py index FR-012 [--kind 検証] [--json]   # typed relations (上位/出典/参照/実装/検証/使用), generated on demand, never saved
-python scripts/rdcheck.py hierarchy                    # kind -> category -> area -> item hierarchy (generated on demand)
+python scripts/rdcheck.py hierarchy [--json]           # kind -> category -> area -> item hierarchy (generated on demand)
 python scripts/rdcheck.py stats                        # audit metrics (JSON)
 python scripts/rdcheck.py similar "resume an interrupted input"   # before creating, find similar existing requirements / ACs (--kind FR|AC|CASE|CAT, --top N)
 python scripts/rdcheck.py similar --pairs [--min 0.35] # pairs of similar items (merge candidates)
@@ -69,13 +70,13 @@ python scripts/rdcheck.py trace G-002 申請 PARAM-004   # trace back from goals
 python scripts/rdcheck.py trace INT-001                # requirements and ACs that reference an external integration
 ```
 
-`check` prints one finding per line (`<ERROR|WARN> <CHK-ID> <location> <message>`) and a final summary line.
+`check` prints one finding per line (`<ERROR|WARN> <CHK-ID> <location> <message>`) and a final summary line. `--errors-only` prints only ERRORs (the counts in the summary line do not change). With registered extension checks, one `EXT <name> target=… result=… findings=N source=…` line per extension is printed too. Extension findings (default ID `EXT-<name>`) are not filtered by the profile; they are reported under lite as well.
 
 ```text
 rdcheck: errors=0 warnings=2 base=… profile=lite
 ```
 
-`--profile` overrides `checks.profile` in `scripts/ebak.config.json`. Exit 0 = no errors, 1 = at least one error. The default of `--base` is the merge-base with `base_branch` (default `main`), used by the diff checks; `none` disables the comparison. The profile applies the same way to `rdcheck.py check`, `verify.py`, and `rdfix.py`.
+`--profile` overrides `checks.profile` in `scripts/ebak.config.json` (a `checks.profile` value other than `lite` or `full` is treated as `full`). Exit 0 = no errors, 1 = at least one error. The default of `--base` is the merge-base with `base_branch` (default `main`; `origin/main` if it does not exist), used by the diff checks (CHK-12, CHK-13); `none` disables the comparison. There is no comparison either when HEAD is the same commit as the base branch. The profile applies the same way to `rdcheck.py check`, `verify.py`, and `rdfix.py`.
 
 ## rdfix.py (automatic repair of data-layer inconsistencies)
 
@@ -98,7 +99,7 @@ python scripts/rdfix.py --full --apply --json     # the same result as JSON (man
 python scripts/rdfix.py --full --apply --lock-wait 60   # change the lock wait in seconds (default 30 = PARAM-027)
 ```
 
-**Output:** `FIX <CHK> <location> <message>` (fixed automatically) and `MANUAL <CHK> <location> <message>（担当: <area of work>）次の行動: …` (needs a judgment), followed by one line `rdfix: fix=N manual=M mode=…`. "担当" (in charge) is not a role name but the kind of work that fixes it.
+**Output:** `FIX <CHK> <location> <message>` (fixed automatically) and `MANUAL <CHK> <location> <message>（担当: <area of work>）次の行動: …` (needs a judgment), followed by one final line: without `--full`, `rdfix: fix=N manual=M mode=dry-run|applied`; with `--full`, `rdfix: fix=N manual=M mode=check|apply rounds=R result=<result>` (result is `pass`, `plan`, `repaired`, `manual`, `not-converged`, `lock-timeout`, `cancelled` or `error`). "担当" (in charge) is not a role name but the kind of work that fixes it. The defaults of the round limit and the lock wait can be changed with `repair.max_rounds` (default 3) and `repair.lock_wait_sec` (default 30) in `scripts/ebak.config.json`.
 
 | 担当 (in charge) | What to fix |
 |---|---|
@@ -170,25 +171,27 @@ IDs are allocated only with this script (an `AGENTS.md` rule). The next number i
 
 ## ledger.py (System Test ledger)
 
-The only writer of `tests/system/ledger.json`. Cases are never deleted; stop them with `block`. Changing `command` or `ac_ids` requires `--reason`, which is kept in the history. pass / fail is recorded only from the exit code of an executed command. `--by` sets who is recorded in the history (your name, `ci`, ...).
+The only writer of `tests/system/ledger.json`. Cases are never deleted; stop them with `block`. Changing `command` or `ac_ids` requires `--reason`, which is kept in the history. pass / fail is recorded only from the exit code of an executed command (`set` to pass or fail requires an execution log in `--evidence`; `blocked` requires `--reason`). `--by`, given before the subcommand, sets who is recorded in the history (your name, `ci`, ...; default `script`). Invalid arguments and refusals print `ERROR ledger: …` and exit 1.
 
 ```bash
 python scripts/ledger.py summary [-v]
-python scripts/ledger.py add --req FR-012 --ac AC-031 --title "…" --layer e2e --command "…" [--canary] [--serial]
-                                                    # refused if the AC already has an active case (extend it with update; exception: --new-case-reason "reason")
-python scripts/ledger.py update E2E-001 --command "…" --reason "…"     # --title, --ac, --req, --canary can be changed too. Reason required
+python scripts/ledger.py add --req FR-012 --ac AC-031 --title "…" --layer e2e --command "…" [--canary] [--serial] [--reason "…"]
+                                                    # refused if the AC, or the same requirement in the same layer, already has an active case (extend it with update; exception: --new-case-reason "reason")
+                                                    # --layer is e2e, api, contract, data, nonfunctional or ai_eval. --reason is the history reason (default 「受入基準からケースを作成」)
+python scripts/ledger.py update E2E-001 --command "…" --reason "…"     # --title, --ac, --req, --canary true|false, --serial true|false can be changed too. Reason required
 python scripts/ledger.py block E2E-001 --reason "…"                   # use instead of deleting
 python scripts/ledger.py set E2E-001 pass|fail|blocked|not_run [--evidence PATH] [--reason "…"]
 python scripts/ledger.py digests [--update]                           # AC digests (text with PARAMs expanded)
 python scripts/ledger.py repair [--apply]                             # align the ledger with the requirements definition (used by rdfix.py)
-python scripts/ledger.py preflight [--cases ID,..] [--all]            # pytest collect-only (syntax / import errors, zero tests selected)
+python scripts/ledger.py preflight [--cases ID,..] [--all] [--jobs N|auto] [--timeout 300]
+                                                    # pytest collect-only (syntax / import errors, zero tests selected). Default: not_run and fail cases; --all adds passed ones
 python scripts/ledger.py cost [--top N] [--check]                     # cases, test files, mergeable cases, slow commands, budget (--check: exit 1 when over)
 python scripts/ledger.py consolidate [--apply] [--reason "…"]         # merge cases with the same test file, layer and requirement (plan only by default)
-python scripts/ledger.py run --select changed|failed|all [--base REF] [--canary-first] [--stop-on-canary-fail] [--max-minutes N] [--jobs N|auto]
+python scripts/ledger.py run --select changed|failed|all [--base REF] [--canary-first] [--stop-on-canary-fail] [--max-minutes N] [--case-timeout 1800] [--jobs N|auto] [--no-batch]
 python scripts/ledger.py run --cases E2E-001,IT-002 [--no-record]     # only the given cases; --no-record leaves the ledger unchanged
 ```
 
-`--select changed` prefers cases whose requirement or AC IDs appear in lines added or changed in the git diff, and prints `select <case ID>: <reason>` per case. When it cannot narrow down (e.g. shared code changed), it widens the selection and says so in the reason. `run` prints lines `<id> <requirement_ids> <pass|fail> <seconds> <evidence>` and a `結果: …` (result) line. Details are saved to `work/system-test/results.json` (`--results PATH` sets the location; with `--no-record` the ledger is not rewritten and results go only to the `--results` file). Cases that already passed or failed on the same commit with a clean working tree are not re-run (force with `--rerun-passed` / `--rerun-failed`).
+The default of `run` is `--select changed`. `--case-timeout` is the time limit per case in seconds (default 1800), `--jobs` is the number of cases run at the same time (default `system_test.jobs`, otherwise 1; cases with `"serial": true` run alone), and `--no-batch` stops grouping cases of the same pytest file into one process. `--select changed` prefers cases whose requirement or AC IDs appear in lines added or changed in the git diff, and prints `select <case ID>: <reason>` per case. When it cannot narrow down (e.g. shared code changed), it widens the selection and says so in the reason. `run` prints lines `<id> <requirement_ids> <pass|fail> <seconds> <evidence>` and a final `ledger run: pass=N fail=N skipped=N … results=<path> 結果: …` (result) line. It exits 0 when nothing failed and the run was neither stopped (canary failure, time budget) nor skipped cases because of earlier failures; otherwise 1. Details are saved to `work/system-test/results.json` (`--results PATH` sets the location; with `--no-record` the ledger is not rewritten and results go only to the `--results` file). Cases that already passed or failed on the same commit with a clean working tree are not re-run (force with `--rerun-passed` / `--rerun-failed`).
 
 ## summarize.py (log summary)
 
@@ -197,7 +200,7 @@ python scripts/summarize.py work/logs/verify-…-unit.log [--max-lines 15] [--ta
 npm test 2>&1 | python scripts/summarize.py -
 ```
 
-Prints only the test runner's summary lines, the first few distinct error lines, and the last few lines.
+Prints only a header line, the test runner's summary lines, the first few distinct error lines, and the last few lines.
 
 ## adopt.py (adopting an existing app)
 
@@ -205,9 +208,9 @@ Prints only the test runner's summary lines, the first few distinct error lines,
 python scripts/adopt.py scan [--since-days 365] [--json]          # inventory -> docs/baseline/inventory.{json,md}
 python scripts/adopt.py request [--clusters 6] [--cluster NAME] [--implement] [--stdout]
                                                                   # request draft to paste into Copilot chat -> work/import/adopt-<datetime>.md
-python scripts/adopt.py anchor SRC-003 src/a.py:10-48 [--note "…"] # pin source evidence -> docs/baseline/evidence.json
+python scripts/adopt.py anchor SRC-003 src/a.py:10-48 [src/b.py ...] [--note "…"] # pin source evidence -> docs/baseline/evidence.json
 python scripts/adopt.py check [--strict] [--json]                 # evidence drift, recovery rate, checks of recovered requirements (exit 1 = error)
-python scripts/adopt.py golden add NAME -- CMD ARG...             # characterization test (golden master)
+python scripts/adopt.py golden add NAME [--stdin TEXT] [--cwd DIR] [--env K=V ...] -- CMD ARG...   # characterization test (golden master); --env can be repeated
 python scripts/adopt.py golden record|check|list [NAME] [--update]
 ```
 
@@ -243,7 +246,7 @@ python tools/install.py --version
 | `--allow-non-git` | Install into a directory that is not a git repository |
 | `--version` | Print the toolkit version and exit |
 
-What it does (idempotent): installs the distributed files (rd-auditor, skills, `ebak-verify.yml`, `scripts/*`, HVE-Studio; Studio's tests `HVE-Studio/tests/` are not installed) and updates them if unmodified. Management-data templates (requirements definition, catalog, external integration catalog, ID registry, ledger) are created only when missing. `scripts/ebak.config.json` gets new keys while your values are kept (a new install gets an empty `verify.commands`: `[]`). It adds `/work/` to `.gitignore` (header `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`), `docs/id-registry.md merge=union` to `.gitattributes`, and the rules block to `AGENTS.md` and `.github/copilot-instructions.md`, and records versions and hashes in `.github/ebak-toolkit.json`. Finally it runs `rdfix.py --full --apply` once (the requirements definition is never changed and the repair is not committed).
+What it does (idempotent): installs the distributed files (rd-auditor, skills, `ebak-verify.yml`, `scripts/*`, HVE-Studio; Studio's tests `HVE-Studio/tests/` are not installed) and updates them if unmodified. Management-data templates (requirements definition, catalog, external integration catalog, ID registry, ledger) are created only when missing. `scripts/ebak.config.json` gets new keys while your values are kept (a new install gets an empty `verify.commands`: `[]`). It adds `/work/` and `/.hve-studio/` to `.gitignore` (header `# Enterprise App Build Kit: temporary files (logs, evidence, notes)`), `docs/id-registry.md merge=union` and LF line-ending rules for `*.sh` to `.gitattributes`, and the rules block to `AGENTS.md` and `.github/copilot-instructions.md`, and records versions and hashes in `.github/ebak-toolkit.json`. Then it runs `rdfix.py --full --apply` once (the requirements definition is never changed and the repair is not committed). Finally it creates or synchronizes HVE Studio's display data `.hve-studio/managed-data.json` (also with `--no-repair` or `--skip-verify`; never with `--dry-run`, `--check`, `--uninstall` or `--purge`). If the synchronization fails, the installer exits 1 (the installed toolkit stays).
 
 An update handles only the files this version ships. Files an older version installed that this version no longer ships are not deleted; they stay in the manifest (so `--clean` can find them) and their count is shown as a note. There is no migration code for older versions (no per-version removal list, no settings rewrite). When updating from an older version (such as 0.5.x), use `--clean`. Even after `--clean`, data-layer files from older versions (such as `docs/run-history.md` from 0.5.x) and the worktrees and `run/*` branches left by 0.5.x runs remain. The worktrees and merged branches can be removed with `python tools/uninstall.py --target <repo> --runs`; delete the data-layer files by hand if you do not need them ([9.4](09-versioning.en.md#94-updating-from-an-older-version-clean-install)).
 
@@ -276,7 +279,7 @@ The catalog `tools/uninstall-catalog.json` is built by `tools/build-uninstall-ca
 Installed into `HVE-Studio/` of the target repository. A local, read-only web app that shows the data layer (requirements definition, catalog, ledger) as diagrams, tables and search (Japanese and English). A git repository without HVE can also be viewed from an HVE clone with `python HVE-Studio/studio.py --repo <any-git-repo>` (code mode, FR-1086).
 
 ```text
-python HVE-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--no-remote] [--check]
+python HVE-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--no-remote] [--check | --sync-data | --delete-data | --data-status]
 ```
 
 | Option | Behavior |
@@ -286,8 +289,11 @@ python HVE-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--no-remote]
 | `--no-open` | Do not open the browser automatically |
 | `--no-remote` | Do not read GitHub Issues, PRs and Actions through gh (does not affect the AI settings) |
 | `--check` | Print which management-data files exist, the parsed counts and warnings, then exit. Exit 0 if a data layer exists or code mode has something to show (a `mode: code (...) requirement-docs=… requirements=… linked-to-code=… code-files=… test-files=… components=…` line is printed), otherwise 1 |
+| `--sync-data` | Create or synchronize the display data `.hve-studio/managed-data.json` with progress, then exit (the authoritative requirements are not changed). Prints the state as JSON; exit 1 on a conflict (`conflict`) or failure |
+| `--delete-data` | Delete only the display data Studio generated, then exit |
+| `--data-status` | Print whether the display data exists and its synchronization state as JSON, then exit |
 
 - Wrappers: `HVE-Studio/start.ps1 [-Repo DIR] [-Port N] [-Check] [-NoOpen]`, `HVE-Studio/start.sh [DIR] [PORT] [studio.py options…]`.
 - In code mode it derives, read-only, requirement IDs (`FR-…`, `NFR-…`) from the first column of markdown tables and from headings (`docs/PRD.md` and the like first), the code and test files that mention each ID, and source files grouped into components. The ledger and acceptance criteria are empty. Only a git repository root is used; an empty or non-git folder exits 1.
-- With a data layer it never reads source code. It listens on 127.0.0.1 only. The only writes are catalog titles and decision states in `docs/catalog.md` that you confirm and run in "整合性保守" (consistency maintenance).
+- With a data layer it never reads source code. It listens on 127.0.0.1 only. The only writes are catalog titles and decision states in `docs/catalog.md` that you confirm and run in "整合性保守" (consistency maintenance), and `.hve-studio/managed-data.json` through the display-data operations (`--sync-data`, `--delete-data`, the "作成・同期" (create / sync) button). `--check`, `--sync-data`, `--delete-data` and `--data-status` cannot be combined.
 - Role-based guides are in [studio/README.en.md](studio/README.en.md).
