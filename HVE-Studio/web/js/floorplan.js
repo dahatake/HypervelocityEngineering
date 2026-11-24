@@ -8,6 +8,9 @@ import { sourceTabs } from './srctabs.js';
 import { createBoard, icon } from './fp-board.js';
 import { indexModel, boardOf, membersOf, chain, parentOf, memberFor, outsideFor, describe, labelOf, shortestPath, allFiles, folderFiles, KIND_ORDER } from './fp-data.js';
 import { mountPanels } from './fp-panels.js';
+import { store } from './store.js';
+import { hierarchy, listTiers } from './tierlist.js';
+import { xrefLink } from './xref.js';
 
 const EDITORS = { vscode: 'vscode://file/{path}:{line}', 'vscode-insiders': 'vscode-insiders://file/{path}:{line}', vscodium: 'vscodium://file/{path}:{line}', cursor: 'cursor://file/{path}:{line}', windsurf: 'windsurf://file/{path}:{line}', zed: 'zed://file/{path}:{line}', idea: 'idea://open?file={path}&line={line}', phpstorm: 'phpstorm://open?file={path}&line={line}' };
 const STRENGTH = { http: 5, data: 4, event: 3, queue: 3, rpc: 3, call: 2, config: 1, import: 0 };
@@ -315,7 +318,16 @@ export function mount(host) {
     get board() { return board; },
   };
   function renderHeader() { panelsApi.header(); }
-  function renderPanel() { panelsApi.panel(); }
+  function renderPanel() {
+    panelsApi.panel();
+    panelEl.append(el('section', { class: 'fp-sec', 'data-testid': 'floorplan-tiers' },
+      el('h3', {}, t('dash.tiers')),
+      listTiers(hierarchy().items, {
+        itemNode: (it) => el('div', { class: 'tier-item', role: 'treeitem', 'data-testid': 'tier-item', 'data-id': it.id },
+          store.nodes.has(it.id) ? xrefLink(it.id, it.id) : el('span', { class: 'mono' }, it.id),
+          it.title ? el('span', { class: 'tier-item-title' }, ` ${it.title}`) : null),
+      })));
+  }
 
   // ------------------------------------------------------------ keyboard
   function onKey(e) {
@@ -325,14 +337,14 @@ export function mount(host) {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); return panelsApi.focusSearch(); }
     if (typing || e.ctrlKey || e.metaKey || e.altKey || panelsApi.modalOpen()) return;
     if (e.key === '/') { e.preventDefault(); panelsApi.focusSearch(); }
-    else if (e.key === 'Enter' && S.sel && !e.target.closest?.('.fp-card')) openItem(S.sel);
+    else if (e.key === 'Enter' && S.sel && !e.target.closest?.('.fp-card, [data-testid="floorplan-tiers"]')) openItem(S.sel);
     else if (e.key === 'Backspace') { e.preventDefault(); up(); }
     else if (e.key === 'f' || e.key === 'F') board.fit();
     else if (e.key === '+' || e.key === '=') board.zoomBy(1.2);
     else if (e.key === '-' || e.key === '_') board.zoomBy(1 / 1.2);
     else if (e.key === 'p' || e.key === 'P') ctx.togglePanel();
-    else if (e.key === 'ArrowRight' && S.flow) stepFlow(S.flow.i + 1);
-    else if (e.key === 'ArrowLeft' && S.flow) stepFlow(S.flow.i - 1);
+    else if (e.key === 'ArrowRight' && S.flow && !e.target.closest?.('[data-testid="floorplan-tiers"]')) stepFlow(S.flow.i + 1);
+    else if (e.key === 'ArrowLeft' && S.flow && !e.target.closest?.('[data-testid="floorplan-tiers"]')) stepFlow(S.flow.i - 1);
   }
   const onClickAway = (e) => { if (!e.target.closest?.('.fp-menu,.fp-pop')) panelsApi.closeMenus(); };
 
@@ -358,6 +370,7 @@ export function mount(host) {
   document.addEventListener('keydown', onKey);
   document.addEventListener('pointerdown', onClickAway);
   const offLang = onLang(() => { if (S.g) { S.index = null; const nt = sourceTabs('functions'); tabsEl?.replaceWith(nt); tabsEl = nt; pathEl?.setAttribute('aria-label', t('fp.crumbs')); renderPath(); renderHeader(); renderPanel(); draw({ keepCamera: true }); } });
+  const offModel = store.on('model', () => { if (panelsApi) renderPanel(); });
   const view = { mode: 'floorplan', getState: () => ({ view: S.view, selected: S.sel, answer: !!S.answer, cards: board?.cards?.size || 0, technical: S.technical, flow: S.flow ? S.flow.i : null, health: S.g?.health.summary || null, ready: !!board?.cards }),
     go: (v, o) => go(v, o), select: (id) => select(id), reveal, ask };
   window.hveView = view;
@@ -374,6 +387,6 @@ export function mount(host) {
   });
   return {
     onHash: () => { if (S.g && board) apply(); },
-    destroy() { destroyed = true; document.removeEventListener('keydown', onKey); document.removeEventListener('pointerdown', onClickAway); offLang(); board?.destroy(); hideTip(); if (window.hveView === view) window.hveView = undefined; },
+    destroy() { destroyed = true; document.removeEventListener('keydown', onKey); document.removeEventListener('pointerdown', onClickAway); offLang(); offModel(); board?.destroy(); hideTip(); if (window.hveView === view) window.hveView = undefined; },
   };
 }

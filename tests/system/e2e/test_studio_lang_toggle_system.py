@@ -84,7 +84,7 @@ def test_ac479_studio_brand_titles_and_saved_preferences(browser, zurl):
         for word in ("JA", "EN"):
             _pick(page, word).click()
             page.wait_for_function("document.title.startsWith('HVE Studio · ')")
-            assert "HVE Studio" not in page.title()
+            assert "EABK Studio" not in page.title()
         page.reload()
         page.wait_for_load_state("networkidle")
         assert page.title().startswith("HVE Studio · ")

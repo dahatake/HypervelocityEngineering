@@ -10,6 +10,8 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 
 System Test の最適化（2026-11-24）: `tests/system/e2e/test_semantic_zoom_system.py` は AC-174・AC-179・AC-183 の同じ画面での検証を統合、`tests/system/e2e/test_studio_header_row_system.py` は AC-391・AC-392 を各幅で一括検証、`tests/system/e2e/test_studio_header_dim_3d_part1_system.py` は AC-374・AC-375 の包含される重複を削除し AC-378・AC-379 の往復操作を統合した。要求・AC・閾値・異なる入力の検証は維持し、台帳の更新理由に対応を記録する。
 
+全件実行の追補: `tests/system/e2e/test_studio_system.py` の画面遷移ヘルパーは旧画面の切断を待ち、`tests/system/e2e/test_studio_fluent_appearance_system.py` で再利用する。文字のみのクリッピング SVG はアイコンの寸法検査と区別する。`tests/system/e2e/test_studio_map_placement_system.py` は全面クリック探索を公開座標による候補探索に置き換え、実在する点の周りで拡大・縮小して実クリックの半径を測る（固定閾値と全4条件・外側クリックは維持）。
+
 | 要求 ID | 題名 | 決定状態 | 実装ファイル | テスト | 使っている共通部品 |
 |---|---|---|---|---|---|
 | FR-1009 | 正常完了 run の統合後清掃 | 廃止 | 未実装 | 未実装 | なし |
@@ -88,7 +90,7 @@ System Test の最適化（2026-11-24）: `tests/system/e2e/test_semantic_zoom_s
 | FR-1060 | 領域の初期分類（AI提案） | 承認済み | 未実装 | 未実装 | - |
 | FR-1078 | 要求・受入基準・System Test のケースの数の最適化（似た既存の項目の再利用と重複の統合） | 承認済み | scripts/rdcheck.py, scripts/ledger.py, .github/skills/requirement-definition/SKILL.md, .github/skills/rd-audit/SKILL.md | `tests/integration/test_reuse_optimization_it.py` | データ層検査、配布同期対象 |
 | FR-1062 | 各データの上位層の定義（種類→区分→領域→項目） | 承認済み | `HVE-Studio/hve_model.py`、`HVE-Studio/web/js/hier.js`、`scripts/rdcheck.py`、`tools/install.py` | `HVE-Studio/tests/test_tier_hierarchy.py`、`tests/system/test_data_tiers_system.py` | 階層の導出、階層の共通 JS 部品 |
-| FR-1063 | Studio の全画面での上位層の表示 | 承認済み | `HVE-Studio/web/js/tierlist.js`、`HVE-Studio/web/js/tables.js`、`HVE-Studio/web/js/integrations.js`、`HVE-Studio/web/js/entities.js`、`HVE-Studio/web/js/implstatus.js`、`HVE-Studio/web/js/dashboard.js`、`HVE-Studio/web/js/diagrams.js`、`HVE-Studio/web/js/source.js`、`HVE-Studio/web/js/insights.js`、`HVE-Studio/web/js/maptiers.js`、`HVE-Studio/web/js/map2d.js`、`HVE-Studio/web/js/map3d.js`、`HVE-Studio/web/app.css` | `HVE-Studio/tests/test_tier_lists_ui.py`、`tests/system/e2e/test_studio_tiers_system.py`、`HVE-Studio/tests/test_map_tiers_ui.py`、`HVE-Studio/tests/test_tier_reflow_a11y_ui.py` | 階層の共通 JS 部品、一覧の階層ブリッジ、マップの上位層パネル |
+| FR-1063 | Studio の全画面での上位層の表示 | 承認済み | `HVE-Studio/web/js/tierlist.js`、`HVE-Studio/web/js/tables.js`、`HVE-Studio/web/js/integrations.js`、`HVE-Studio/web/js/entities.js`、`HVE-Studio/web/js/implstatus.js`、`HVE-Studio/web/js/dashboard.js`、`HVE-Studio/web/js/diagrams.js`、`HVE-Studio/web/js/source.js`、`HVE-Studio/web/js/floorplan.js`、`HVE-Studio/web/js/insights.js`、`HVE-Studio/web/js/maptiers.js`、`HVE-Studio/web/js/map2d.js`、`HVE-Studio/web/js/map3d.js`、`HVE-Studio/web/app.css` | `HVE-Studio/tests/test_tier_lists_ui.py`、`tests/system/e2e/test_studio_tiers_system.py`、`HVE-Studio/tests/test_floorplan_ui.py`、`HVE-Studio/tests/test_map_tiers_ui.py`、`HVE-Studio/tests/test_tier_reflow_a11y_ui.py` | 階層の共通 JS 部品、一覧の階層ブリッジ、マップの上位層パネル |
 | NFR-UX-014 | 管理データの情報デザイン（段階的開示と一覧性） | 承認済み | `scripts/metadata.json`、`scripts/ebaklib.py`、`scripts/rdcheck.py`、`HVE-Studio/hve_model.py`、`tools/install.py` | `tests/toolkit/test_hierarchy.py`、`tests/system/test_data_hierarchy_system.py` | メタデータ定義と階層・関係索引 |
 | FR-1050 | 表・連携の ID の全面リンク化と未解決 ID の明示 | 承認済み | 未実装 | tests/system/e2e/test_studio_info_design_system.py | - |
 | FR-1051 | 「表」画面の種別のグループ化と名称の統一 | 承認済み | 未実装 | tests/system/e2e/test_studio_info_design_system.py | - |

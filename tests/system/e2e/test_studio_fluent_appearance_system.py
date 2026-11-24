@@ -42,6 +42,7 @@ from playwright.sync_api import expect
 
 from entity_repo import make_large, make_zoom
 from test_studio_system import ROOT, _management_fingerprints, _repository_files, page, studio_url  # noqa: F401
+from test_studio_system import goto_view as _go
 from test_studio_links_wrap_status_arch_system import _serve
 
 WEB = ROOT / "HVE-Studio" / "web"
@@ -110,11 +111,6 @@ def _ratio(a, b):
 
 def _theme(page, choice):
     page.locator(f'[data-testid="theme-toggle"] [data-theme-choice="{choice}"]').click()
-
-
-def _go(page, route):
-    page.goto(page.url.split("#")[0] + f"#/{route}")
-    page.wait_for_load_state("networkidle")
 
 
 @pytest.fixture()
@@ -491,6 +487,9 @@ def test_ac268_single_bundled_icon_set_allowed_sizes_and_accessible_names(page):
         # 最大アイコンサイズより大きくなければならない（小さい無印 svg はアイコンの取りこぼしとして失敗）
         bad = page.evaluate("""(sizes) => [...document.querySelectorAll('svg')].filter(s => s.getBoundingClientRect().width && !s.closest('.brand')).flatMap(s => {
             const isIcon = s.matches('.icon, [data-icon]') || !!s.closest('[data-part="icon"]');
+            const textViewport = s.ownerSVGElement && s.getAttribute('overflow') === 'hidden'
+                && s.children.length && [...s.children].every(e => e.localName === 'text');
+            if (!isIcon && textViewport) return [];
             if (!isIcon) { const q = s.getBoundingClientRect(); return Math.min(q.width, q.height) > Math.max(...sizes) ? [] : ['unmarked small svg ' + q.width + 'x' + q.height + ' ' + s.parentElement.outerHTML.slice(0, 60)]; }
             const r = s.getBoundingClientRect(), out = [];
             if (!sizes.includes(Math.round(r.width)) || !sizes.includes(Math.round(r.height))) out.push('size ' + r.width + 'x' + r.height);
@@ -695,15 +694,19 @@ def test_ac274_states_not_conveyed_by_color_alone(browser, studio_url, choice):
 
 # ---------------------------------------------------------------- NFR-PERF-006
 def _git(*args):
-    return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, encoding="utf-8").stdout
+    result = subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode == 0, f"git {' '.join(args)} failed:\n{result.stderr}"
+    return result.stdout
 
 
 # NFR-PERF-006 AC-275
 def test_ac275_nav_items_and_legacy_urls_identical_to_baseline_commit(page):
     # 基準 commit 80c7cc55 の ナビ全項目は、作業ステップ（FR-1094。2026-11-20）の中に置かれて今も全部開ける。
     # 項目の画面 ID は基準の NAV（app.js）と同一で、旧 URL も開ける。ステップ内のナビは「そのステップの画面」だけを並べる。
-    base_app = _git("show", f"{BASE}:HVE-Studio/web/js/app.js")   # 基準 commit のフォルダー名は HVE-Studio（のちに HVE-Studio へ改名）
-    base_nav = re.findall(r"'([^']+)'", re.search(r"const NAV = \[([^\]]*)\]", base_app).group(1))
+    base_app = _git("show", f"{BASE}:EABK-Studio/web/js/app.js")
+    nav_match = re.search(r"const NAV = \[([^\]]*)\]", base_app)
+    assert nav_match, f"{BASE} のナビ定義が読めない"
+    base_nav = re.findall(r"'([^']+)'", nav_match.group(1))
     now = []
     for step in range(1, 7):
         page.locator(f'[data-testid="step"][data-step="{step}"]').click()

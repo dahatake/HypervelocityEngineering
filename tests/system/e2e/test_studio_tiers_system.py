@@ -25,6 +25,7 @@ import pytest
 from entity_repo import make_zoom
 from test_studio_links_wrap_status_arch_system import _serve
 from test_studio_system import page, studio_url  # noqa: F401  (fixtures)
+from test_studio_system import goto_view
 
 ROOT_REQ = "docs/requirements-definition.md"
 SCREENS = ["map2d", "map3d", "tables", "entities", "integrations", "implstatus", "dashboard"]
@@ -32,8 +33,7 @@ GROUP = '[data-testid="tier-group"]'
 
 
 def _go(page, route):
-    page.goto(page.url.split("#")[0] + "#/" + route)
-    page.wait_for_load_state("networkidle")
+    goto_view(page, route)
     page.wait_for_selector(GROUP, timeout=10000)
 
 
@@ -241,26 +241,27 @@ def test_ac347_rpg_removed_and_map2d_map3d_keep_fr1062_hierarchy_data_and_refere
                 got_areas[key] = got_areas.get(key, 0) + group["count"]
         assert got_areas == expected_areas, f"{route}: FR-1062 由来の区分・領域件数と一致しない"
 
-        items = {
-            item.get_attribute("data-id"): item
-            for item in page.locator('[data-testid="tier-item"]').all()
-        }
+        items = {item["id"]: item for item in page.locator('[data-testid="tier-item"]').evaluate_all(
+            """items => items.map(item => ({
+                id: item.getAttribute('data-id'),
+                title: item.getAttribute('data-title') || item.innerText,
+                refs: [...item.querySelectorAll('a[href]')].map(a => a.getAttribute('href'))
+            }))""")}
         assert expected_ids <= set(items), f"{route}: 管理データ項目が欠けている: {expected_ids - set(items)}"
         for item_id, title in expected_labels.items():
             item = items[item_id]
-            assert title in (item.get_attribute("data-title") or item.inner_text()), (
+            assert title in item["title"], (
                 f"{route}: {item_id} の名称が管理データと一致しない"
             )
-            ref = item.locator("a[href]").first
-            assert ref.count() == 1, f"{route}: {item_id} の詳細参照がない"
+            assert item["refs"], f"{route}: {item_id} の詳細参照がない"
             # SPA の query は通常の URL query ではなく #/route?select=ID 内にある。
-            assert parse_qs(urlsplit(urlsplit(ref.get_attribute("href")).fragment).query).get("select") == [item_id], (
+            assert parse_qs(urlsplit(urlsplit(item["refs"][0]).fragment).query).get("select") == [item_id], (
                 f"{route}: {item_id} の詳細参照先が一致しない"
             )
 
         # 各モードで代表の詳細参照を実際に開き、選択先の ID・名称を確認する。
         selected_id = sorted(expected_ids)[0]
-        items[selected_id].locator("a[href]").first.click()
+        page.locator(f'[data-testid="tier-item"][data-id="{selected_id}"] a[href]').first.click()
         expect(page.locator("#drawer")).to_contain_text(selected_id)
         expect(page.locator("#drawer")).to_contain_text(expected_labels[selected_id])
 
@@ -311,22 +312,18 @@ def test_ac349_implstatus_shows_per_tier_state_breakdown_summing_to_count(page):
 def test_ac350_all_screens_show_identical_tier_names_order_and_counts(page):
     _go(page, "map2d")
     screens = _screens(page)
-    # map3d はナビにない（マップは 2D・3D・RPG のモード切替で開く）。ナビの route に、3D・RPG をモード切替で足す
+    # FR-1063: RPG は廃止済み。ナビにない 3D は残る表示モードとして検証する。
     nav_expected = [s for s in SCREENS if s != "map3d"]
     assert set(nav_expected) <= set(screens), f"ナビゲーションに画面が足りない: {screens}"
-    targets = [(r, None) for r in screens] + [("map3d", "3d"), ("maprpg", "rpg")]
+    targets = [(r, None) for r in screens] + [("map3d", "3d")]
     ref = None
     for r, dim in targets:
         _go(page, "map2d" if dim else r)
         if dim:
             page.locator(f'[data-testid="dim-toggle"] [data-dim="{dim}"]').click()
             page.wait_for_load_state("networkidle")
-        if dim == "rpg":
-            page.wait_for_selector('[data-testid="rpg-view"]')
-            page.evaluate("() => window.hveView.openTierDialog && window.hveView.openTierDialog()")
-            page.locator('[data-testid="rpg-dialog"]').wait_for(timeout=5000)
-        else:
-            page.wait_for_selector(GROUP, state="attached", timeout=10000)
+        assert page.locator('[data-dim="rpg"], [data-testid="rpg-view"], [data-testid="rpg-dialog"]').count() == 0
+        page.wait_for_selector(GROUP, state="attached", timeout=10000)
         areas = [(tuple(g["path"]), g["count"]) for g in _groups(page, "area") if g["path"][0] in ("要求", "requirements")]
         if not areas:
             assert not dim, f"{r}（モード切替 {dim}）に要求の上位層がない"

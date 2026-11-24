@@ -1,4 +1,5 @@
 """FR-1092: the floorplan viewer in a real browser, served on this repository's own source and its floorplan/architecture.json."""
+import re
 import socket
 import subprocess
 import sys
@@ -51,13 +52,19 @@ def _card(page, key):
 
 
 # FR-1092 AC-510: the overview shows parts and outside services; double-click goes inside, where three columns and pills appear; back, breadcrumb, URL and history follow.
+# FR-1063 AC-350: the shared hierarchy stays available when navigating inside a part.
 def test_ac510_overview_inside_brackets_and_history(studio):
     page = _open(studio)
     top = _state(page)
     assert top["view"] == "" and top["cards"] >= 8 and page.locator(".fp-line").count() >= 3
     assert page.locator(f'{CARD}[data-type="node"]').count() >= 8
+    areas = page.get_by_test_id("floorplan-tiers").locator('[data-tier-level="area"]')
+    sync_api.expect(areas.first).to_be_visible()
+    area_count = areas.count()
+    assert area_count > 0
     _card(page, "n:server").dblclick()
     page.wait_for_function("() => window.hveView.getState().view === 'n:server'")
+    sync_api.expect(areas).to_have_count(area_count)
     labels = page.locator(".fp-bracket").all_inner_texts()
     assert any("Used by" in x for x in labels) and any("Inside Studio server" in x for x in labels) and any("Uses" in x for x in labels)
     assert page.locator(f"{CARD}.pill").count() >= 1 and "v=n%3Aserver" in page.url
@@ -82,6 +89,7 @@ def test_ac510_path_shows_the_position_in_the_structure(studio):
     assert page.locator('[data-testid="fp-crumbs"] [aria-current="location"]').inner_text().startswith("Endpoint")
     crumbs.nth(1).click()
     page.wait_for_function("() => window.hveView.getState().view.startsWith('n:')")
+    sync_api.expect(page.locator('[data-testid="fp-crumbs"] [aria-current="location"] small')).to_have_text(re.compile(r"^(Part|Folder)$"))
     assert page.locator('[data-testid="fp-crumbs"] [aria-current="location"]').inner_text().split("\n")[0] in ("Part", "Folder")
     page.locator('[data-testid="fp-crumbs"] [data-testid="fp-crumb"]').first.click()
     page.wait_for_function("() => window.hveView.getState().view === ''")
@@ -115,11 +123,18 @@ def test_ac510_file_view_keyboard_menu_and_semantic_zoom(studio):
 
 
 # FR-1092 AC-511: details panel, filters and technical names; Health shows what was checked and keeps "Not a problem" after a reload; Recent work and Screens open answer boards.
+# FR-1063 AC-350 AC-352: keyboard hierarchy controls do not navigate the selected floorplan card.
 def test_ac511_panel_health_recent_screens_and_filters(studio):
     page = _open(studio)
     _card(page, "n:server").click()
     assert page.locator('[data-testid="fp-name"]').inner_text() == "Studio server" and page.locator(".fp-line.hot").count() >= 1 and page.locator(f"{CARD}.dim").count() >= 1
     assert page.locator('[data-testid="fp-link"]').count() >= 2
+    toggle = page.get_by_test_id("floorplan-tiers").get_by_test_id("tier-toggle").first
+    before = _state(page)["view"]
+    expanded = toggle.get_attribute("aria-expanded")
+    toggle.press("Enter")
+    sync_api.expect(toggle).not_to_have_attribute("aria-expanded", expanded)
+    assert _state(page)["view"] == before
     page.locator('[data-testid="fp-filters"]').click()
     page.locator('[data-testid="fp-technical"]').check()
     page.wait_for_function("() => document.querySelector('[data-testid=fp-name]').textContent === 'server'")
@@ -155,6 +170,8 @@ def test_ac511_flows_and_tour(studio):
     page.locator('[data-testid="fp-flow"]', has_text="Opening the code floorplan").click()
     page.wait_for_selector('[data-testid="fp-flowbar"]')
     assert "1 / 4" in page.locator('[data-testid="fp-flowbar"]').inner_text()
+    page.get_by_test_id("floorplan-tiers").get_by_test_id("tier-toggle").first.press("ArrowRight")
+    assert _state(page)["flow"] == 0
     page.locator('[data-testid="fp-flow-next"]').click()
     page.wait_for_function("() => window.hveView.getState().flow === 1")
     page.keyboard.press("ArrowRight")

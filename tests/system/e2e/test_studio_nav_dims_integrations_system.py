@@ -205,6 +205,7 @@ def test_ac227_integrations_sort_filter_and_csv(page, int_url):
     page.wait_for_load_state("networkidle")
     page.locator('[data-testid="step"][data-step="2"]').click()   # FR-1094: integrations is in step 2
     page.locator("#nav").get_by_text("外部連携").first.click()
+    expect(page.get_by_test_id("integration-row")).to_have_count(2)
     page.locator("#view input").first.fill("倉庫")
     rows = page.get_by_test_id("integration-row")
     expect(rows).to_have_count(1)
@@ -213,6 +214,7 @@ def test_ac227_integrations_sort_filter_and_csv(page, int_url):
         page.get_by_role("button", name=re.compile("CSV")).click()
     assert d.value.suggested_filename.endswith(".csv")
     page.locator("#view input").first.fill("")
+    expect(rows).to_have_count(2)
     page.locator("#view").get_by_role("columnheader", name=re.compile("ID")).first.click()
     ids = [r.get_attribute("data-id") for r in page.get_by_test_id("integration-row").all()]
     assert sorted(ids) == sorted(["INT-001", "INT-002"]) and len(ids) == 2
@@ -224,6 +226,7 @@ def test_ac227_filter_with_no_match_shows_zero_rows_without_error(page, int_url)
     page.wait_for_load_state("networkidle")
     page.locator('[data-testid="step"][data-step="2"]').click()   # FR-1094: integrations is in step 2
     page.locator("#nav").get_by_text("外部連携").first.click()
+    expect(page.get_by_test_id("integration-row")).to_have_count(2)
     page.locator("#view input").first.fill("存在しない連携先-zzz")
     expect(page.get_by_test_id("integration-row")).to_have_count(0)
     assert not ERROR_RE.search(page.locator("#view").inner_text())

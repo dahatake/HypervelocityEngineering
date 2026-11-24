@@ -115,6 +115,16 @@ def page(browser, studio_url):
     context.close()
 
 
+def goto_view(page, route):
+    """Hash navigation can leave the previous view visible while its module loads."""
+    previous_hash = page.evaluate("() => location.hash")
+    previous_view = page.locator("#view > *").first.element_handle()
+    page.goto(page.url.split("#")[0] + "#/" + route)
+    if previous_view is not None and previous_hash != "#/" + route:
+        page.wait_for_function("(previous) => !previous.isConnected", arg=previous_view)
+    page.wait_for_load_state("networkidle")
+
+
 def _fingerprint(path):
     return (path.stat().st_mtime_ns, hashlib.sha256(path.read_bytes()).hexdigest())
 

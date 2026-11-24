@@ -1232,20 +1232,26 @@
       "ac_ids": [
         "AC-077"
       ],
-      "title": "2D マップのクリックは縮小・既定・拡大・CSS寸法差でも画面 12px 半径内の最近傍ノードだけを選択する",
+      "title": "2D マップのクリックは縮小・既定・拡大・CSS寸法差でも画面 12px 半径内の最近傍ノードだけを選択する（全件実行の安定化）",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_map_placement_system.py -k test_map2d_click_selects_node_within_fixed_px_radius -q",
+      "command": "python -m pytest tests/system/e2e/test_studio_map_placement_system.py -k test_map2d -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "aa8deb38",
-      "last_run_at": "2026-11-20T13:28:54+09:00",
-      "evidence": "work/system-test/logs/system-test/E2E-062-202611201324.log",
+      "last_commit": "4a9fde43",
+      "last_run_at": "2026-11-24T09:30:08+09:00",
+      "evidence": "work\\logs\\system-test\\E2E-062-202611240928.log",
       "history": [
         {
           "at": "2026-10-12T15:07:56+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-24T08:23:25+09:00",
+          "by": "script",
+          "change": "command: 'python -m pytest tests/system/e2e/test_studio_map_placement_system.py -k test_map2d_click_selects_node_within_fixed_px_radius -q' -> 'python -m pytest tests/system/e2e/test_studio_map_placement_system.py -k test_map2d -q'; title: '2D マップのクリックは縮小・既定・拡大・CSS寸法差でも画面 12px 半径内の最近傍ノードだけを選択する' -> '2D マップのクリックは縮小・既定・拡大・CSS寸法差でも画面 12px 半径内の最近傍ノードだけを選択する（全件実行の安定化）'",
+          "reason": "公開座標は候補探索にだけ使用し、実クリックの弦で半径を検証。4条件と閾値を維持し、ズーム中心を実在の点に固定して空白の全面探索を防ぐ。ホイール符号と拡大・縮小の名称を修正。外側クリックの既存検証も選択する。"
         }
       ]
     },
@@ -1823,20 +1829,26 @@
       "ac_ids": [
         "AC-227"
       ],
-      "title": "外部連携が一覧（INT-ID・連携先・方向等）に出て、詳細に 16 観点・関連要求・AC・責任分界が出る",
+      "title": "外部連携: 一覧と16観点・関連ID・責任分界（描画後に絞り込み）",
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_nav_dims_integrations_system.py -k \"list_shows_columns\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "aa8deb38",
-      "last_run_at": "2026-11-20T13:28:54+09:00",
-      "evidence": "work/system-test/logs/system-test/E2E-106-202611201324.log",
+      "last_commit": "4a9fde43",
+      "last_run_at": "2026-11-24T09:30:08+09:00",
+      "evidence": "work\\logs\\system-test\\E2E-106-202611240928.log",
       "history": [
         {
           "at": "2026-10-15T22:37:48+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test を追加"
+        },
+        {
+          "at": "2026-11-24T09:08:14+09:00",
+          "by": "script",
+          "change": "title: '外部連携が一覧（INT-ID・連携先・方向等）に出て、詳細に 16 観点・関連要求・AC・責任分界が出る' -> '外部連携: 一覧と16観点・関連ID・責任分界（描画後に絞り込み）'",
+          "reason": "一覧の既知の2行を待ってから連携用入力を操作し、フィルター解除後も2行を待つ。遷移途中の別画面の入力操作を防ぎ、絞り込み・CSV・全件復元のassertは維持。"
         }
       ]
     },
@@ -2166,14 +2178,14 @@
         "AC-262",
         "AC-260"
       ],
-      "title": "tokens defined once and no raw colors outside them（ほか 4 件を統合）",
+      "title": "tokens defined once and no raw colors outside them（ほか 4 件を統合）（全件実行の安定化）",
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"(test_ac258_tokens_defined_once_and_no_raw_colors_outside_them) or (test_ac259_three_choices_default_system_and_follow_os_without_reload) or (test_ac261_system_font_stack_no_remote_fonts_and_type_ramp) or (test_ac262_spacing_size_radius_tokens_are_multiples_of_grid) or (test_ac260_choice_is_restored_after_reload_and_next_launch)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "aa8deb38",
-      "last_run_at": "2026-11-20T13:28:54+09:00",
-      "evidence": "work/system-test/logs/system-test/E2E-119-202611201324.log",
+      "last_commit": "4a9fde43",
+      "last_run_at": "2026-11-24T09:30:08+09:00",
+      "evidence": "work\\logs\\system-test\\E2E-119-202611240928.log",
       "history": [
         {
           "at": "2026-10-17T14:37:55+09:00",
@@ -2198,6 +2210,12 @@
           "by": "conductor",
           "change": "command, ac_ids: E2E-121, E2E-125, E2E-127, E2E-160 を統合",
           "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
+        },
+        {
+          "at": "2026-11-24T08:23:26+09:00",
+          "by": "script",
+          "change": "title: 'tokens defined once and no raw colors outside them（ほか 4 件を統合）' -> 'tokens defined once and no raw colors outside them（ほか 4 件を統合）（全件実行の安定化）'",
+          "reason": "Hash遷移時に前画面の切断を待ち、画面を取り違えない。検証条件・閾値は維持。"
         }
       ]
     },
@@ -2346,14 +2364,14 @@
         "AC-267",
         "AC-268"
       ],
-      "title": "elevation levels and same kind same value on all screens（ほか 5 件を統合）",
+      "title": "elevation levels and same kind same value on all screens（ほか 5 件を統合）（全件実行の安定化）",
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"(test_ac263_elevation_levels_and_same_kind_same_value_on_all_screens) or (test_ac264_interactive_states_defined_and_selection_not_color_only) or (test_ac265_motion_uses_tokens_within_limit_and_no_endless_animation) or (test_ac266_layers_fall_back_to_opaque_with_readable_text) or (test_ac267_error_state_has_common_structure_and_keeps_input) or (test_ac268_single_bundled_icon_set_allowed_sizes_and_accessible_names)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "aa8deb38",
-      "last_run_at": "2026-11-20T13:28:54+09:00",
-      "evidence": "work/system-test/logs/system-test/E2E-129-202611201324.log",
+      "last_commit": "4a9fde43",
+      "last_run_at": "2026-11-24T09:30:08+09:00",
+      "evidence": "work\\logs\\system-test\\E2E-129-202611240928.log",
       "history": [
         {
           "at": "2026-10-17T14:38:51+09:00",
@@ -2378,6 +2396,12 @@
           "by": "conductor",
           "change": "command, ac_ids: E2E-130, E2E-132, E2E-133, E2E-134, E2E-137 を統合",
           "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
+        },
+        {
+          "at": "2026-11-24T08:23:26+09:00",
+          "by": "script",
+          "change": "title: 'elevation levels and same kind same value on all screens（ほか 5 件を統合）' -> 'elevation levels and same kind same value on all screens（ほか 5 件を統合）（全件実行の安定化）'",
+          "reason": "Hash遷移時に前画面の切断を待ち、画面を取り違えない。検証条件・閾値は維持。文字だけの入ったSVG内のクリッピング用SVGをアイコンと区別。実アイコンのサイズ・名前・同梱条件は変更しない。"
         }
       ]
     },
@@ -2614,14 +2638,14 @@
         "AC-273",
         "AC-274"
       ],
-      "title": "token contrast ratios meet wcag aa and are reported（ほか 5 件を統合）",
+      "title": "token contrast ratios meet wcag aa and are reported（ほか 5 件を統合）（全件実行の安定化）",
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"(test_ac269_token_contrast_ratios_meet_wcag_aa_and_are_reported) or (test_ac270_focus_visible_on_keyboard_not_on_mouse_and_no_bare_outline_none) or (test_ac271_forced_colors_defined_and_state_visible) or (test_ac272_reduced_motion_stops_animations_on_all_screens) or (test_ac273_pointer_target_size_at_least_24px) or (test_ac274_theme_toggle_keyboard_reachable_with_name_role_state_and_announced)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "aa8deb38",
-      "last_run_at": "2026-11-20T13:28:54+09:00",
-      "evidence": "work/system-test/logs/system-test/E2E-139-202611201324.log",
+      "last_commit": "4a9fde43",
+      "last_run_at": "2026-11-24T09:30:08+09:00",
+      "evidence": "work\\logs\\system-test\\E2E-139-202611240928.log",
       "history": [
         {
           "at": "2026-10-17T14:39:55+09:00",
@@ -2646,6 +2670,12 @@
           "by": "conductor",
           "change": "command, ac_ids: E2E-140, E2E-142, E2E-143, E2E-145, E2E-147 を統合",
           "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
+        },
+        {
+          "at": "2026-11-24T08:23:26+09:00",
+          "by": "script",
+          "change": "title: 'token contrast ratios meet wcag aa and are reported（ほか 5 件を統合）' -> 'token contrast ratios meet wcag aa and are reported（ほか 5 件を統合）（全件実行の安定化）'",
+          "reason": "Hash遷移時に前画面の切断を待ち、画面を取り違えない。検証条件・閾値は維持。"
         }
       ]
     },
@@ -2877,20 +2907,32 @@
       "ac_ids": [
         "AC-275"
       ],
-      "title": "nav items and legacy urls identical to baseline commit",
+      "title": "nav items and legacy URLs match the actual EABK-Studio baseline and PM steps",
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac275_nav_items_and_legacy_urls_identical_to_baseline_commit\" -q",
       "canary": true,
       "status": "pass",
-      "last_commit": "aa8deb38",
-      "last_run_at": "2026-11-20T13:28:54+09:00",
-      "evidence": "work/system-test/logs/system-test/E2E-149-202611201324.log",
+      "last_commit": "4a9fde43",
+      "last_run_at": "2026-11-24T09:30:08+09:00",
+      "evidence": "work\\logs\\system-test\\E2E-149-202611240928.log",
       "history": [
         {
           "at": "2026-10-17T14:40:58+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-24T08:23:26+09:00",
+          "by": "script",
+          "change": "title: 'nav items and legacy urls identical to baseline commit' -> 'nav items and legacy urls identical to baseline commit（全件実行の安定化）'",
+          "reason": "Hash遷移時に前画面の切断を待ち、画面を取り違えない。検証条件・閾値は維持。"
+        },
+        {
+          "at": "2026-11-24T09:08:13+09:00",
+          "by": "script",
+          "change": "title: 'nav items and legacy urls identical to baseline commit（全件実行の安定化）' -> 'nav items and legacy URLs match the actual EABK-Studio baseline and PM steps'",
+          "reason": "基準80c7cc55の実在パスEABK-Studio/web/js/app.jsを参照し、git失敗とNAV未取得を明示。ナビ・旧URL・追加releaseだけという判定は維持。"
         }
       ]
     },
@@ -3925,14 +3967,14 @@
         "AC-348",
         "AC-349"
       ],
-      "title": "マップ 2D で項目が上位層ごとにまとまり名称・件数・開閉がある（ほか 4 件を統合）",
+      "title": "上位層: 2D/3Dの全ID・名称・参照と一覧・状態（全件DOM採取）",
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"(test_ac345_map2d_items_are_grouped_by_tier_with_name_and_count_and_toggle) or (test_ac346_map3d_same_tier_structure_as_2d_and_toggles) or (test_ac347_rpg_removed_and_map2d_map3d_keep_fr1062_hierarchy_data_and_references) or (test_ac348_list_and_table_screens_group_rows_under_headings_with_counts) or (test_ac349_status_and_dashboard_group_by_tier_with_counts)\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "aa8deb38",
-      "last_run_at": "2026-11-20T13:28:54+09:00",
-      "evidence": "work/system-test/logs/system-test/E2E-173-202611201324.log",
+      "last_commit": "4a9fde43",
+      "last_run_at": "2026-11-24T09:30:08+09:00",
+      "evidence": "work\\logs\\system-test\\E2E-173-202611240928.log",
       "history": [
         {
           "at": "2026-10-18T19:36:50+09:00",
@@ -3945,6 +3987,12 @@
           "by": "conductor",
           "change": "command, ac_ids: E2E-175, E2E-176, E2E-178, E2E-179 を統合",
           "reason": "同じテストファイル・層・要求のケースを統合（System Test の数の最小化）"
+        },
+        {
+          "at": "2026-11-24T09:08:13+09:00",
+          "by": "script",
+          "change": "title: 'マップ 2D で項目が上位層ごとにまとまり名称・件数・開閉がある（ほか 4 件を統合）' -> '上位層: 2D/3Dの全ID・名称・参照と一覧・状態（全件DOM採取）'",
+          "reason": "AC-347の全ID・名称・参照を一括DOM採取で検証し、代表の実クリックを維持。AC-350は廃止済みRPGだけを対象から外し不在を確認。関数関係画面を除外せず既存階層ブリッジを補い、移動・言語・モデル更新とキーボード操作を既存回帰テストで確認。"
         }
       ]
     },
@@ -4742,20 +4790,26 @@
       "ac_ids": [
         "AC-430"
       ],
-      "title": "言語トグル: 状態表示・キーボード・全文言の切替・再読込後の保持",
+      "title": "言語トグル: JA/ENの状態・操作・保持（同ファイルの改称回帰を修正）",
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_lang_toggle_system.py -k ac430",
       "canary": false,
       "status": "pass",
-      "last_commit": "aa8deb38",
-      "last_run_at": "2026-11-20T13:28:54+09:00",
-      "evidence": "work/system-test/logs/system-test/E2E-223-202611201324.log",
+      "last_commit": "4a9fde43",
+      "last_run_at": "2026-11-24T09:30:08+09:00",
+      "evidence": "work\\logs\\system-test\\E2E-223-202611240928.log",
       "history": [
         {
           "at": "2026-10-27T13:44:14+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-24T09:08:14+09:00",
+          "by": "script",
+          "change": "title: '言語トグル: 状態表示・キーボード・全文言の切替・再読込後の保持' -> '言語トグル: JA/ENの状態・操作・保持（同ファイルの改称回帰を修正）'",
+          "reason": "同ファイルAC-479のHVE Studioを含む/含まないという矛盾を、現在のHVE Studioと旧EABK Studioの区別に修正。言語・テーマ・タイトル・ブランドの検証を維持。"
         }
       ]
     },

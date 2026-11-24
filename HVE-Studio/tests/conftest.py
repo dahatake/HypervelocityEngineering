@@ -14,3 +14,19 @@ def shared_browser(request):
         browser = pw.chromium.launch()
         yield browser
         browser.close()
+
+
+@pytest.fixture(autouse=True)
+def close_test_browser_contexts(request):
+    if "shared_browser" in request.fixturenames:
+        browser = request.getfixturevalue("shared_browser")
+    elif "browser" in request.fixturenames:
+        browser = request.getfixturevalue("browser")
+    else:
+        yield
+        return
+    previous = tuple(browser.contexts)
+    yield
+    for context in browser.contexts:
+        if context not in previous:
+            context.close()

@@ -64,3 +64,16 @@ def installed_repo(tmp_path: Path) -> Path:
 def shared_browser(request):
     """The UI tests copied from HVE-Studio/tests (test_links_wrap_status_ui's `studio` fixture) share one browser."""
     yield request.getfixturevalue("browser")
+
+
+@pytest.fixture(autouse=True)
+def close_test_browser_contexts(request):
+    if "browser" not in request.fixturenames:
+        yield
+        return
+    browser = request.getfixturevalue("browser")
+    previous = tuple(browser.contexts)
+    yield
+    for context in browser.contexts:
+        if context not in previous:
+            context.close()

@@ -59,24 +59,25 @@ class _Map:
 
 
 def _find_two_nodes(m):
-    """Sweep with coarse clicks.  Selection persists after a miss, so only a click that
-    *changes* the selection counts as a hit (a stale selection must never be read as a hit)."""
+    """Use published coordinates only to find candidates; real clicks prove selection.
+    The fixed-radius oracle remains the measured click chords, not these coordinates."""
+    points = m.page.evaluate("() => window.hveView.getState().map2d.points")
     w, h = m.box["width"], m.box["height"]
     anchor = None
     current = _selected(m.page, m.ids)
-    y = 20
-    while y < h - 20:
-        x = 20
-        while x < w - 20:
-            got = m.click(x, y)
-            if got and got != current:
-                current = got
-                if anchor is None:
-                    anchor = (got, x, y)
-                elif got != anchor[0] and abs(x - anchor[1]) + abs(y - anchor[2]) > 60:
-                    return anchor, (got, x, y)
-            x += 14
-        y += 14
+    for point in points:
+        if not point["visible"] or point["id"] not in m.ids:
+            continue
+        x, y = point["x"] - m.box["x"], point["y"] - m.box["y"]
+        if not (20 <= x < w - 20 and 20 <= y < h - 20):
+            continue
+        got = m.click(x, y)
+        if got and got != current:
+            current = got
+            if anchor is None:
+                anchor = (got, x, y)
+            elif got != anchor[0] and abs(x - anchor[1]) + abs(y - anchor[2]) > 60:
+                return anchor, (got, x, y)
     return anchor, None
 
 
@@ -113,8 +114,8 @@ def _chord(m, anchor, node, axis):
 
 VARIANTS = [
     ("default", 0, 1, None),
-    ("zoom-out", -4, 1, None),
-    ("zoom-in", 4, 1, None),
+    ("zoom-out", 4, 1, None),
+    ("zoom-in", -4, 1, None),
     ("css-ne-internal", 0, 2, "70%"),
 ]
 
@@ -133,8 +134,13 @@ def test_map2d_click_selects_node_within_fixed_px_radius(browser, studio_url, na
         if css_w:
             canvas.evaluate("(c, w) => { c.style.width = w; }", css_w)
         b = canvas.bounding_box()
+        zoom_x, zoom_y = b["x"] + b["width"] / 2, b["y"] + b["height"] / 2
+        if wheel:
+            anchor, _ = _find_two_nodes(_Map(page, ids))
+            assert anchor, "no selectable node to keep in view while zooming"
+            zoom_x, zoom_y = b["x"] + anchor[1], b["y"] + anchor[2]
         for _ in range(abs(wheel)):
-            page.mouse.move(b["x"] + b["width"] / 2, b["y"] + b["height"] / 2)
+            page.mouse.move(zoom_x, zoom_y)
             page.mouse.wheel(0, 300 if wheel > 0 else -300)
             page.wait_for_timeout(120)
         page.wait_for_timeout(600)
